@@ -1,0 +1,25 @@
+[project]
+name = "fly-in"
+version = "0.1.0"
+description = "Drone fleet routing simulation"
+requires-python = ">=3.10"
+dependencies = [
+    "pydantic>=2.0",
+]
+
+[dependency-groups]
+dev = [
+    "mypy>=1.10",
+    "flake8>=7.0",
+]
+
+[tool.uv]
+package = false
+
+[tool.mypy]
+python_version = "3.10"
+strict = true
+check_untyped_defs = true
+
+[tool.flake8]
+max-line-length = 79
