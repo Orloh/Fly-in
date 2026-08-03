@@ -10,6 +10,7 @@ make run MAP=maps/example.map   # uv run python -m src <map>
 make debug MAP=maps/example.map # uv run python -X dev -m src --debug <map>
 make lint         # mypy src && flake8 src
 make clean        # nuke .venv, __pycache__, .mypy_cache
+make test         # uv run pytest tests
 ```
 
 ## Architecture
@@ -34,7 +35,15 @@ make clean        # nuke .venv, __pycache__, .mypy_cache
 
 - **Before committing:** always show the commit message and wait for explicit approval before running `git commit`.
 - **Docstrings:** every class, method, and function must have a docstring. 4 lines max — state what it does, not how.
+- **Test-driven:** write tests in `tests/` before implementing; use `make test` to run them.
 - **After lint:** run `make lint` after any code change and fix all issues before declaring work done.
+
+## GUI
+
+- Use **pygame** for frame-based real-time animation of the simulation.
+- Zones → `pygame.draw.circle`, connections → `pygame.draw.line`, drones → small colored circles that lerp between positions each frame.
+- Add with `uv add pygame` (no graph logic involved, does not violate constraints).
+- GUI layer lives in a separate module (e.g. `src/gui/`); keep it decoupled from the simulation engine.
 
 ## Map format
 

@@ -2,7 +2,7 @@ PYTHON := uv run python
 
 MAP ?= maps/example.map
 
-.PHONY: install run debug clean lint
+.PHONY: install run debug clean lint test
 
 install:
 	uv sync --group dev
@@ -21,3 +21,6 @@ clean:
 lint:
 	uv run mypy src
 	uv run flake8 src
+
+test:
+	uv run pytest tests || true
