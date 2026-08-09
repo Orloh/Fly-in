@@ -6,94 +6,147 @@ No domain validation is performed — every value is stored as a string.
 """
 
 from __future__ import annotations
-from src.models import ParsedMap
+from src.models import ParsedConnection, ParsedMap, ParsedZone
 from src.parser.errors import ParseError
-
-# parse_map(path: str) -> ParsedMap  —  YOUR TURN: replace the stub body
-# below using this guide. Write the code yourself, one step at a time.
-#
-# GOAL: turn a map file into a ParsedMap. Any malformed content raises
-# ParseError(line_number, <message>) using the REAL file line number.
-#
-# STRING / STRUCTURE HINTS (not the solution):
-#   enumerate(file, start=1)   → (line_number, raw_line) pairs
-#   raw_line.split("#", 1)[0]  → drop the comment, keep the rest
-#   text.strip()               → remove surrounding whitespace
-#   line.split("[", 1)[0]      → head of the line (before metadata)
-#   head.split()               → whitespace tokens of the head
-#
-# STEP 1 — read and pre-process lines
-#   Open the file and read it line by line with enumerate(start=1).
-#   For each raw line:
-#     a. Strip everything from '#' onward (inline comments).
-#     b. Strip leading/trailing whitespace.
-#     c. Skip if empty.
-#   Keep every surviving line TOGETHER WITH its real line number
-#   (list of (line_number, line) pairs).
-#
-# STEP 2 — require a first content line
-#   If there are NO content lines at all (empty or comment-only file),
-#   raise ParseError(1, ...) — line 1 is where 'nb_drones' belongs.
-#
-# STEP 3 — parse the drone count
-#   The FIRST content line must be 'nb_drones: <positive int>'.
-#   Split on ': ' and validate:
-#     - wrong prefix or missing colon  → ParseError
-#     - int() fails (abc, 1.5)        → ParseError
-#     - value < 1 (0, -5)             → ParseError
-#   Keep the int for the final ParsedMap.
-#
-# STEP 4 — process every remaining content line by prefix
-#   head = line.split("[", 1)[0];  tokens = head.split()
-#   prefix = tokens[0]  (e.g. 'start_hub:', 'end_hub:', 'hub:',
-#   'connection:')
-#   Dispatch on prefix:
-#     - 'start_hub:' → parse hub, record it as start, flag start_found.
-#       A SECOND start_hub → ParseError (duplicate).
-#     - 'end_hub:'   → same pattern for the end hub.
-#     - 'hub:'       → parse hub, append to the zones list.
-#     - 'connection:'→ parse connection, append to the connections list.
-#     - anything else → ParseError (unknown prefix).
-#
-# STEP 5 — enforce both hubs
-#   After the loop, if the start hub was never found → ParseError using
-#   the line number of the LAST content line. Same for the end hub.
-#
-# STEP 6 — build the ParsedMap
-#   Return ParsedMap(nb_drones=..., start_hub=..., end_hub=...,
-#   zones=..., connections=...).
-#   NOTE: start_hub and end_hub are REQUIRED fields — hold them as
-#   'ParsedZone | None' locals until step 5 validates them.
-#
-# Suggested helpers (each line-number aware; all raise ParseError):
-#
-#   _parse_nb_drones(line, line_number) -> int
-#     Implements STEP 3 on a single line.
-#
-#   _parse_hub_line(line, line_number) -> ParsedZone
-#     head = line.split("[", 1)[0].strip();  tokens = head.split()
-#     - EXACTLY 4 tokens: [prefix, name, x, y]  else ParseError
-#       (also catches missing / extra coordinates)
-#     - int(x) and int(y); non-integer → ParseError
-#     - metadata = _parse_metadata(line, line_number)  (already written)
-#     - return ParsedZone(name=name, x=x, y=y, metadata=metadata)
-#
-#   _parse_connection_line(line, line_number) -> ParsedConnection
-#     head = line.split("[", 1)[0].strip();  tokens = head.split()
-#     - EXACTLY 2 tokens: [connection:, <A>-<B>]  else ParseError
-#     - endpoints = tokens[1].split("-")
-#       - exactly 2 parts AND both non-empty  else ParseError
-#         (covers 'AB', 'A-B-C', 'A-', '-B')
-#     - metadata = _parse_metadata(line, line_number)
-#     - return ParsedConnection(zone_a=..., zone_b=..., metadata=...)
 
 
 def parse_map(path: str) -> ParsedMap:
     """Parse a map file into a ParsedMap.
 
-    Placeholder — replace the body using the guide above.
+    Any malformed content raises ParseError(line_number, <message>).
     """
-    raise NotImplementedError
+    with open(path, "r", encoding="utf-8") as file:
+        content_lines: list[tuple[int, str]] = []
+
+        for line_number, raw_line in enumerate(file, start=1):
+            text = raw_line.split("#", 1)[0]
+            line = text.strip()
+            if line:
+                content_lines.append((line_number, line))
+
+        if not content_lines:
+            raise ParseError(
+                1, "File is empty or contains only comments. "
+                "Missing 'nb_drones'."
+            )
+
+        first_line_num, first_line = content_lines[0]
+        nb_drones = _parse_nb_drones(first_line, first_line_num)
+
+        start_hub: ParsedZone | None = None
+        end_hub: ParsedZone | None = None
+        zones: list[ParsedZone] = []
+        connections: list[ParsedConnection] = []
+
+        for line_number, line in content_lines[1:]:
+            head = line.split("[", 1)[0].strip()
+            tokens = head.split()
+            if not tokens:
+                raise ParseError(line_number, "line has no prefix")
+
+            prefix = tokens[0]
+
+            match prefix:
+                case "start_hub:":
+                    if start_hub is not None:
+                        raise ParseError(
+                            line_number, "Duplicate start_hub defined"
+                        )
+                    start_hub = _parse_hub_line(line, line_number)
+
+                case "end_hub:":
+                    if end_hub is not None:
+                        raise ParseError(
+                            line_number, "Duplicate end_hub defined"
+                        )
+                    end_hub = _parse_hub_line(line, line_number)
+
+                case "hub:":
+                    zones.append(_parse_hub_line(line, line_number))
+
+                case "connection:":
+                    connections.append(
+                        _parse_connection_line(line, line_number)
+                    )
+
+                case _:
+                    raise ParseError(
+                        line_number, f"Unknown prefix '{prefix}'"
+                    )
+
+        last_line_num = content_lines[-1][0]
+        if start_hub is None:
+            raise ParseError(
+                last_line_num, "Map is missing a required start_hub"
+            )
+
+        if end_hub is None:
+            raise ParseError(
+                last_line_num, "Map is missing a required end_hub"
+            )
+
+        return ParsedMap(
+            nb_drones=nb_drones,
+            start_hub=start_hub,
+            end_hub=end_hub,
+            zones=zones,
+            connections=connections,
+        )
+
+
+def _parse_nb_drones(line: str, line_number: int) -> int:
+    """Parse and validate the 'nb_drones: <int>' first line."""
+    parts = line.split(": ", 1)
+    if len(parts) != 2 or parts[0] != "nb_drones":
+        raise ParseError(line_number, "expected 'nb_drones: <int>' line")
+    try:
+        value = int(parts[1])
+    except ValueError:
+        raise ParseError(line_number, "nb_drones must be an integer") from None
+    if value < 1:
+        raise ParseError(
+            line_number, "nb_drones must be a positive integer"
+        )
+    return value
+
+
+def _parse_hub_line(line: str, line_number: int) -> ParsedZone:
+    """Parse a hub line (start/end/hub) into a ParsedZone."""
+    head = line.split("[", 1)[0].strip()
+    tokens = head.split()
+    if len(tokens) != 4:
+        raise ParseError(
+            line_number, "hub line must be '<prefix> <name> <x> <y>'"
+        )
+    _, name, x_token, y_token = tokens
+    try:
+        x = int(x_token)
+        y = int(y_token)
+    except ValueError:
+        raise ParseError(
+            line_number, "hub coordinates must be integers"
+        ) from None
+    metadata = _parse_metadata(line, line_number)
+    return ParsedZone(name=name, x=x, y=y, metadata=metadata)
+
+
+def _parse_connection_line(line: str, line_number: int) -> ParsedConnection:
+    """Parse a 'connection: <A>-<B>' line into a ParsedConnection."""
+    head = line.split("[", 1)[0].strip()
+    tokens = head.split()
+    if len(tokens) != 2:
+        raise ParseError(
+            line_number, "connection line must be '<A>-<B>'"
+        )
+    endpoints = tokens[1].split("-")
+    if len(endpoints) != 2 or not all(endpoints):
+        raise ParseError(
+            line_number, "connection must link exactly two zones"
+        )
+    metadata = _parse_metadata(line, line_number)
+    return ParsedConnection(
+        zone_a=endpoints[0], zone_b=endpoints[1], metadata=metadata
+    )
 
 
 def _parse_metadata(raw_line: str, line_number: int) -> dict[str, str]:

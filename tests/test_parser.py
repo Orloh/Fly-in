@@ -7,7 +7,13 @@ from pathlib import Path
 import pytest
 
 from src.parser.errors import ParseError
-from src.parser.parser import _parse_metadata, parse_map
+from src.parser.parser import (
+    _parse_connection_line,
+    _parse_hub_line,
+    _parse_metadata,
+    _parse_nb_drones,
+    parse_map,
+)
 
 
 class TestParseMetadata:
@@ -68,6 +74,113 @@ class TestParseMetadata:
         with pytest.raises(ParseError) as exc:
             _parse_metadata("[zone=normal] junk", 3)
         assert exc.value.line_number == 3
+
+
+class TestParseNbDrones:
+    """Unit tests for the drone-count first-line parser."""
+
+    def test_valid_count(self) -> None:
+        result = _parse_nb_drones("nb_drones: 3", 1)
+        assert result == 3
+
+    def test_missing_space_after_colon_raises_error(self) -> None:
+        with pytest.raises(ParseError) as exc:
+            _parse_nb_drones("nb_drones:5", 1)
+        assert exc.value.line_number == 1
+
+    def test_non_integer_raises_error(self) -> None:
+        with pytest.raises(ParseError) as exc:
+            _parse_nb_drones("nb_drones: abc", 1)
+        assert exc.value.line_number == 1
+
+    def test_zero_raises_error(self) -> None:
+        with pytest.raises(ParseError) as exc:
+            _parse_nb_drones("nb_drones: 0", 1)
+        assert exc.value.line_number == 1
+
+    def test_negative_raises_error(self) -> None:
+        with pytest.raises(ParseError) as exc:
+            _parse_nb_drones("nb_drones: -5", 1)
+        assert exc.value.line_number == 1
+
+    def test_wrong_prefix_raises_error(self) -> None:
+        with pytest.raises(ParseError) as exc:
+            _parse_nb_drones("start_hub: A 0 0", 1)
+        assert exc.value.line_number == 1
+
+    def test_missing_colon_raises_error(self) -> None:
+        with pytest.raises(ParseError) as exc:
+            _parse_nb_drones("nb_drones", 1)
+        assert exc.value.line_number == 1
+
+
+class TestParseHubLine:
+    """Unit tests for the hub-line parser."""
+
+    def test_valid_hub(self) -> None:
+        result = _parse_hub_line("hub: A 0 0", 1)
+        assert result.name == "A"
+        assert result.x == 0
+        assert result.y == 0
+        assert result.metadata == {}
+
+    def test_valid_hub_with_metadata(self) -> None:
+        result = _parse_hub_line("hub: A 0 0 [zone=priority]", 1)
+        assert result.name == "A"
+        assert result.metadata == {"zone": "priority"}
+
+    def test_missing_coordinate_raises_error(self) -> None:
+        with pytest.raises(ParseError) as exc:
+            _parse_hub_line("hub: A 0", 1)
+        assert exc.value.line_number == 1
+
+    def test_extra_token_raises_error(self) -> None:
+        with pytest.raises(ParseError) as exc:
+            _parse_hub_line("hub: A 0 0 extra", 1)
+        assert exc.value.line_number == 1
+
+    def test_non_integer_coordinate_raises_error(self) -> None:
+        with pytest.raises(ParseError) as exc:
+            _parse_hub_line("hub: A x 0", 1)
+        assert exc.value.line_number == 1
+
+    def test_malformed_metadata_raises_error(self) -> None:
+        with pytest.raises(ParseError) as exc:
+            _parse_hub_line("hub: A 0 0 [zone", 1)
+        assert exc.value.line_number == 1
+
+
+class TestParseConnectionLine:
+    """Unit tests for the connection-line parser."""
+
+    def test_valid_connection(self) -> None:
+        result = _parse_connection_line("connection: A-B", 1)
+        assert result.zone_a == "A"
+        assert result.zone_b == "B"
+        assert result.metadata == {}
+
+    def test_valid_connection_with_metadata(self) -> None:
+        result = _parse_connection_line(
+            "connection: A-B [max_link_capacity=3]", 1
+        )
+        assert result.zone_a == "A"
+        assert result.zone_b == "B"
+        assert result.metadata == {"max_link_capacity": "3"}
+
+    def test_no_dash_raises_error(self) -> None:
+        with pytest.raises(ParseError) as exc:
+            _parse_connection_line("connection: AB", 1)
+        assert exc.value.line_number == 1
+
+    def test_three_parts_raises_error(self) -> None:
+        with pytest.raises(ParseError) as exc:
+            _parse_connection_line("connection: A-B-C", 1)
+        assert exc.value.line_number == 1
+
+    def test_empty_endpoint_raises_error(self) -> None:
+        with pytest.raises(ParseError) as exc:
+            _parse_connection_line("connection: A-", 1)
+        assert exc.value.line_number == 1
 
 
 class TestParseMapHappyPaths:
