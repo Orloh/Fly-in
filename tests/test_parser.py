@@ -64,6 +64,11 @@ class TestParseMetadata:
             _parse_metadata("[a=1][b=2]", 3)
         assert exc.value.line_number == 3
 
+    def test_trailing_content_after_brackets_raises_error(self) -> None:
+        with pytest.raises(ParseError) as exc:
+            _parse_metadata("[zone=normal] junk", 3)
+        assert exc.value.line_number == 3
+
 
 class TestParseMapHappyPaths:
     """Integration tests for complete valid map files."""
@@ -155,6 +160,19 @@ class TestParseMapHappyPaths:
         assert result.start_hub.name == "A"
         assert result.end_hub.name == "B"
 
+    def test_leading_whitespace_lines(self, tmp_path: Path) -> None:
+        content = (
+            "  nb_drones: 2\n"
+            "  start_hub: A 0 0\n"
+            "   end_hub: B 1 1\n"
+        )
+        path = tmp_path / "indented.map"
+        path.write_text(content)
+        result = parse_map(str(path))
+        assert result.nb_drones == 2
+        assert result.start_hub.name == "A"
+        assert result.end_hub.name == "B"
+
 
 class TestParseMapErrors:
     """Error-handling tests for malformed map files."""
@@ -225,8 +243,9 @@ class TestParseMapErrors:
         content = "nb_drones: 1\nend_hub: B 1 1\n"
         path = tmp_path / "nostart.map"
         path.write_text(content)
-        with pytest.raises(ParseError):
+        with pytest.raises(ParseError) as exc:
             parse_map(str(path))
+        assert exc.value.line_number == 2
 
     def test_missing_end_hub_raises_error(
         self, tmp_path: Path
@@ -234,8 +253,9 @@ class TestParseMapErrors:
         content = "nb_drones: 1\nstart_hub: A 0 0\n"
         path = tmp_path / "noend.map"
         path.write_text(content)
-        with pytest.raises(ParseError):
+        with pytest.raises(ParseError) as exc:
             parse_map(str(path))
+        assert exc.value.line_number == 2
 
     def test_duplicate_start_hub_raises_error(
         self, tmp_path: Path
@@ -297,6 +317,20 @@ class TestParseMapErrors:
             parse_map(str(path))
         assert exc.value.line_number == 3
 
+    def test_end_hub_missing_coordinate_raises_error(
+        self, tmp_path: Path
+    ) -> None:
+        content = (
+            "nb_drones: 1\n"
+            "start_hub: A 0 0\n"
+            "end_hub: B\n"
+        )
+        path = tmp_path / "shortend.map"
+        path.write_text(content)
+        with pytest.raises(ParseError) as exc:
+            parse_map(str(path))
+        assert exc.value.line_number == 3
+
     def test_hub_extra_token_raises_error(self, tmp_path: Path) -> None:
         content = (
             "nb_drones: 1\n"
@@ -310,6 +344,20 @@ class TestParseMapErrors:
             parse_map(str(path))
         assert exc.value.line_number == 3
 
+    def test_start_hub_extra_token_raises_error(
+        self, tmp_path: Path
+    ) -> None:
+        content = (
+            "nb_drones: 1\n"
+            "start_hub: A 0 0 extra\n"
+            "end_hub: B 1 1\n"
+        )
+        path = tmp_path / "extrastart.map"
+        path.write_text(content)
+        with pytest.raises(ParseError) as exc:
+            parse_map(str(path))
+        assert exc.value.line_number == 2
+
     def test_unknown_prefix_raises_error(
         self, tmp_path: Path
     ) -> None:
@@ -320,6 +368,36 @@ class TestParseMapErrors:
             "end_hub: C 2 2\n"
         )
         path = tmp_path / "badprefix.map"
+        path.write_text(content)
+        with pytest.raises(ParseError) as exc:
+            parse_map(str(path))
+        assert exc.value.line_number == 3
+
+    def test_metadata_malformed_on_hub_line_raises_error(
+        self, tmp_path: Path
+    ) -> None:
+        content = (
+            "nb_drones: 1\n"
+            "start_hub: A 0 0\n"
+            "hub: B 1 1 [zone\n"
+            "end_hub: C 2 2\n"
+        )
+        path = tmp_path / "badmeta.map"
+        path.write_text(content)
+        with pytest.raises(ParseError) as exc:
+            parse_map(str(path))
+        assert exc.value.line_number == 3
+
+    def test_trailing_junk_after_metadata_raises_error(
+        self, tmp_path: Path
+    ) -> None:
+        content = (
+            "nb_drones: 1\n"
+            "start_hub: A 0 0\n"
+            "hub: B 1 1 [color=red] junk\n"
+            "end_hub: C 2 2\n"
+        )
+        path = tmp_path / "trailing.map"
         path.write_text(content)
         with pytest.raises(ParseError) as exc:
             parse_map(str(path))
