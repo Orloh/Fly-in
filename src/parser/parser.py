@@ -127,7 +127,9 @@ def _parse_hub_line(line: str, line_number: int) -> ParsedZone:
             line_number, "hub coordinates must be integers"
         ) from None
     metadata = _parse_metadata(line, line_number)
-    return ParsedZone(name=name, x=x, y=y, metadata=metadata)
+    return ParsedZone(
+        name=name, x=x, y=y, metadata=metadata, line_number=line_number
+    )
 
 
 def _parse_connection_line(line: str, line_number: int) -> ParsedConnection:
@@ -145,7 +147,10 @@ def _parse_connection_line(line: str, line_number: int) -> ParsedConnection:
         )
     metadata = _parse_metadata(line, line_number)
     return ParsedConnection(
-        zone_a=endpoints[0], zone_b=endpoints[1], metadata=metadata
+        zone_a=endpoints[0],
+        zone_b=endpoints[1],
+        metadata=metadata,
+        line_number=line_number,
     )
 
 

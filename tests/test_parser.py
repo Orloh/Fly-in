@@ -199,9 +199,11 @@ class TestParseMapHappyPaths:
         assert result.start_hub.name == "start"
         assert result.start_hub.x == 0
         assert result.start_hub.y == 0
+        assert result.start_hub.line_number == 2
         assert result.end_hub.name == "end"
         assert result.end_hub.x == 5
         assert result.end_hub.y == 5
+        assert result.end_hub.line_number == 3
         assert result.zones == []
         assert result.connections == []
 
@@ -222,16 +224,23 @@ class TestParseMapHappyPaths:
         assert result.nb_drones == 5
         assert result.start_hub.name == "base"
         assert result.start_hub.metadata == {"color": "green"}
+        assert result.start_hub.line_number == 2
         assert len(result.zones) == 2
         assert result.zones[0].name == "roof1"
+        assert result.zones[0].line_number == 3
         assert result.zones[1].name == "corridorA"
+        assert result.zones[1].line_number == 4
         assert result.zones[1].metadata == {
             "zone": "priority", "color": "blue"
         }
         assert result.end_hub.name == "target"
+        assert result.end_hub.line_number == 5
         assert len(result.connections) == 3
         assert result.connections[0].zone_a == "base"
         assert result.connections[0].zone_b == "roof1"
+        assert result.connections[0].line_number == 6
+        assert result.connections[1].line_number == 7
+        assert result.connections[2].line_number == 8
         assert result.connections[0].metadata == {
             "max_link_capacity": "3"
         }
@@ -251,10 +260,13 @@ class TestParseMapHappyPaths:
         assert len(result.connections) == 2
         assert result.connections[0].zone_a == "B"
         assert result.connections[0].zone_b == "C"
+        assert result.connections[0].line_number == 3
         assert result.connections[1].zone_a == "A"
         assert result.connections[1].zone_b == "B"
+        assert result.connections[1].line_number == 4
         assert len(result.zones) == 1
         assert result.zones[0].name == "B"
+        assert result.zones[0].line_number == 5
 
     def test_comments_and_blank_lines(self, tmp_path: Path) -> None:
         content = (

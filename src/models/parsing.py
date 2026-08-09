@@ -17,6 +17,7 @@ class ParsedZone(BaseModel):
     x: int
     y: int
     metadata: dict[str, str] = Field(default_factory=dict)
+    line_number: int
 
 
 class ParsedConnection(BaseModel):
@@ -25,6 +26,7 @@ class ParsedConnection(BaseModel):
     zone_a: str
     zone_b: str
     metadata: dict[str, str] = Field(default_factory=dict)
+    line_number: int
 
 
 class ParsedMap(BaseModel):
