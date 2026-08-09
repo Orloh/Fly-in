@@ -10,8 +10,17 @@ make run MAP=maps/example.map   # uv run python -m src <map>
 make debug MAP=maps/example.map # uv run python -X dev -m src --debug <map>
 make lint         # mypy src && flake8 src
 make clean        # nuke .venv, __pycache__, .mypy_cache
-make test         # uv run pytest tests
+make test         # uv run pytest tests || true   ← swallows failures
 ```
+
+### Gotchas
+
+- **`make test` masks failures** (`|| true` in the Makefile). For a real
+  pass/fail signal run `uv run pytest tests` directly.
+- **No `maps/*.map` files exist yet** — `make run`/`make debug` fail until
+  you create one.
+- **`src/__main__.py` is still a stub** (prints "Hello, World!") — the
+  simulation is not runnable end-to-end.
 
 ## Architecture
 
@@ -22,6 +31,8 @@ make test         # uv run pytest tests
 - **`Graph`** wraps `dict[str, Zone]` + `dict[tuple[str,str], Connection]` with a `cached_property` adjacency index.
 - **Connections are undirected** — key is always `(a, b)` with `a <= b` (lexicographic sort).
 - **Start/end hubs** have unlimited capacity: `Zone.capacity` returns `None` for hubs, `max_drones` otherwise.
+- **Absolute imports** everywhere, including tests: `from src.*`. No relative imports.
+- **Build status:** parser is partially implemented (`_parse_metadata` works; `parse_map` and `converter.py` are still comment-outlined plans). Pathfinding, simulation engine, and GUI are not built yet.
 
 ## Constraints
 
@@ -35,7 +46,7 @@ make test         # uv run pytest tests
 
 - **Before committing:** always show the commit message and wait for explicit approval before running `git commit`.
 - **Docstrings:** every class, method, and function must have a docstring. 4 lines max — state what it does, not how.
-- **Test-driven:** write tests in `tests/` before implementing; use `make test` to run them.
+- **Test-driven:** write tests in `tests/` before implementing; run them with `uv run pytest tests` (see gotcha above — `make test` hides failures).
 - **After lint:** run `make lint` after any code change and fix all issues before declaring work done.
 
 ## GUI
