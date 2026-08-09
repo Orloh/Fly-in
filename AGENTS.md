@@ -32,7 +32,7 @@ make test         # uv run pytest tests || true   ← swallows failures
 - **Connections are undirected** — key is always `(a, b)` with `a <= b` (lexicographic sort).
 - **Start/end hubs** have unlimited capacity: `Zone.capacity` returns `None` for hubs, `max_drones` otherwise.
 - **Absolute imports** everywhere, including tests: `from src.*`. No relative imports.
-- **Build status:** parser is partially implemented (`_parse_metadata` works; `parse_map` and `converter.py` are still comment-outlined plans). Pathfinding, simulation engine, and GUI are not built yet.
+- **Build status:** parser is fully implemented and tested (`parse_map` + `_parse_metadata` + per-line helpers). `converter.py` (ParsedMap → Graph + drone fleet) is still a comment-outlined plan. Pathfinding, simulation engine, and GUI are not built yet.
 
 ## Constraints
 
