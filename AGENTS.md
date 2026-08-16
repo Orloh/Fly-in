@@ -32,11 +32,12 @@ make test         # uv run pytest tests || true   ← swallows failures
 - **Connections are undirected** — key is always `(a, b)` with `a <= b` (lexicographic sort).
 - **Start/end hubs** have unlimited capacity: `Zone.capacity` returns `None` for hubs, `max_drones` otherwise.
 - **Absolute imports** everywhere, including tests: `from src.*`. No relative imports.
-- **Build status:** parser, converter, and the static GUI map renderer
-  are fully implemented and tested (`parse_map` + helpers, `build_graph`
-  + `_convert_zone` + `_convert_connection`, and `src/gui/` with the
-  pure `layout` helper). Pathfinding, simulation engine, and drone
-  movement are not built yet.
+- **Build status:** parser, converter, and the GUI map selector are
+  fully implemented and tested (`parse_map` + helpers, `build_graph`
+  + `_convert_zone` + `_convert_connection`, `src/gui/` with pure
+  helpers `transform.layout` + `maps.list_maps`/`load_map`, and the
+  `MapViewer` window with a working map dropdown). Pathfinding,
+  simulation engine, and drone movement are not built yet.
 
 ## Deferred decisions
 
@@ -87,8 +88,15 @@ make test         # uv run pytest tests || true   ← swallows failures
   pygame/app drawing code (`app.py`).
 - **Map selector:** `UIDropDownMenu` bottom-left
   (`expand_direction="up"`), options from `list_maps(maps_dir)`.
-  Selection reloads the map; parse/IO failures show an error line and
-  keep the current map.
+  Selection reloads the map via `load_map`; parse/IO failures show a
+  wrapped error line on the canvas and keep the current map. An empty
+  `maps/` yields no dropdown, just the error line. Widgets are built in
+  `MapViewer._build_ui` so future controls slot in additively.
+- **Headless GUI tests:** `tests/conftest.py` sets `SDL_VIDEODRIVER` /
+  `SDL_AUDIODRIVER = dummy` before pygame initializes, so `MapViewer`
+  smoke tests (`tests/test_gui_app.py`) run without a display. The
+  theme font `regular_path` resolves against the CWD, so pytest must
+  run from the project root.
 - **Planned controls** (pygame-gui, not built yet): play/pause
   `UIButton`, step-back `UIButton`, velocity `UIHorizontalSlider`.
   Widgets are built in a central factory so these slot in additively.

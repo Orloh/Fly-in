@@ -13,9 +13,9 @@ kept visually separate from the UI layer (scale/resolution differ), but
 the whole frame shares one rose-pine palette and one pixel font so it
 reads as a single cohesive arcade look.
 
-Current milestone: the **map selector** dropdown. Play/pause, step-back,
+Shipped milestone: the **map selector** dropdown. Play/pause, step-back,
 and velocity controls are planned and outlined below; they slot into the
-same widget factory with no rework.
+same widget factory (`MapViewer._build_ui`) with no rework.
 
 ## Libraries and technologies
 
@@ -65,24 +65,28 @@ the simulation engine; the map selector is the shipped milestone.
 
 ```
 src/gui/
-  app.py        # pygame window, UIManager, widget factory, frame loop
-  maps.py       # pure: list_maps() -> sorted *.map names
+  app.py        # MapViewer class: window, UIManager, widget factory, loop
+  maps.py       # pure: list_maps() + load_map() (parse/convert/layout)
   transform.py  # pure: world coords -> low-res canvas pixels (layout)
 assets/
   theme.json    # rose-pine palette + Press Start 2P font config
   fonts/        # PressStart2P-Regular.ttf + OFL.txt
 tests/
-  test_gui_maps.py, test_gui_transform.py   # pure logic
+  conftest.py   # SDL dummy drivers (headless GUI tests)
+  test_gui_app.py, test_gui_maps.py, test_gui_transform.py
 ```
 
-Frame loop (per tick):
+Frame loop (`MapViewer.run`, per tick):
 
-1. Pull pygame events; `QUIT`/`ESC` exits.
-2. `manager.process_events` (dropdown clicks handled here).
+1. Pull pygame events; `QUIT`/`ESC` stops the loop; the
+   `UI_DROP_DOWN_MENU_CHANGED` event reloads the selected map.
+2. Everything else goes to `manager.process_events` (dropdown clicks).
 3. `manager.update(dt)` with `dt = clock.tick(30) / 1000`.
 4. Draw map onto the 640 × 360 canvas (rose-pine palette, pixel font).
 5. `pygame.transform.scale(canvas, WINDOW)` → blit to the screen.
 6. `manager.draw_ui(screen)` at native resolution → `flip()`.
+   Load errors are wrapped onto the canvas top-left and the previous
+   map stays current.
 
 ## Dependencies to add / config
 
@@ -90,7 +94,9 @@ Frame loop (per tick):
   0.6.14 requires it. Replaced classic `pygame` in `pyproject.toml`;
   pygame-ce is a drop-in for the `pygame` module).
 - `pyproject.toml`: mypy override `pygame_gui.*` →
-  `ignore_missing_imports = true` (same pattern as `pygame.*`).
+  `follow_imports = "skip"` + `ignore_missing_imports = true`
+  (pygame-gui ships `py.typed`, so `ignore_missing_imports` alone does
+  not silence strict-mode errors inside it).
 - Shipped: `assets/fonts/PressStart2P-Regular.ttf` (OFL-1.1) + its
   `OFL.txt` license, downloaded from `google/fonts` (`ofl/pressstart2p/`).
 - Shipped: `assets/theme.json` — rose-pine palette, flat square widget
@@ -102,10 +108,11 @@ Frame loop (per tick):
 
 ## Milestones
 
-1. **Map selector (current)** — dropdown, `list_maps`, error handling,
-   low-res map rendering, rose-pine theme + pixel font. Theme + font
-   shipped (`assets/theme.json`, `assets/fonts/`); the `MapViewer`
-   refactor with the dropdown is the active work. [in progress]
+1. **Map selector** — dropdown, `list_maps` + `load_map`, error
+   handling, low-res map rendering, rose-pine theme + pixel font.
+   Shipped: theme + font assets, and a class-based `MapViewer` with the
+   dropdown (headless-tested via `tests/conftest.py` dummy SDL drivers).
+   [done]
 2. **Simulation GUI controls** — play/pause + step-back buttons,
    velocity slider; wiring once the simulation engine exists.
 3. **Polish** — keyboard shortcuts, drone animation states, per-zone

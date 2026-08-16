@@ -1,44 +1,62 @@
-"""Pygame-based map renderer for loaded Fly-in maps.
+"""Pygame-based map viewer for loaded Fly-in maps.
 
-Runs an event loop that draws zones, connections, and drones from a
-parsed map. Decoupled from the simulation engine: it only depends on
-the parser, the converter, and the pure layout helper.
+Hosts a ``MapViewer`` window that renders the current map as chunky
+retro pixel-art on a low-res canvas and offers a pygame-gui dropdown to
+switch maps. Decoupled from the simulation engine: it only depends on
+the parser, the converter, and the pure GUI helpers.
 """
 
 from __future__ import annotations
 
 import math
+from pathlib import Path
 
 import pygame
+from pygame_gui import UI_DROP_DOWN_MENU_CHANGED, UIManager
+from pygame_gui.elements import UIDropDownMenu
 
-from src.gui.transform import layout
+from src.gui.maps import DEFAULT_CANVAS, list_maps, load_map
 from src.models.drone import Drone
 from src.models.enums import ZoneType
 from src.models.graph import Graph
 from src.models.zone import Zone
-from src.parser.converter import build_graph
-from src.parser.parser import parse_map
 
 _GOLDEN_ANGLE = 2.399963229063653
 
-DEFAULT_COLORS = {
-    ZoneType.NORMAL: (100, 150, 220),
-    ZoneType.PRIORITY: (230, 200, 60),
-    ZoneType.RESTRICTED: (220, 120, 60),
-    ZoneType.BLOCKED: (120, 120, 120),
+SCALE = 2
+WINDOW = (DEFAULT_CANVAS[0] * SCALE, DEFAULT_CANVAS[1] * SCALE)
+
+_ASSETS_DIR = Path(__file__).resolve().parents[2] / "assets"
+_THEME_PATH = _ASSETS_DIR / "theme.json"
+_FONT_PATH = _ASSETS_DIR / "fonts" / "PressStart2P-Regular.ttf"
+
+_BG = (25, 23, 36)
+_GOLD = (246, 193, 119)
+_ROSE = (235, 111, 146)
+_FOAM = (156, 207, 216)
+_PINE = (49, 116, 143)
+_TEXT = (224, 222, 244)
+_MUTED = (110, 106, 134)
+
+ZONE_COLORS = {
+    ZoneType.NORMAL: _FOAM,
+    ZoneType.PRIORITY: _GOLD,
+    ZoneType.RESTRICTED: _ROSE,
+    ZoneType.BLOCKED: _MUTED,
 }
 
-LINE_COLOR = (180, 180, 180)
-LABEL_COLOR = (30, 30, 30)
-DRONE_COLOR = (240, 240, 240)
-DRONE_RING = (60, 60, 60)
-START_RING = (40, 180, 70)
-END_RING = (220, 60, 60)
-BACKGROUND = (245, 245, 245)
+LINE_COLOR = _PINE
+LABEL_COLOR = _TEXT
+DRONE_COLOR = _GOLD
+DRONE_RING = _MUTED
+START_RING = _PINE
+END_RING = _ROSE
+ERROR_COLOR = _ROSE
 
 ZONE_RADIUS = 14
 DRONE_RADIUS = 5
 RING_WIDTH = 3
+ERROR_PADDING = 8
 
 
 def _parse_color(name: str) -> tuple[int, int, int]:
@@ -54,11 +72,11 @@ def _zone_color(zone: Zone) -> tuple[int, int, int]:
     """Return the fill color for a zone, honoring explicit colors."""
     if zone.color != "none":
         return _parse_color(zone.color)
-    return DEFAULT_COLORS[zone.zone_type]
+    return ZONE_COLORS[zone.zone_type]
 
 
 def _draw_connections(
-    screen: pygame.Surface,
+    surface: pygame.Surface,
     positions: dict[str, tuple[int, int]],
     graph: Graph,
 ) -> None:
@@ -66,43 +84,43 @@ def _draw_connections(
     for zone_a, zone_b in graph.connections:
         start = positions[zone_a]
         end = positions[zone_b]
-        pygame.draw.line(screen, LINE_COLOR, start, end, 2)
+        pygame.draw.line(surface, LINE_COLOR, start, end, 2)
 
 
 def _draw_zones(
-    screen: pygame.Surface,
+    surface: pygame.Surface,
     positions: dict[str, tuple[int, int]],
     graph: Graph,
 ) -> None:
     """Draw each zone as a colored circle with a ring on the hubs."""
     for name, zone in graph.zones.items():
         center = positions[name]
-        pygame.draw.circle(screen, _zone_color(zone), center, ZONE_RADIUS)
+        pygame.draw.circle(surface, _zone_color(zone), center, ZONE_RADIUS)
         if zone.is_start_hub:
             pygame.draw.circle(
-                screen, START_RING, center, ZONE_RADIUS, RING_WIDTH
+                surface, START_RING, center, ZONE_RADIUS, RING_WIDTH
             )
         elif zone.is_end_hub:
             pygame.draw.circle(
-                screen, END_RING, center, ZONE_RADIUS, RING_WIDTH
+                surface, END_RING, center, ZONE_RADIUS, RING_WIDTH
             )
 
 
 def _draw_labels(
-    screen: pygame.Surface,
+    surface: pygame.Surface,
     font: pygame.font.Font,
     positions: dict[str, tuple[int, int]],
 ) -> None:
     """Render zone names above their circles."""
     for name, (px, py) in positions.items():
         label = font.render(name, True, LABEL_COLOR)
-        screen.blit(
+        surface.blit(
             label, (px - label.get_width() // 2, py - ZONE_RADIUS - 18)
         )
 
 
 def _draw_drones(
-    screen: pygame.Surface,
+    surface: pygame.Surface,
     positions: dict[str, tuple[int, int]],
     drones: list[Drone],
 ) -> None:
@@ -116,46 +134,169 @@ def _draw_drones(
         dx = round(8 * math.cos(index * _GOLDEN_ANGLE))
         dy = round(8 * math.sin(index * _GOLDEN_ANGLE))
         center = (px + dx, py + dy)
-        pygame.draw.circle(screen, DRONE_COLOR, center, DRONE_RADIUS)
-        pygame.draw.circle(
-            screen, DRONE_RING, center, DRONE_RADIUS, 1
+        pygame.draw.circle(surface, DRONE_COLOR, center, DRONE_RADIUS)
+        pygame.draw.circle(surface, DRONE_RING, center, DRONE_RADIUS, 1)
+
+
+def _wrap_text(
+    font: pygame.font.Font, text: str, max_width: int
+) -> list[str]:
+    """Split ``text`` into lines that fit ``max_width`` pixels."""
+    lines: list[str] = []
+    for raw in text.splitlines() or [""]:
+        words = raw.split()
+        if not words:
+            lines.append("")
+            continue
+        current = words[0]
+        for word in words[1:]:
+            candidate = f"{current} {word}"
+            if font.size(candidate)[0] <= max_width:
+                current = candidate
+            else:
+                lines.append(current)
+                current = word
+        lines.append(current)
+    return lines
+
+
+class MapViewer:
+    """Pygame window hosting the map and the map-selector dropdown."""
+
+    def __init__(
+        self,
+        maps_dir: str | Path,
+        starting_map: str | None = None,
+        canvas: tuple[int, int] = DEFAULT_CANVAS,
+    ) -> None:
+        self.maps_dir = Path(maps_dir)
+        self.canvas = canvas
+        self.current_map: str | None = None
+        self.graph: Graph | None = None
+        self.fleet: list[Drone] | None = None
+        self.positions: dict[str, tuple[int, int]] | None = None
+        self.error: str | None = None
+        self.running = True
+
+        self.screen = self._init_window()
+        self.clock = pygame.time.Clock()
+        self.map_surface = pygame.Surface(canvas)
+        self.manager = UIManager(
+            self.screen.get_size(),
+            theme_path=str(_THEME_PATH),
+            enable_live_theme_updates=False,
+        )
+        self.font = pygame.font.Font(str(_FONT_PATH), 8)
+        self.dropdown = self._build_ui(starting_map)
+        if starting_map is not None:
+            self._load_map(starting_map)
+
+    def _init_window(self) -> pygame.Surface:
+        """Initialize pygame and open the scaled-up window."""
+        pygame.init()
+        window = (self.canvas[0] * SCALE, self.canvas[1] * SCALE)
+        screen = pygame.display.set_mode(window)
+        pygame.display.set_caption("Fly-in")
+        return screen
+
+    def _build_ui(self, starting_map: str | None) -> UIDropDownMenu | None:
+        """Create the map-selector dropdown, or None with an error."""
+        options = list_maps(self.maps_dir)
+        if not options:
+            self.error = f"No .map files found in {self.maps_dir}"
+            return None
+        starting = starting_map if starting_map in options else options[0]
+        window_h = self.screen.get_size()[1]
+        rect = pygame.Rect((12, window_h - 42), (220, 30))
+        return UIDropDownMenu(
+            options,
+            starting,
+            rect,
+            manager=self.manager,
+            expansion_height_limit=120,
         )
 
+    def _load_map(self, name: str) -> None:
+        """Load a map by name, keeping the current one on failure."""
+        result, message = load_map(self.maps_dir / name, self.canvas)
+        if message is not None:
+            self.error = message
+            return
+        assert result is not None
+        self.graph, self.fleet, self.positions = result
+        self.current_map = name
+        self.error = None
+        pygame.display.set_caption(f"Fly-in: {name}")
 
-def run(map_path: str, width: int = 900, height: int = 600) -> None:
-    """Render a map file in a pygame window until it is closed."""
-    parsed = parse_map(map_path)
-    graph, drones = build_graph(parsed)
-    points = {
-        name: (float(zone.x), float(zone.y))
-        for name, zone in graph.zones.items()
-    }
-    positions = layout(points, width, height)
+    def _on_map_selected(self, event: pygame.event.Event) -> None:
+        """React to a new dropdown selection, ignoring no-ops."""
+        if self.dropdown is None:
+            return
+        name = event.text
+        if name == self.current_map:
+            return
+        self._load_map(name)
 
-    pygame.init()
-    screen = pygame.display.set_mode((width, height))
-    pygame.display.set_caption(f"Fly-in: {map_path}")
-    font = pygame.font.SysFont("arial", 14)
+    def _handle_event(self, event: pygame.event.Event) -> None:
+        """Dispatch one pygame or pygame-gui event."""
+        if event.type == pygame.QUIT:
+            self.running = False
+        elif (
+            event.type == pygame.KEYDOWN and event.key == pygame.K_ESCAPE
+        ):
+            self.running = False
+        elif event.type == UI_DROP_DOWN_MENU_CHANGED:
+            self._on_map_selected(event)
+        else:
+            self.manager.process_events(event)
 
-    running = True
-    clock = pygame.time.Clock()
-    while running:
-        for event in pygame.event.get():
-            if event.type == pygame.QUIT:
-                running = False
-            elif (
-                event.type == pygame.KEYDOWN
-                and event.key == pygame.K_ESCAPE
-            ):
-                running = False
+    def _render(self) -> pygame.Surface:
+        """Draw the current frame and return the window surface."""
+        surface = self.map_surface
+        surface.fill(_BG)
+        if self.graph is not None and self.positions is not None:
+            self._draw_map(surface)
+        if self.error is not None:
+            self._draw_error(surface)
+        scaled = pygame.transform.scale(surface, self.screen.get_size())
+        self.screen.blit(scaled, (0, 0))
+        self.manager.draw_ui(self.screen)
+        return self.screen
 
-        screen.fill(BACKGROUND)
-        _draw_connections(screen, positions, graph)
-        _draw_labels(screen, font, positions)
-        _draw_zones(screen, positions, graph)
-        _draw_drones(screen, positions, drones)
+    def _draw_map(self, surface: pygame.Surface) -> None:
+        """Draw connections, labels, zones, and drones onto the canvas."""
+        assert self.graph is not None
+        assert self.positions is not None
+        _draw_connections(surface, self.positions, self.graph)
+        _draw_labels(surface, self.font, self.positions)
+        _draw_zones(surface, self.positions, self.graph)
+        if self.fleet is not None:
+            _draw_drones(surface, self.positions, self.fleet)
 
-        pygame.display.flip()
-        clock.tick(30)
+    def _draw_error(self, surface: pygame.Surface) -> None:
+        """Render the current error message at the top-left corner."""
+        assert self.error is not None
+        max_width = surface.get_width() - 2 * ERROR_PADDING
+        y = ERROR_PADDING
+        for line in _wrap_text(self.font, self.error, max_width):
+            label = self.font.render(line, True, ERROR_COLOR)
+            surface.blit(label, (ERROR_PADDING, y))
+            y += label.get_height() + 2
 
-    pygame.quit()
+    def run(self) -> None:
+        """Run the frame loop until the window is closed."""
+        while self.running:
+            dt = self.clock.tick(30) / 1000.0
+            for event in pygame.event.get():
+                self._handle_event(event)
+            self.manager.update(dt)
+            self._render()
+            pygame.display.flip()
+        pygame.quit()
+
+
+def run(map_path: str) -> None:
+    """Open a viewer for the map's directory and run until closed."""
+    path = Path(map_path)
+    viewer = MapViewer(path.parent, starting_map=path.name)
+    viewer.run()

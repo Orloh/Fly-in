@@ -28,5 +28,10 @@ check_untyped_defs = true
 module = "pygame.*"
 ignore_missing_imports = true
 
+[[tool.mypy.overrides]]
+module = "pygame_gui.*"
+follow_imports = "skip"
+ignore_missing_imports = true
+
 [tool.flake8]
 max-line-length = 79
