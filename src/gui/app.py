@@ -56,7 +56,13 @@ ERROR_COLOR = _ROSE
 ZONE_RADIUS = 14
 DRONE_RADIUS = 5
 RING_WIDTH = 3
-ERROR_PADDING = 8
+
+TOAST_DURATION_MS = 5000
+TOAST_MARGIN = 12
+TOAST_PADDING = 10
+TOAST_BORDER_WIDTH = 2
+TOAST_BG = (38, 35, 58)
+TOAST_BORDER = _ROSE
 
 
 def _parse_color(name: str) -> tuple[int, int, int]:
@@ -176,6 +182,7 @@ class MapViewer:
         self.fleet: list[Drone] | None = None
         self.positions: dict[str, tuple[int, int]] | None = None
         self.error: str | None = None
+        self.error_visible_until: int | None = None
         self.running = True
 
         self.screen = self._init_window()
@@ -204,6 +211,7 @@ class MapViewer:
         options = list_maps(self.maps_dir)
         if not options:
             self.error = f"No .map files found in {self.maps_dir}"
+            self.error_visible_until = None
             return None
         starting = starting_map if starting_map in options else options[0]
         window_h = self.screen.get_size()[1]
@@ -221,11 +229,15 @@ class MapViewer:
         result, message = load_map(self.maps_dir / name, self.canvas)
         if message is not None:
             self.error = message
+            self.error_visible_until = (
+                pygame.time.get_ticks() + TOAST_DURATION_MS
+            )
             return
         assert result is not None
         self.graph, self.fleet, self.positions = result
         self.current_map = name
         self.error = None
+        self.error_visible_until = None
         pygame.display.set_caption(f"Fly-in: {name}")
 
     def _on_map_selected(self, event: pygame.event.Event) -> None:
@@ -256,8 +268,8 @@ class MapViewer:
         surface.fill(_BG)
         if self.graph is not None and self.positions is not None:
             self._draw_map(surface)
-        if self.error is not None:
-            self._draw_error(surface)
+        if self._toast_active():
+            self._draw_toast(surface)
         scaled = pygame.transform.scale(surface, self.screen.get_size())
         self.screen.blit(scaled, (0, 0))
         self.manager.draw_ui(self.screen)
@@ -273,20 +285,53 @@ class MapViewer:
         if self.fleet is not None:
             _draw_drones(surface, self.positions, self.fleet)
 
-    def _draw_error(self, surface: pygame.Surface) -> None:
-        """Render the current error message at the top-left corner."""
+    def _toast_active(self) -> bool:
+        """Whether the error toast should currently be drawn."""
+        if self.error is None:
+            return False
+        if self.error_visible_until is None:
+            return True
+        return pygame.time.get_ticks() < self.error_visible_until
+
+    def _draw_toast(self, surface: pygame.Surface) -> None:
+        """Draw the error message in a bottom-centered box."""
         assert self.error is not None
-        max_width = surface.get_width() - 2 * ERROR_PADDING
-        y = ERROR_PADDING
-        for line in _wrap_text(self.font, self.error, max_width):
+        text_width = surface.get_width() - 2 * (
+            TOAST_MARGIN + TOAST_PADDING
+        )
+        lines = _wrap_text(self.font, self.error, text_width)
+        line_height = self.font.get_height()
+        box_w = surface.get_width() - 2 * TOAST_MARGIN
+        box_h = 2 * TOAST_PADDING + line_height * len(lines)
+        left = TOAST_MARGIN
+        top = surface.get_height() - TOAST_MARGIN - box_h
+
+        box = pygame.Rect(left, top, box_w, box_h)
+        pygame.draw.rect(surface, TOAST_BG, box)
+        pygame.draw.rect(
+            surface, TOAST_BORDER, box, TOAST_BORDER_WIDTH
+        )
+        y = top + TOAST_PADDING
+        for line in lines:
             label = self.font.render(line, True, ERROR_COLOR)
-            surface.blit(label, (ERROR_PADDING, y))
-            y += label.get_height() + 2
+            surface.blit(label, (left + TOAST_PADDING, y))
+            y += line_height
+
+    def _prune_error(self) -> None:
+        """Clear the error once its toast window has elapsed."""
+        if (
+            self.error is not None
+            and self.error_visible_until is not None
+            and pygame.time.get_ticks() >= self.error_visible_until
+        ):
+            self.error = None
+            self.error_visible_until = None
 
     def run(self) -> None:
         """Run the frame loop until the window is closed."""
         while self.running:
             dt = self.clock.tick(30) / 1000.0
+            self._prune_error()
             for event in pygame.event.get():
                 self._handle_event(event)
             self.manager.update(dt)

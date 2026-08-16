@@ -137,3 +137,66 @@ class TestMapViewer:
         viewer._handle_event(event)
 
         assert viewer.current_map is None
+
+    def test_toast_active_after_bad_selection(self, tmp_path: Path) -> None:
+        _make_maps(tmp_path, ["a.map"])
+        (tmp_path / "bad.map").write_text("not a map\n", encoding="utf-8")
+        viewer = MapViewer(tmp_path, starting_map="a.map")
+
+        event = pygame_event.Event(
+            UI_DROP_DOWN_MENU_CHANGED, text="bad.map", ui_element=None
+        )
+        viewer._handle_event(event)
+
+        assert viewer._toast_active() is True
+
+    def test_toast_inactive_after_window_elapses(self, tmp_path: Path) -> None:
+        _make_maps(tmp_path, ["a.map"])
+        (tmp_path / "bad.map").write_text("not a map\n", encoding="utf-8")
+        viewer = MapViewer(tmp_path, starting_map="a.map")
+        event = pygame_event.Event(
+            UI_DROP_DOWN_MENU_CHANGED, text="bad.map", ui_element=None
+        )
+        viewer._handle_event(event)
+
+        viewer.error_visible_until = pygame.time.get_ticks() - 1
+
+        assert viewer._toast_active() is False
+
+    def test_successful_reload_clears_toast(self, tmp_path: Path) -> None:
+        _make_maps(tmp_path, ["a.map", "b.map"])
+        (tmp_path / "bad.map").write_text("not a map\n", encoding="utf-8")
+        viewer = MapViewer(tmp_path, starting_map="a.map")
+        bad = pygame_event.Event(
+            UI_DROP_DOWN_MENU_CHANGED, text="bad.map", ui_element=None
+        )
+        viewer._handle_event(bad)
+        assert viewer._toast_active() is True
+
+        good = pygame_event.Event(
+            UI_DROP_DOWN_MENU_CHANGED, text="b.map", ui_element=None
+        )
+        viewer._handle_event(good)
+
+        assert viewer.error is None
+        assert viewer._toast_active() is False
+
+    def test_empty_dir_message_is_persistent(self, tmp_path: Path) -> None:
+        viewer = MapViewer(tmp_path)
+
+        assert viewer.error is not None
+        assert viewer.error_visible_until is None
+        assert viewer._toast_active() is True
+
+    def test_render_with_toast_returns_window_size(
+        self, tmp_path: Path
+    ) -> None:
+        _make_maps(tmp_path, ["a.map"])
+        (tmp_path / "bad.map").write_text("not a map\n", encoding="utf-8")
+        viewer = MapViewer(tmp_path, starting_map="a.map")
+        event = pygame_event.Event(
+            UI_DROP_DOWN_MENU_CHANGED, text="bad.map", ui_element=None
+        )
+        viewer._handle_event(event)
+
+        assert viewer._render().get_size() == WINDOW

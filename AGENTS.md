@@ -89,9 +89,10 @@ make test         # uv run pytest tests || true   ← swallows failures
 - **Map selector:** `UIDropDownMenu` bottom-left
   (`expand_direction="up"`), options from `list_maps(maps_dir)`.
   Selection reloads the map via `load_map`; parse/IO failures show a
-  wrapped error line on the canvas and keep the current map. An empty
-  `maps/` yields no dropdown, just the error line. Widgets are built in
-  `MapViewer._build_ui` so future controls slot in additively.
+  5-second bottom-center toast (boxed, rose-bordered) and keep the
+  current map. An empty `maps/` yields no dropdown and a persistent
+  "no maps found" toast. Widgets are built in `MapViewer._build_ui` so
+  future controls slot in additively.
 - **Headless GUI tests:** `tests/conftest.py` sets `SDL_VIDEODRIVER` /
   `SDL_AUDIODRIVER = dummy` before pygame initializes, so `MapViewer`
   smoke tests (`tests/test_gui_app.py`) run without a display. The

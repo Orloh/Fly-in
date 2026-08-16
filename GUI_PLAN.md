@@ -55,7 +55,7 @@ the simulation engine; the map selector is the shipped milestone.
 
 | Control | Widget | Behaviour |
 |---|---|---|
-| Map selector | `UIDropDownMenu`, bottom-left, `expand_direction="up"` | Options = `list_maps(maps_dir)`. Reloads the map on change; parse/IO failure shows an error line and keeps the current map |
+| Map selector | `UIDropDownMenu`, bottom-left, `expand_direction="up"` | Options = `list_maps(maps_dir)`. Reloads the map on change; parse/IO failure shows a 5s bottom-center toast and keeps the current map (persistent toast when `maps/` is empty) |
 | Play / Pause | `UIButton` (toggling) | Starts / pauses the simulation loop |
 | Step-back | `UIButton` | Rewinds the simulation by one time step |
 | Velocity | `UIHorizontalSlider` | Scales simulated time (e.g. 0.25×–4×) in real time |
@@ -85,8 +85,9 @@ Frame loop (`MapViewer.run`, per tick):
 4. Draw map onto the 640 × 360 canvas (rose-pine palette, pixel font).
 5. `pygame.transform.scale(canvas, WINDOW)` → blit to the screen.
 6. `manager.draw_ui(screen)` at native resolution → `flip()`.
-   Load errors are wrapped onto the canvas top-left and the previous
-   map stays current.
+   Load errors appear as a 5s bottom-center toast (boxed, rose-bordered)
+   and the previous map stays current; empty `maps/` keeps a persistent
+   toast.
 
 ## Dependencies to add / config
 
