@@ -2,13 +2,16 @@ PYTHON := uv run python
 
 MAP ?= maps/example.map
 
-.PHONY: install run debug clean lint test
+.PHONY: install run gui debug clean lint test
 
 install:
 	uv sync --group dev
 
 run:
 	$(PYTHON) -m src $(MAP)
+
+gui:
+	$(PYTHON) -m src --gui $(MAP)
 
 debug:
 	$(PYTHON) -X dev -m src --debug $(MAP)
