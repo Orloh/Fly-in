@@ -203,10 +203,9 @@ class MapViewer:
             self._load_map(starting_map)
 
     def _init_window(self) -> pygame.Surface:
-        """Initialize pygame and open the scaled-up window."""
+        """Initialize pygame and open the fixed-size window."""
         pygame.init()
-        window = (self.canvas[0] * SCALE, self.canvas[1] * SCALE)
-        screen = pygame.display.set_mode(window, pygame.RESIZABLE)
+        screen = pygame.display.set_mode(WINDOW)
         pygame.display.set_caption("Fly-in")
         return screen
 
@@ -221,7 +220,7 @@ class MapViewer:
         rect = pygame.Rect(
             (
                 DROPDOWN_MARGIN,
-                self.screen.get_height() - DROPDOWN_MARGIN - DROPDOWN_HEIGHT,
+                WINDOW[1] - DROPDOWN_MARGIN - DROPDOWN_HEIGHT,
             ),
             (DROPDOWN_WIDTH, DROPDOWN_HEIGHT),
         )
@@ -266,44 +265,10 @@ class MapViewer:
             event.type == pygame.KEYDOWN and event.key == pygame.K_ESCAPE
         ):
             self.running = False
-        elif event.type == pygame.VIDEORESIZE:
-            self._on_window_resized(event.size)
-        elif event.type in (
-            pygame.WINDOWRESIZED,
-            pygame.WINDOWSIZECHANGED,
-        ):
-            self._on_window_resized(self._resize_event_size(event))
         elif event.type == UI_DROP_DOWN_MENU_CHANGED:
             self._on_map_selected(event)
         else:
             self.manager.process_events(event)
-
-    def _resize_event_size(self, event: pygame.event.Event) -> tuple[int, int]:
-        """Extract the new window size from a resize event."""
-        attributes = event.dict
-        width = attributes.get("w") or attributes.get("x")
-        height = attributes.get("h") or attributes.get("y")
-        if width and height:
-            return (width, height)
-        return self.screen.get_size()
-
-    def _on_window_resized(self, size: tuple[int, int]) -> None:
-        """Recreate the window and re-anchor the UI at a new size."""
-        if size == self.screen.get_size():
-            return
-        self.screen = pygame.display.set_mode(size, pygame.RESIZABLE)
-        self.manager.set_window_resolution(size)
-        if self.dropdown is not None:
-            self.dropdown.set_relative_position(
-                (
-                    DROPDOWN_MARGIN,
-                    size[1] - DROPDOWN_MARGIN - DROPDOWN_HEIGHT,
-                )
-            )
-        caption = (
-            f"Fly-in: {self.current_map}" if self.current_map else "Fly-in"
-        )
-        pygame.display.set_caption(caption)
 
     def _render(self) -> pygame.Surface:
         """Draw the current frame and return the window surface."""
@@ -313,7 +278,7 @@ class MapViewer:
             self._draw_map(surface)
         if self._toast_active():
             self._draw_toast(surface)
-        scaled = pygame.transform.scale(surface, self.screen.get_size())
+        scaled = pygame.transform.scale(surface, WINDOW)
         self.screen.blit(scaled, (0, 0))
         self.manager.draw_ui(self.screen)
         return self.screen
