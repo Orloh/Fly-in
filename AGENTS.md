@@ -7,6 +7,7 @@ Drone fleet routing simulation. Python 3.10+, Pydantic models, `uv` package mana
 ```
 make install      # uv sync --group dev
 make run MAP=maps/example.map   # uv run python -m src <map>
+make gui MAP=maps/example.map   # uv run python -m src --gui <map>
 make debug MAP=maps/example.map # uv run python -X dev -m src --debug <map>
 make lint         # mypy src && flake8 src
 make clean        # nuke .venv, __pycache__, .mypy_cache
@@ -17,10 +18,9 @@ make test         # uv run pytest tests || true   ← swallows failures
 
 - **`make test` masks failures** (`|| true` in the Makefile). For a real
   pass/fail signal run `uv run pytest tests` directly.
-- **No `maps/*.map` files exist yet** — `make run`/`make debug` fail until
-  you create one.
-- **`src/__main__.py` is still a stub** (prints "Hello, World!") — the
-  simulation is not runnable end-to-end.
+- **`make run`/`make debug` exit with "simulation run not implemented
+  yet"** — the CLI simulation path is a stub. Use `make gui` to see a
+  rendered map instead.
 
 ## Architecture
 
@@ -32,7 +32,11 @@ make test         # uv run pytest tests || true   ← swallows failures
 - **Connections are undirected** — key is always `(a, b)` with `a <= b` (lexicographic sort).
 - **Start/end hubs** have unlimited capacity: `Zone.capacity` returns `None` for hubs, `max_drones` otherwise.
 - **Absolute imports** everywhere, including tests: `from src.*`. No relative imports.
-- **Build status:** parser and converter are fully implemented and tested (`parse_map` + helpers, and `build_graph` + `_convert_zone` + `_convert_connection`). Pathfinding, simulation engine, and GUI are not built yet.
+- **Build status:** parser, converter, and the static GUI map renderer
+  are fully implemented and tested (`parse_map` + helpers, `build_graph`
+  + `_convert_zone` + `_convert_connection`, and `src/gui/` with the
+  pure `layout` helper). Pathfinding, simulation engine, and drone
+  movement are not built yet.
 
 ## Deferred decisions
 
@@ -58,10 +62,31 @@ make test         # uv run pytest tests || true   ← swallows failures
 
 ## GUI
 
-- Use **pygame** for frame-based real-time animation of the simulation.
-- Zones → `pygame.draw.circle`, connections → `pygame.draw.line`, drones → small colored circles that lerp between positions each frame.
-- Add with `uv add pygame` (no graph logic involved, does not violate constraints).
-- GUI layer lives in a separate module (e.g. `src/gui/`); keep it decoupled from the simulation engine.
+- **Stack:** `pygame-ce` (rendering; drop-in for the `pygame` module)
+  + `pygame-gui` (widgets, added with `uv add pygame-gui`). Widgets
+  come from pygame-gui — no hand-rolled buttons/dropdowns/sliders.
+  Detailed outline in `GUI_PLAN.md`.
+- **Rendering style:** retro pixel-art. The map is drawn to a low-res
+  canvas (`VIRTUAL = (640, 360)`) and upscaled to the window
+  (`1280 × 720`, `SCALE = 2`) with `pygame.transform.scale`
+  (nearest-neighbor = crisp pixels). pygame-gui is drawn at **native
+  window resolution** — its text upscales fuzzily, so the UI stays
+  crisp while the map stays chunky (Minecraft-style).
+- **Theme:** rose-pine palette in `assets/theme.json` — bg `#191724`,
+  gold `#f6c177`, rose `#eb6f92`, foam `#9ccfd8`, iris `#c4a7e7`,
+  pine `#31748f`, text `#e0def4`. Pixel font **Press Start 2P**
+  (OFL-1.1, vendored under `assets/fonts/` with its license).
+- **GUI layer lives in `src/gui/`**, decoupled from the simulation
+  engine: pure helpers (`transform.layout`, `maps.list_maps`) plus the
+  pygame/app drawing code (`app.py`).
+- **Map selector:** `UIDropDownMenu` bottom-left
+  (`expand_direction="up"`), options from `list_maps(maps_dir)`.
+  Selection reloads the map; parse/IO failures show an error line and
+  keep the current map.
+- **Planned controls** (pygame-gui, not built yet): play/pause
+  `UIButton`, step-back `UIButton`, velocity `UIHorizontalSlider`.
+  Widgets are built in a central factory so these slot in additively.
+- Keep the map folder named `maps/` (scanned by the dropdown).
 
 ## Map format
 
