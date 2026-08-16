@@ -268,12 +268,24 @@ class MapViewer:
             self.running = False
         elif event.type == pygame.VIDEORESIZE:
             self._on_window_resized(event.size)
-        elif event.type == pygame.WINDOWSIZECHANGED:
-            self._on_window_resized((event.w, event.h))
+        elif event.type in (
+            pygame.WINDOWRESIZED,
+            pygame.WINDOWSIZECHANGED,
+        ):
+            self._on_window_resized(self._resize_event_size(event))
         elif event.type == UI_DROP_DOWN_MENU_CHANGED:
             self._on_map_selected(event)
         else:
             self.manager.process_events(event)
+
+    def _resize_event_size(self, event: pygame.event.Event) -> tuple[int, int]:
+        """Extract the new window size from a resize event."""
+        attributes = event.dict
+        width = attributes.get("w") or attributes.get("x")
+        height = attributes.get("h") or attributes.get("y")
+        if width and height:
+            return (width, height)
+        return self.screen.get_size()
 
     def _on_window_resized(self, size: tuple[int, int]) -> None:
         """Recreate the window and re-anchor the UI at a new size."""

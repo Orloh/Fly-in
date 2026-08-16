@@ -231,16 +231,44 @@ class TestMapViewer:
         viewer._handle_event(
             pygame_event.Event(
                 pygame.WINDOWSIZECHANGED,
-                x=0,
-                y=0,
-                w=size[0],
-                h=size[1],
+                x=size[0],
+                y=size[1],
             )
         )
 
         assert viewer.screen.get_size() == size
         assert viewer.manager.window_resolution == size
         assert viewer._render().get_size() == size
+
+    def test_window_resized_event_with_wh(self, tmp_path: Path) -> None:
+        _make_maps(tmp_path, ["a.map"])
+        viewer = MapViewer(tmp_path, starting_map="a.map")
+        size = (900, 600)
+
+        viewer._handle_event(
+            pygame_event.Event(
+                pygame.WINDOWRESIZED,
+                w=size[0],
+                h=size[1],
+            )
+        )
+
+        assert viewer.screen.get_size() == size
+        assert viewer._render().get_size() == size
+
+    def test_resize_event_without_size_is_noop(self, tmp_path: Path) -> None:
+        _make_maps(tmp_path, ["a.map"])
+        viewer = MapViewer(tmp_path, starting_map="a.map")
+        current = viewer.screen
+
+        viewer._handle_event(
+            pygame_event.Event(
+                pygame.WINDOWSIZECHANGED,
+                window=None,
+            )
+        )
+
+        assert viewer.screen is current
 
     def test_resize_to_same_size_is_noop(self, tmp_path: Path) -> None:
         _make_maps(tmp_path, ["a.map"])
