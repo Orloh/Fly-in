@@ -1,0 +1,13 @@
+nb_drones: 3
+start_hub: base 0 0
+end_hub: target 400 300 [color=green]
+hub: roof1 200 -100
+hub: corridorA 300 150 [zone=priority color=blue]
+hub: vault 350 -150 [zone=restricted]
+hub: landing 150 250 [color=red]
+connection: base-roof1 [max_link_capacity=3]
+connection: roof1-corridorA
+connection: corridorA-target
+connection: base-landing
+connection: landing-target
+connection: roof1-vault
