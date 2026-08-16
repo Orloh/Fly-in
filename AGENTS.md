@@ -76,6 +76,12 @@ make test         # uv run pytest tests || true   ← swallows failures
   gold `#f6c177`, rose `#eb6f92`, foam `#9ccfd8`, iris `#c4a7e7`,
   pine `#31748f`, text `#e0def4`. Pixel font **Press Start 2P**
   (OFL-1.1, vendored under `assets/fonts/` with its license).
+- **Theme gotchas:** pygame-gui resolves a font `regular_path` against
+  the **process working directory** (not the theme file), so run
+  `make gui`/pytest from the project root; `drop_down_menu.misc
+  .expand_direction: "up"` is a theme option, not a constructor arg;
+  `drop_down_menu.#expand_button` is left on the default
+  `fira_code_symbols` because Press Start 2P lacks the ▾ glyph.
 - **GUI layer lives in `src/gui/`**, decoupled from the simulation
   engine: pure helpers (`transform.layout`, `maps.list_maps`) plus the
   pygame/app drawing code (`app.py`).

@@ -91,12 +91,21 @@ Frame loop (per tick):
   pygame-ce is a drop-in for the `pygame` module).
 - `pyproject.toml`: mypy override `pygame_gui.*` →
   `ignore_missing_imports = true` (same pattern as `pygame.*`).
-- Vendor `PressStart2P-Regular.ttf` + the OFL license in `assets/fonts/`.
+- Shipped: `assets/fonts/PressStart2P-Regular.ttf` (OFL-1.1) + its
+  `OFL.txt` license, downloaded from `google/fonts` (`ofl/pressstart2p/`).
+- Shipped: `assets/theme.json` — rose-pine palette, flat square widget
+  shapes (`shadow_width: 0`), and a `drop_down_menu` section where
+  `misc.expand_direction: "up"` is a **theme option** (not a ctor arg)
+  and the font `regular_path` is **relative to the process CWD** — run
+  `make gui`/pytest from the project root. `drop_down_menu.#expand_button`
+  stays on default `fira_code_symbols` (Press Start 2P has no ▾ glyph).
 
 ## Milestones
 
 1. **Map selector (current)** — dropdown, `list_maps`, error handling,
-   low-res map rendering, rose-pine theme + pixel font. [in progress]
+   low-res map rendering, rose-pine theme + pixel font. Theme + font
+   shipped (`assets/theme.json`, `assets/fonts/`); the `MapViewer`
+   refactor with the dropdown is the active work. [in progress]
 2. **Simulation GUI controls** — play/pause + step-back buttons,
    velocity slider; wiring once the simulation engine exists.
 3. **Polish** — keyboard shortcuts, drone animation states, per-zone
