@@ -1,0 +1,13 @@
+nb_drones: 2
+start_hub: dock 0 0
+end_hub: summit 500 400
+hub: pier 150 50 [zone=priority color=cyan]
+hub: forest 250 180 [zone=restricted]
+hub: tower 380 120 [color=gold]
+hub: cave 100 250 [zone=blocked]
+connection: dock-pier
+connection: pier-tower
+connection: tower-summit
+connection: dock-forest
+connection: forest-cave
+connection: forest-summit
