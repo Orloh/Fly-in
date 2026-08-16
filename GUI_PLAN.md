@@ -89,6 +89,11 @@ Frame loop (`MapViewer.run`, per tick):
    and the previous map stays current; empty `maps/` keeps a persistent
    toast.
 
+Window resize: the window is `pygame.RESIZABLE`; `VIDEORESIZE` /
+`WINDOWSIZECHANGED` re-apply `set_mode`, sync the UIManager via
+`set_window_resolution`, and re-anchor the dropdown to the bottom-left.
+The map always stretches to fill the current window size.
+
 ## Dependencies to add / config
 
 - `uv add pygame-gui` (resolved to **pygame-ce** 2.5.8 — pygame-gui

@@ -64,6 +64,10 @@ TOAST_BORDER_WIDTH = 2
 TOAST_BG = (38, 35, 58)
 TOAST_BORDER = _ROSE
 
+DROPDOWN_MARGIN = 12
+DROPDOWN_WIDTH = 220
+DROPDOWN_HEIGHT = 30
+
 
 def _parse_color(name: str) -> tuple[int, int, int]:
     """Convert a color name or CSS value into an RGB triple."""
@@ -202,7 +206,7 @@ class MapViewer:
         """Initialize pygame and open the scaled-up window."""
         pygame.init()
         window = (self.canvas[0] * SCALE, self.canvas[1] * SCALE)
-        screen = pygame.display.set_mode(window)
+        screen = pygame.display.set_mode(window, pygame.RESIZABLE)
         pygame.display.set_caption("Fly-in")
         return screen
 
@@ -214,8 +218,13 @@ class MapViewer:
             self.error_visible_until = None
             return None
         starting = starting_map if starting_map in options else options[0]
-        window_h = self.screen.get_size()[1]
-        rect = pygame.Rect((12, window_h - 42), (220, 30))
+        rect = pygame.Rect(
+            (
+                DROPDOWN_MARGIN,
+                self.screen.get_height() - DROPDOWN_MARGIN - DROPDOWN_HEIGHT,
+            ),
+            (DROPDOWN_WIDTH, DROPDOWN_HEIGHT),
+        )
         return UIDropDownMenu(
             options,
             starting,
@@ -257,10 +266,32 @@ class MapViewer:
             event.type == pygame.KEYDOWN and event.key == pygame.K_ESCAPE
         ):
             self.running = False
+        elif event.type == pygame.VIDEORESIZE:
+            self._on_window_resized(event.size)
+        elif event.type == pygame.WINDOWSIZECHANGED:
+            self._on_window_resized((event.w, event.h))
         elif event.type == UI_DROP_DOWN_MENU_CHANGED:
             self._on_map_selected(event)
         else:
             self.manager.process_events(event)
+
+    def _on_window_resized(self, size: tuple[int, int]) -> None:
+        """Recreate the window and re-anchor the UI at a new size."""
+        if size == self.screen.get_size():
+            return
+        self.screen = pygame.display.set_mode(size, pygame.RESIZABLE)
+        self.manager.set_window_resolution(size)
+        if self.dropdown is not None:
+            self.dropdown.set_relative_position(
+                (
+                    DROPDOWN_MARGIN,
+                    size[1] - DROPDOWN_MARGIN - DROPDOWN_HEIGHT,
+                )
+            )
+        caption = (
+            f"Fly-in: {self.current_map}" if self.current_map else "Fly-in"
+        )
+        pygame.display.set_caption(caption)
 
     def _render(self) -> pygame.Surface:
         """Draw the current frame and return the window surface."""

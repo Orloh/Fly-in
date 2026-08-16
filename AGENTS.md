@@ -98,6 +98,11 @@ make test         # uv run pytest tests || true   ← swallows failures
   smoke tests (`tests/test_gui_app.py`) run without a display. The
   theme font `regular_path` resolves against the CWD, so pytest must
   run from the project root.
+- **Resizable window:** the window opens with `pygame.RESIZABLE` and
+  the map stretches to fill any size. `VIDEORESIZE`/`WINDOWSIZECHANGED`
+  events are handled by `MapViewer._on_window_resized`, which re-applies
+  `set_mode`, syncs `manager.set_window_resolution`, and re-anchors the
+  dropdown to the bottom-left.
 - **Planned controls** (pygame-gui, not built yet): play/pause
   `UIButton`, step-back `UIButton`, velocity `UIHorizontalSlider`.
   Widgets are built in a central factory so these slot in additively.

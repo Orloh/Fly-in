@@ -200,3 +200,57 @@ class TestMapViewer:
         viewer._handle_event(event)
 
         assert viewer._render().get_size() == WINDOW
+
+    def test_videoresize_repositions_everything(
+        self, tmp_path: Path
+    ) -> None:
+        _make_maps(tmp_path, ["a.map"])
+        viewer = MapViewer(tmp_path, starting_map="a.map")
+        size = (1600, 900)
+
+        viewer._handle_event(
+            pygame_event.Event(
+                pygame.VIDEORESIZE,
+                size=size,
+                w=size[0],
+                h=size[1],
+            )
+        )
+
+        assert viewer.screen.get_size() == size
+        assert viewer.manager.window_resolution == size
+        rect = viewer.dropdown.get_relative_rect()
+        assert (rect.left, rect.bottom) == (12, size[1] - 12)
+        assert viewer._render().get_size() == size
+
+    def test_window_changed_event_resizes(self, tmp_path: Path) -> None:
+        _make_maps(tmp_path, ["a.map"])
+        viewer = MapViewer(tmp_path, starting_map="a.map")
+        size = (800, 500)
+
+        viewer._handle_event(
+            pygame_event.Event(
+                pygame.WINDOWSIZECHANGED,
+                x=0,
+                y=0,
+                w=size[0],
+                h=size[1],
+            )
+        )
+
+        assert viewer.screen.get_size() == size
+        assert viewer.manager.window_resolution == size
+        assert viewer._render().get_size() == size
+
+    def test_resize_to_same_size_is_noop(self, tmp_path: Path) -> None:
+        _make_maps(tmp_path, ["a.map"])
+        viewer = MapViewer(tmp_path, starting_map="a.map")
+        current = viewer.screen
+
+        viewer._handle_event(
+            pygame_event.Event(
+                pygame.VIDEORESIZE, size=WINDOW, w=WINDOW[0], h=WINDOW[1]
+            )
+        )
+
+        assert viewer.screen is current
