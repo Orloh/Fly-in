@@ -36,7 +36,8 @@ make test         # uv run pytest tests || true   ← swallows failures
   fully implemented and tested (`parse_map` + helpers, `build_graph`
   + `_convert_zone` + `_convert_connection`, `src/gui/` with pure
   helpers `transform.layout` + `maps.list_maps`/`load_map`, and the
-  `MapViewer` window with a working map dropdown). Pathfinding,
+  `MapViewer` window with a working keyboard-driven map picker).
+  Pathfinding,
   simulation engine, and drone movement are not built yet.
 
 ## Deferred decisions
@@ -63,48 +64,42 @@ make test         # uv run pytest tests || true   ← swallows failures
 
 ## GUI
 
-- **Stack:** `pygame-ce` (rendering; drop-in for the `pygame` module)
-  + `pygame-gui` (widgets, added with `uv add pygame-gui`). Widgets
-  come from pygame-gui — no hand-rolled buttons/dropdowns/sliders.
-  Detailed outline in `GUI_PLAN.md`.
-- **Rendering style:** retro pixel-art. The map is drawn to a low-res
-  canvas (`VIRTUAL = (640, 360)`) and upscaled to the window
-  (`1280 × 720`, `SCALE = 2`) with `pygame.transform.scale`
-  (nearest-neighbor = crisp pixels). pygame-gui is drawn at **native
-  window resolution** — its text upscales fuzzily, so the UI stays
-  crisp while the map stays chunky (Minecraft-style).
-- **Theme:** rose-pine palette in `assets/theme.json` — bg `#191724`,
+- **Stack:** `pygame-ce` only — all controls are keyboard-driven, no
+  widget library. The map, key legend, map picker, and toast are all
+  drawn to a low-res canvas (`VIRTUAL = (640, 360)`) in the pixel font
+  and upscaled with `pygame.transform.scale` (nearest-neighbor = crisp
+  pixels). Detailed outline in `GUI_PLAN.md`.
+- **Palette:** rose-pine (code constants in `app.py`) — bg `#191724`,
   gold `#f6c177`, rose `#eb6f92`, foam `#9ccfd8`, iris `#c4a7e7`,
   pine `#31748f`, text `#e0def4`. Pixel font **Press Start 2P**
   (OFL-1.1, vendored under `assets/fonts/` with its license).
-- **Theme gotchas:** pygame-gui resolves a font `regular_path` against
-  the **process working directory** (not the theme file), so run
-  `make gui`/pytest from the project root; `drop_down_menu.misc
-  .expand_direction: "up"` is a theme option, not a constructor arg;
-  `drop_down_menu.#expand_button` is left on the default
-  `fira_code_symbols` because Press Start 2P lacks the ▾ glyph.
+- **Keyboard controls:** the bottom-left legend (`_draw_legend`) shows
+  the bindings. `SPACE` = step forward, `BACKSPACE` = step back (no-op
+  stubs until the sim engine), `+`/`-` = cycle speed
+  (`SPEEDS = 0.5/1/2/4×`, wraps, shown live), `M` = toggle the map
+  picker. In the picker: `UP`/`DOWN` move, `ENTER` loads, `ESC`/`M`
+  close. `ESC` quits when the picker is closed.
+- **Map picker:** hand-drawn centered overlay (`_draw_menu`) on top of
+  the `MapMenu` state machine in `src/gui/menu.py` (pure, tested in
+  `tests/test_gui_menu.py`). Options from `list_maps(maps_dir)`,
+  refreshed on open, current map pre-highlighted. Parse/IO failures
+  show a 5-second bottom-center toast (boxed, rose-bordered) and keep
+  the current map; an empty `maps/` yields a persistent "no maps found"
+  toast and no picker.
 - **GUI layer lives in `src/gui/`**, decoupled from the simulation
-  engine: pure helpers (`transform.layout`, `maps.list_maps`) plus the
-  pygame/app drawing code (`app.py`).
-- **Map selector:** `UIDropDownMenu` bottom-left
-  (`expand_direction="up"`), options from `list_maps(maps_dir)`.
-  Selection reloads the map via `load_map`; parse/IO failures show a
-  5-second bottom-center toast (boxed, rose-bordered) and keep the
-  current map. An empty `maps/` yields no dropdown and a persistent
-  "no maps found" toast. Widgets are built in `MapViewer._build_ui` so
-  future controls slot in additively.
+  engine: pure helpers (`transform.layout`, `maps.list_maps`,
+  `menu.MapMenu`) plus the pygame/app drawing code (`app.py`).
 - **Headless GUI tests:** `tests/conftest.py` sets `SDL_VIDEODRIVER` /
   `SDL_AUDIODRIVER = dummy` before pygame initializes, so `MapViewer`
-  smoke tests (`tests/test_gui_app.py`) run without a display. The
-  theme font `regular_path` resolves against the CWD, so pytest must
-  run from the project root.
-- **Fixed-size window:** the window opens at a fixed
-  `WINDOW = (1280, 720)`. Resize events are ignored — the map and the
-  UI are never re-laid-out, so everything stays put on resize.
-- **Planned controls** (pygame-gui, not built yet): play/pause
-  `UIButton`, step-back `UIButton`, velocity `UIHorizontalSlider`.
-  Widgets are built in a central factory so these slot in additively.
-- Keep the map folder named `maps/` (scanned by the dropdown).
+  smoke tests (`tests/test_gui_app.py`) run without a display. pytest
+  must run from the project root (the font path is CWD-relative).
+- **Resizable window:** opens at `WINDOW = (1280, 720)` with
+  `pygame.RESIZABLE`. On `VIDEORESIZE`/`WINDOWRESIZED`/
+  `WINDOWSIZECHANGED`, `_on_resized` re-creates the window at the new
+  size (pygame-ce reports the size in `x`/`y` for `WINDOWSIZECHANGED`);
+  same-size events are ignored (loop guard). The canvas is stretched to
+  fill the window, so nothing is re-laid-out on resize.
+- Keep the map folder named `maps/` (scanned by the picker).
 
 ## Map format
 

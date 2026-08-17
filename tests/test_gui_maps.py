@@ -1,7 +1,7 @@
-"""Tests for the pure GUI map helpers (map selector milestone).
+"""Tests for the pure GUI map helpers (map picker milestone).
 
 Covers ``list_maps`` (discovery of ``*.map`` files) and ``load_map``
-(the parse + convert + layout pipeline behind the map dropdown).
+(the parse + convert + layout pipeline behind the map picker).
 """
 
 from __future__ import annotations

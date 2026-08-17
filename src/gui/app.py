@@ -1,9 +1,11 @@
 """Pygame-based map viewer for loaded Fly-in maps.
 
 Hosts a ``MapViewer`` window that renders the current map as chunky
-retro pixel-art on a low-res canvas and offers a pygame-gui dropdown to
-switch maps. Decoupled from the simulation engine: it only depends on
-the parser, the converter, and the pure GUI helpers.
+retro pixel-art on a low-res canvas. Controls are keyboard-driven: a
+bottom-left legend shows the bindings, ``M`` opens the map picker, and
+step/speed keys drive the simulation once the engine lands. Decoupled
+from the simulation engine: it only depends on the parser, the
+converter, and the pure GUI helpers.
 """
 
 from __future__ import annotations
@@ -12,10 +14,9 @@ import math
 from pathlib import Path
 
 import pygame
-from pygame_gui import UI_DROP_DOWN_MENU_CHANGED, UIManager
-from pygame_gui.elements import UIDropDownMenu
 
 from src.gui.maps import DEFAULT_CANVAS, list_maps, load_map
+from src.gui.menu import MapMenu
 from src.models.drone import Drone
 from src.models.enums import ZoneType
 from src.models.graph import Graph
@@ -27,7 +28,6 @@ SCALE = 2
 WINDOW = (DEFAULT_CANVAS[0] * SCALE, DEFAULT_CANVAS[1] * SCALE)
 
 _ASSETS_DIR = Path(__file__).resolve().parents[2] / "assets"
-_THEME_PATH = _ASSETS_DIR / "theme.json"
 _FONT_PATH = _ASSETS_DIR / "fonts" / "PressStart2P-Regular.ttf"
 
 _BG = (25, 23, 36)
@@ -64,9 +64,14 @@ TOAST_BORDER_WIDTH = 2
 TOAST_BG = (38, 35, 58)
 TOAST_BORDER = _ROSE
 
-DROPDOWN_MARGIN = 12
-DROPDOWN_WIDTH = 220
-DROPDOWN_HEIGHT = 30
+SPEEDS = (0.5, 1.0, 2.0, 4.0)
+
+LEGEND_MARGIN = 8
+LEGEND_PADDING = 6
+LEGEND_BORDER = _MUTED
+
+MENU_PADDING = 10
+MENU_BORDER = _ROSE
 
 
 def _parse_color(name: str) -> tuple[int, int, int]:
@@ -171,7 +176,7 @@ def _wrap_text(
 
 
 class MapViewer:
-    """Pygame window hosting the map and the map-selector dropdown."""
+    """Pygame window hosting the map and keyboard controls."""
 
     def __init__(
         self,
@@ -188,49 +193,29 @@ class MapViewer:
         self.error: str | None = None
         self.error_visible_until: int | None = None
         self.running = True
+        self.speed_index = 1
+        self.menu = MapMenu(list_maps(self.maps_dir))
 
         self.screen = self._init_window()
         self.clock = pygame.time.Clock()
         self.map_surface = pygame.Surface(canvas)
-        self.manager = UIManager(
-            self.screen.get_size(),
-            theme_path=str(_THEME_PATH),
-            enable_live_theme_updates=False,
-        )
         self.font = pygame.font.Font(str(_FONT_PATH), 8)
-        self.dropdown = self._build_ui(starting_map)
+        if not self.menu.options:
+            self.error = f"No .map files found in {self.maps_dir}"
+            self.error_visible_until = None
         if starting_map is not None:
             self._load_map(starting_map)
 
     def _init_window(self) -> pygame.Surface:
-        """Initialize pygame and open the fixed-size window."""
+        """Initialize pygame and open a resizable window."""
         pygame.init()
-        screen = pygame.display.set_mode(WINDOW)
-        pygame.display.set_caption("Fly-in")
+        screen = pygame.display.set_mode(WINDOW, pygame.RESIZABLE)
+        pygame.display.set_caption(self._caption())
         return screen
 
-    def _build_ui(self, starting_map: str | None) -> UIDropDownMenu | None:
-        """Create the map-selector dropdown, or None with an error."""
-        options = list_maps(self.maps_dir)
-        if not options:
-            self.error = f"No .map files found in {self.maps_dir}"
-            self.error_visible_until = None
-            return None
-        starting = starting_map if starting_map in options else options[0]
-        rect = pygame.Rect(
-            (
-                DROPDOWN_MARGIN,
-                WINDOW[1] - DROPDOWN_MARGIN - DROPDOWN_HEIGHT,
-            ),
-            (DROPDOWN_WIDTH, DROPDOWN_HEIGHT),
-        )
-        return UIDropDownMenu(
-            options,
-            starting,
-            rect,
-            manager=self.manager,
-            expansion_height_limit=120,
-        )
+    def _caption(self) -> str:
+        """Return the window caption for the current map."""
+        return f"Fly-in: {self.current_map}" if self.current_map else "Fly-in"
 
     def _load_map(self, name: str) -> None:
         """Load a map by name, keeping the current one on failure."""
@@ -246,29 +231,108 @@ class MapViewer:
         self.current_map = name
         self.error = None
         self.error_visible_until = None
-        pygame.display.set_caption(f"Fly-in: {name}")
+        pygame.display.set_caption(self._caption())
 
-    def _on_map_selected(self, event: pygame.event.Event) -> None:
-        """React to a new dropdown selection, ignoring no-ops."""
-        if self.dropdown is None:
+    def _handle_event(self, event: pygame.event.Event) -> None:
+        """Dispatch one pygame event."""
+        if event.type == pygame.QUIT:
+            self.running = False
+        elif event.type == pygame.KEYDOWN:
+            self._handle_key(event.key)
+        elif event.type == pygame.VIDEORESIZE:
+            self._on_resized(event.size)
+        elif event.type in (
+            pygame.WINDOWRESIZED,
+            pygame.WINDOWSIZECHANGED,
+        ):
+            size = self._resize_event_size(event)
+            if size is not None:
+                self._on_resized(size)
+
+    def _handle_key(self, key: int) -> None:
+        """Route a keypress to the menu or the simulation controls."""
+        if self.menu.visible:
+            self._handle_menu_key(key)
+        else:
+            self._handle_sim_key(key)
+
+    def _handle_sim_key(self, key: int) -> None:
+        """Act on a simulation or overlay key."""
+        if key == pygame.K_ESCAPE:
+            self.running = False
+        elif key == pygame.K_SPACE:
+            self._step_forward()
+        elif key == pygame.K_BACKSPACE:
+            self._step_back()
+        elif key in (pygame.K_PLUS, pygame.K_EQUALS):
+            self._speed_up()
+        elif key == pygame.K_MINUS:
+            self._speed_down()
+        elif key == pygame.K_m:
+            self._toggle_map_menu()
+
+    def _handle_menu_key(self, key: int) -> None:
+        """Navigate and confirm selections in the open map menu."""
+        if key in (pygame.K_ESCAPE, pygame.K_m):
+            self.menu.close()
+        elif key in (pygame.K_UP, pygame.K_DOWN):
+            self.menu.move(1 if key == pygame.K_DOWN else -1)
+        elif key in (pygame.K_RETURN, pygame.K_KP_ENTER):
+            self._select_menu_map()
+
+    def _step_forward(self) -> None:
+        """Advance the simulation by one step (not built yet)."""
+
+    def _step_back(self) -> None:
+        """Rewind the simulation by one step (not built yet)."""
+
+    def _speed_up(self) -> None:
+        """Cycle to the next faster simulation speed."""
+        self.speed_index = (self.speed_index + 1) % len(SPEEDS)
+
+    def _speed_down(self) -> None:
+        """Cycle to the next slower simulation speed."""
+        self.speed_index = (self.speed_index - 1) % len(SPEEDS)
+
+    def _toggle_map_menu(self) -> None:
+        """Open the map picker with fresh options, or close it."""
+        self.menu.options = list_maps(self.maps_dir)
+        if self.menu.visible:
+            self.menu.close()
             return
-        name = event.text
+        if not self.menu.options:
+            return
+        if self.current_map in self.menu.options:
+            self.menu.selected = self.menu.options.index(self.current_map)
+        self.menu.open()
+
+    def _select_menu_map(self) -> None:
+        """Load the highlighted map and close the menu."""
+        name = self.menu.current()
+        if name is None:
+            return
+        self.menu.close()
         if name == self.current_map:
             return
         self._load_map(name)
 
-    def _handle_event(self, event: pygame.event.Event) -> None:
-        """Dispatch one pygame or pygame-gui event."""
-        if event.type == pygame.QUIT:
-            self.running = False
-        elif (
-            event.type == pygame.KEYDOWN and event.key == pygame.K_ESCAPE
-        ):
-            self.running = False
-        elif event.type == UI_DROP_DOWN_MENU_CHANGED:
-            self._on_map_selected(event)
-        else:
-            self.manager.process_events(event)
+    def _on_resized(self, size: tuple[int, int]) -> None:
+        """Resize the window, ignoring events that match the screen."""
+        if size == self.screen.get_size():
+            return
+        self.screen = pygame.display.set_mode(size, pygame.RESIZABLE)
+        pygame.display.set_caption(self._caption())
+
+    def _resize_event_size(
+        self, event: pygame.event.Event
+    ) -> tuple[int, int] | None:
+        """Extract the reported size from a resize event, if present."""
+        attributes = event.dict
+        width = attributes.get("w") or attributes.get("x")
+        height = attributes.get("h") or attributes.get("y")
+        if width and height:
+            return (width, height)
+        return None
 
     def _render(self) -> pygame.Surface:
         """Draw the current frame and return the window surface."""
@@ -278,9 +342,10 @@ class MapViewer:
             self._draw_map(surface)
         if self._toast_active():
             self._draw_toast(surface)
-        scaled = pygame.transform.scale(surface, WINDOW)
+        self._draw_legend(surface)
+        self._draw_menu(surface)
+        scaled = pygame.transform.scale(surface, self.screen.get_size())
         self.screen.blit(scaled, (0, 0))
-        self.manager.draw_ui(self.screen)
         return self.screen
 
     def _draw_map(self, surface: pygame.Surface) -> None:
@@ -292,6 +357,70 @@ class MapViewer:
         _draw_zones(surface, self.positions, self.graph)
         if self.fleet is not None:
             _draw_drones(surface, self.positions, self.fleet)
+
+    def _legend_rows(self) -> list[tuple[str, str]]:
+        """Return the key legend as (key, action) rows."""
+        speed = SPEEDS[self.speed_index]
+        return [
+            ("SPACE", "STEP +1"),
+            ("BKSP", "STEP -1"),
+            ("+/-", f"SPEED {speed:g}x"),
+            ("M", "MAPS"),
+        ]
+
+    def _draw_legend(self, surface: pygame.Surface) -> None:
+        """Draw the key bindings in a box at the bottom-left corner."""
+        rows = self._legend_rows()
+        line_height = self.font.get_height()
+        key_width = self.font.size(rows[0][0])[0] + 8
+        content = max(self.font.size(action)[0] for _, action in rows)
+        box_w = 2 * LEGEND_PADDING + key_width + content
+        box_h = 2 * LEGEND_PADDING + line_height * len(rows)
+        left = LEGEND_MARGIN
+        top = surface.get_height() - LEGEND_MARGIN - box_h
+        box = pygame.Rect(left, top, box_w, box_h)
+        pygame.draw.rect(surface, TOAST_BG, box)
+        pygame.draw.rect(surface, LEGEND_BORDER, box, 1)
+        y = top + LEGEND_PADDING
+        for key, action in rows:
+            key_label = self.font.render(key, True, _GOLD)
+            action_label = self.font.render(action, True, _TEXT)
+            surface.blit(key_label, (left + LEGEND_PADDING, y))
+            surface.blit(
+                action_label,
+                (left + LEGEND_PADDING + key_width, y),
+            )
+            y += line_height
+
+    def _draw_menu(self, surface: pygame.Surface) -> None:
+        """Draw the map picker as a centered overlay when it is open."""
+        if not self.menu.visible:
+            return
+        options = self.menu.options
+        line_height = self.font.get_height()
+        title = "SELECT MAP"
+        hint = "UP/DOWN  ENTER  ESC"
+        widths = [self.font.size(text)[0] for text in options]
+        widths += [self.font.size(title)[0], self.font.size(hint)[0]]
+        box_w = max(widths) + 2 * MENU_PADDING
+        box_h = 2 * MENU_PADDING + line_height * (len(options) + 2)
+        left = (surface.get_width() - box_w) // 2
+        top = (surface.get_height() - box_h) // 2
+        box = pygame.Rect(left, top, box_w, box_h)
+        pygame.draw.rect(surface, TOAST_BG, box)
+        pygame.draw.rect(surface, MENU_BORDER, box, 2)
+        y = top + MENU_PADDING
+        title_label = self.font.render(title, True, _GOLD)
+        surface.blit(title_label, (left + MENU_PADDING, y))
+        y += line_height
+        for index, option in enumerate(options):
+            marker = ">" if index == self.menu.selected else " "
+            color = _ROSE if index == self.menu.selected else _TEXT
+            label = self.font.render(f"{marker} {option}", True, color)
+            surface.blit(label, (left + MENU_PADDING, y))
+            y += line_height
+        hint_label = self.font.render(hint, True, _MUTED)
+        surface.blit(hint_label, (left + MENU_PADDING, y))
 
     def _toast_active(self) -> bool:
         """Whether the error toast should currently be drawn."""
@@ -338,11 +467,10 @@ class MapViewer:
     def run(self) -> None:
         """Run the frame loop until the window is closed."""
         while self.running:
-            dt = self.clock.tick(30) / 1000.0
+            self.clock.tick(30)
             self._prune_error()
             for event in pygame.event.get():
                 self._handle_event(event)
-            self.manager.update(dt)
             self._render()
             pygame.display.flip()
         pygame.quit()

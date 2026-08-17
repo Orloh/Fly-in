@@ -1,8 +1,8 @@
-"""Headless smoke tests for the MapViewer (map selector milestone).
+"""Headless smoke tests for the MapViewer (keyboard controls milestone).
 
 Runs against SDL dummy drivers (see conftest.py) so no window or audio
-device is needed. Exercises construction, rendering, and map selection
-without pumping the real frame loop.
+device is needed. Exercises construction, rendering, key bindings, the
+map menu, and resizing without pumping the real frame loop.
 """
 
 from __future__ import annotations
@@ -11,9 +11,8 @@ from pathlib import Path
 
 import pygame
 import pygame.event as pygame_event
-from pygame_gui import UI_DROP_DOWN_MENU_CHANGED
 
-from src.gui.app import MapViewer, WINDOW
+from src.gui.app import SPEEDS, MapViewer, WINDOW
 
 
 VALID_MAP = (
@@ -37,6 +36,11 @@ def _make_maps(tmp_path: Path, names: list[str]) -> None:
         _write_map(tmp_path / name)
 
 
+def _key(key: int) -> pygame_event.Event:
+    """Build a KEYDOWN event for the given key."""
+    return pygame_event.Event(pygame.KEYDOWN, key=key, mod=0)
+
+
 class TestMapViewer:
     """Smoke tests for the pygame map viewer window state."""
 
@@ -55,58 +59,133 @@ class TestMapViewer:
         assert viewer.graph is not None
         assert set(viewer.graph.zones) == {"base", "target", "roof1"}
 
-    def test_dropdown_lists_available_maps(self, tmp_path: Path) -> None:
+    def test_m_key_toggles_map_menu(self, tmp_path: Path) -> None:
         _make_maps(tmp_path, ["a.map", "b.map"])
         viewer = MapViewer(tmp_path, starting_map="a.map")
 
-        assert viewer.dropdown is not None
-        labels = [
-            option[0] if isinstance(option, tuple) else option
-            for option in viewer.dropdown.options_list
-        ]
-        assert labels == ["a.map", "b.map"]
+        viewer._handle_event(_key(pygame.K_m))
+        assert viewer.menu.visible is True
+        assert viewer.menu.options == ["a.map", "b.map"]
+        assert viewer.menu.selected == 0
 
-    def test_selecting_map_reloads(self, tmp_path: Path) -> None:
+        viewer._handle_event(_key(pygame.K_m))
+        assert viewer.menu.visible is False
+
+    def test_arrow_keys_move_menu_selection(self, tmp_path: Path) -> None:
+        _make_maps(tmp_path, ["a.map", "b.map", "c.map"])
+        viewer = MapViewer(tmp_path, starting_map="a.map")
+        viewer._handle_event(_key(pygame.K_m))
+
+        viewer._handle_event(_key(pygame.K_DOWN))
+        assert viewer.menu.selected == 1
+
+        viewer._handle_event(_key(pygame.K_UP))
+        assert viewer.menu.selected == 0
+
+    def test_enter_loads_selected_map(self, tmp_path: Path) -> None:
         _make_maps(tmp_path, ["a.map", "b.map"])
         viewer = MapViewer(tmp_path, starting_map="a.map")
 
-        event = pygame_event.Event(
-            UI_DROP_DOWN_MENU_CHANGED, text="b.map", ui_element=None
-        )
-        viewer._handle_event(event)
+        viewer._handle_event(_key(pygame.K_m))
+        viewer._handle_event(_key(pygame.K_DOWN))
+        viewer._handle_event(_key(pygame.K_RETURN))
 
         assert viewer.current_map == "b.map"
+        assert viewer.menu.visible is False
         assert viewer.error is None
 
-    def test_selecting_bad_map_keeps_current(self, tmp_path: Path) -> None:
+    def test_enter_on_current_map_is_noop(self, tmp_path: Path) -> None:
+        _make_maps(tmp_path, ["a.map"])
+        viewer = MapViewer(tmp_path, starting_map="a.map")
+
+        viewer._handle_event(_key(pygame.K_m))
+        viewer._handle_event(_key(pygame.K_RETURN))
+
+        assert viewer.current_map == "a.map"
+        assert viewer.menu.visible is False
+
+    def test_menu_selection_keeps_current_on_parse_failure(
+        self, tmp_path: Path
+    ) -> None:
         _make_maps(tmp_path, ["a.map"])
         (tmp_path / "bad.map").write_text("not a map\n", encoding="utf-8")
         viewer = MapViewer(tmp_path, starting_map="a.map")
 
-        event = pygame_event.Event(
-            UI_DROP_DOWN_MENU_CHANGED, text="bad.map", ui_element=None
-        )
-        viewer._handle_event(event)
+        viewer._handle_event(_key(pygame.K_m))
+        viewer._handle_event(_key(pygame.K_DOWN))
+        viewer._handle_event(_key(pygame.K_RETURN))
 
         assert viewer.current_map == "a.map"
         assert viewer.error is not None
         assert "line 1" in viewer.error
 
-    def test_bad_starting_map_shows_error_and_still_renders(
-        self, tmp_path: Path
-    ) -> None:
-        (tmp_path / "bad.map").write_text("not a map\n", encoding="utf-8")
-        viewer = MapViewer(tmp_path, starting_map="bad.map")
+    def test_escape_closes_menu_without_loading(self, tmp_path: Path) -> None:
+        _make_maps(tmp_path, ["a.map", "b.map"])
+        viewer = MapViewer(tmp_path, starting_map="a.map")
 
-        assert viewer.current_map is None
-        assert viewer.error is not None
-        assert viewer._render().get_size() == WINDOW
+        viewer._handle_event(_key(pygame.K_m))
+        viewer._handle_event(_key(pygame.K_DOWN))
+        viewer._handle_event(_key(pygame.K_ESCAPE))
 
-    def test_empty_maps_dir_builds_no_dropdown(self, tmp_path: Path) -> None:
+        assert viewer.menu.visible is False
+        assert viewer.current_map == "a.map"
+
+    def test_escape_quits_when_menu_closed(self, tmp_path: Path) -> None:
+        _make_maps(tmp_path, ["a.map"])
+        viewer = MapViewer(tmp_path, starting_map="a.map")
+
+        viewer._handle_event(_key(pygame.K_ESCAPE))
+
+        assert viewer.running is False
+
+    def test_m_on_empty_dir_opens_no_menu(self, tmp_path: Path) -> None:
         viewer = MapViewer(tmp_path)
 
-        assert viewer.dropdown is None
-        assert viewer.error is not None
+        viewer._handle_event(_key(pygame.K_m))
+
+        assert viewer.menu.visible is False
+
+    def test_speed_keys_cycle_with_wrap(self, tmp_path: Path) -> None:
+        _make_maps(tmp_path, ["a.map"])
+        viewer = MapViewer(tmp_path, starting_map="a.map")
+
+        assert SPEEDS[viewer.speed_index] == 1.0
+
+        viewer._handle_event(_key(pygame.K_PLUS))
+        assert SPEEDS[viewer.speed_index] == 2.0
+        viewer._handle_event(_key(pygame.K_PLUS))
+        assert SPEEDS[viewer.speed_index] == 4.0
+        viewer._handle_event(_key(pygame.K_PLUS))
+        assert SPEEDS[viewer.speed_index] == 0.5
+        viewer._handle_event(_key(pygame.K_MINUS))
+        assert SPEEDS[viewer.speed_index] == 4.0
+
+    def test_equals_key_acts_as_plus(self, tmp_path: Path) -> None:
+        _make_maps(tmp_path, ["a.map"])
+        viewer = MapViewer(tmp_path, starting_map="a.map")
+
+        viewer._handle_event(_key(pygame.K_EQUALS))
+
+        assert SPEEDS[viewer.speed_index] == 2.0
+
+    def test_step_keys_are_noop_stubs(self, tmp_path: Path) -> None:
+        _make_maps(tmp_path, ["a.map"])
+        viewer = MapViewer(tmp_path, starting_map="a.map")
+
+        viewer._handle_event(_key(pygame.K_SPACE))
+        viewer._handle_event(_key(pygame.K_BACKSPACE))
+
+        assert viewer.current_map == "a.map"
+        assert viewer.running is True
+
+    def test_legend_shows_live_speed(self, tmp_path: Path) -> None:
+        _make_maps(tmp_path, ["a.map"])
+        viewer = MapViewer(tmp_path, starting_map="a.map")
+
+        assert ("+/-", "SPEED 1x") in viewer._legend_rows()
+
+        viewer._speed_up()
+        assert ("+/-", "SPEED 2x") in viewer._legend_rows()
 
     def test_quit_event_stops_loop(self, tmp_path: Path) -> None:
         _make_maps(tmp_path, ["a.map"])
@@ -116,37 +195,16 @@ class TestMapViewer:
 
         assert viewer.running is False
 
-    def test_escape_key_stops_loop(self, tmp_path: Path) -> None:
-        _make_maps(tmp_path, ["a.map"])
-        viewer = MapViewer(tmp_path, starting_map="a.map")
-
-        viewer._handle_event(
-            pygame_event.Event(
-                pygame.KEYDOWN, key=pygame.K_ESCAPE, mod=0
-            )
-        )
-
-        assert viewer.running is False
-
-    def test_ignores_selection_without_dropdown(self, tmp_path: Path) -> None:
-        viewer = MapViewer(tmp_path)
-        event = pygame_event.Event(
-            UI_DROP_DOWN_MENU_CHANGED, text="anything.map", ui_element=None
-        )
-
-        viewer._handle_event(event)
-
-        assert viewer.current_map is None
-
-    def test_toast_active_after_bad_selection(self, tmp_path: Path) -> None:
+    def test_toast_active_after_bad_menu_selection(
+        self, tmp_path: Path
+    ) -> None:
         _make_maps(tmp_path, ["a.map"])
         (tmp_path / "bad.map").write_text("not a map\n", encoding="utf-8")
         viewer = MapViewer(tmp_path, starting_map="a.map")
 
-        event = pygame_event.Event(
-            UI_DROP_DOWN_MENU_CHANGED, text="bad.map", ui_element=None
-        )
-        viewer._handle_event(event)
+        viewer._handle_event(_key(pygame.K_m))
+        viewer._handle_event(_key(pygame.K_DOWN))
+        viewer._handle_event(_key(pygame.K_RETURN))
 
         assert viewer._toast_active() is True
 
@@ -154,11 +212,10 @@ class TestMapViewer:
         _make_maps(tmp_path, ["a.map"])
         (tmp_path / "bad.map").write_text("not a map\n", encoding="utf-8")
         viewer = MapViewer(tmp_path, starting_map="a.map")
-        event = pygame_event.Event(
-            UI_DROP_DOWN_MENU_CHANGED, text="bad.map", ui_element=None
-        )
-        viewer._handle_event(event)
 
+        viewer._handle_event(_key(pygame.K_m))
+        viewer._handle_event(_key(pygame.K_DOWN))
+        viewer._handle_event(_key(pygame.K_RETURN))
         viewer.error_visible_until = pygame.time.get_ticks() - 1
 
         assert viewer._toast_active() is False
@@ -167,16 +224,16 @@ class TestMapViewer:
         _make_maps(tmp_path, ["a.map", "b.map"])
         (tmp_path / "bad.map").write_text("not a map\n", encoding="utf-8")
         viewer = MapViewer(tmp_path, starting_map="a.map")
-        bad = pygame_event.Event(
-            UI_DROP_DOWN_MENU_CHANGED, text="bad.map", ui_element=None
-        )
-        viewer._handle_event(bad)
+
+        viewer._handle_event(_key(pygame.K_m))
+        viewer._handle_event(_key(pygame.K_DOWN))
+        viewer._handle_event(_key(pygame.K_DOWN))
+        viewer._handle_event(_key(pygame.K_RETURN))
         assert viewer._toast_active() is True
 
-        good = pygame_event.Event(
-            UI_DROP_DOWN_MENU_CHANGED, text="b.map", ui_element=None
-        )
-        viewer._handle_event(good)
+        viewer._handle_event(_key(pygame.K_m))
+        viewer._handle_event(_key(pygame.K_DOWN))
+        viewer._handle_event(_key(pygame.K_RETURN))
 
         assert viewer.error is None
         assert viewer._toast_active() is False
@@ -194,27 +251,52 @@ class TestMapViewer:
         _make_maps(tmp_path, ["a.map"])
         (tmp_path / "bad.map").write_text("not a map\n", encoding="utf-8")
         viewer = MapViewer(tmp_path, starting_map="a.map")
-        event = pygame_event.Event(
-            UI_DROP_DOWN_MENU_CHANGED, text="bad.map", ui_element=None
-        )
-        viewer._handle_event(event)
+
+        viewer._handle_event(_key(pygame.K_m))
+        viewer._handle_event(_key(pygame.K_DOWN))
+        viewer._handle_event(_key(pygame.K_RETURN))
 
         assert viewer._render().get_size() == WINDOW
 
-    def test_resize_events_are_ignored(self, tmp_path: Path) -> None:
+    def test_render_with_open_menu_returns_window_size(
+        self, tmp_path: Path
+    ) -> None:
         _make_maps(tmp_path, ["a.map"])
         viewer = MapViewer(tmp_path, starting_map="a.map")
-        original_rect = viewer.dropdown.get_relative_rect()
+        viewer._handle_event(_key(pygame.K_m))
+
+        assert viewer._render().get_size() == WINDOW
+
+    def test_video_resize_scales_window(self, tmp_path: Path) -> None:
+        _make_maps(tmp_path, ["a.map"])
+        viewer = MapViewer(tmp_path, starting_map="a.map")
 
         viewer._handle_event(
             pygame_event.Event(pygame.VIDEORESIZE, size=(1600, 900))
         )
+
+        assert viewer.screen.get_size() == (1600, 900)
+        assert viewer._render().get_size() == (1600, 900)
+
+    def test_window_size_changed_resizes_screen(self, tmp_path: Path) -> None:
+        _make_maps(tmp_path, ["a.map"])
+        viewer = MapViewer(tmp_path, starting_map="a.map")
+
+        viewer._handle_event(
+            pygame_event.Event(pygame.WINDOWSIZECHANGED, x=800, y=500)
+        )
+
+        assert viewer.screen.get_size() == (800, 500)
+
+    def test_resize_to_same_size_is_noop(self, tmp_path: Path) -> None:
+        _make_maps(tmp_path, ["a.map"])
+        viewer = MapViewer(tmp_path, starting_map="a.map")
+        current = viewer.screen
+
         viewer._handle_event(
             pygame_event.Event(
-                pygame.WINDOWSIZECHANGED, x=1600, y=900
+                pygame.WINDOWSIZECHANGED, x=WINDOW[0], y=WINDOW[1]
             )
         )
 
-        assert viewer.screen.get_size() == WINDOW
-        assert viewer.dropdown.get_relative_rect() == original_rect
-        assert viewer._render().get_size() == WINDOW
+        assert viewer.screen is current

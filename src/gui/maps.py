@@ -1,7 +1,7 @@
 """Pure map-file helpers for the GUI layer.
 
 Discovery of the ``maps/`` catalogue (``list_maps``) and the load +
-convert + layout pipeline behind the map dropdown (``load_map``).
+convert + layout pipeline behind the map picker (``load_map``).
 Contains no pygame logic so it stays unit-testable.
 """
 
