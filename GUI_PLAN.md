@@ -60,7 +60,7 @@ retro aesthetic better than any widget set.
 
 The bottom-left **legend** (`_draw_legend`) lists the bindings and the
 live speed. The **map picker** (`_draw_menu`) is a centered overlay on
-the `MapMenu` state machine; parse/IO failures show a 5s bottom-center
+the `MapMenu` state machine; parse/IO failures show a 5s top-center
 toast (boxed, rose-bordered) and keep the current map (persistent toast
 when `maps/` is empty).
 
@@ -89,7 +89,7 @@ Frame loop (`MapViewer.run`, per tick):
 2. Draw the map onto the 640 × 360 canvas (rose-pine palette, pixel
    font), then the toast, the legend, and the picker overlay.
 3. `pygame.transform.scale(canvas, screen.get_size())` → blit → `flip()`.
-   Load errors appear as a 5s bottom-center toast and the previous map
+   Load errors appear as a 5s top-center toast and the previous map
    stays current; empty `maps/` keeps a persistent toast.
 
 Window: opens at `1280 × 720` with `pygame.RESIZABLE` and **stretches

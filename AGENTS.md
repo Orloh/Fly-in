@@ -83,7 +83,7 @@ make test         # uv run pytest tests || true   ← swallows failures
   the `MapMenu` state machine in `src/gui/menu.py` (pure, tested in
   `tests/test_gui_menu.py`). Options from `list_maps(maps_dir)`,
   refreshed on open, current map pre-highlighted. Parse/IO failures
-  show a 5-second bottom-center toast (boxed, rose-bordered) and keep
+  show a 5-second top-center toast (boxed, rose-bordered) and keep
   the current map; an empty `maps/` yields a persistent "no maps found"
   toast and no picker.
 - **GUI layer lives in `src/gui/`**, decoupled from the simulation

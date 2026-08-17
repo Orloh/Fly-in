@@ -67,7 +67,7 @@ TOAST_BORDER = _ROSE
 SPEEDS = (0.5, 1.0, 2.0, 4.0)
 
 LEGEND_MARGIN = 8
-LEGEND_PADDING = 6
+LEGEND_PADDING = 4
 LEGEND_BORDER = _MUTED
 
 MENU_PADDING = 10
@@ -200,6 +200,7 @@ class MapViewer:
         self.clock = pygame.time.Clock()
         self.map_surface = pygame.Surface(canvas)
         self.font = pygame.font.Font(str(_FONT_PATH), 8)
+        self.legend_font = pygame.font.Font(str(_FONT_PATH), 7)
         if not self.menu.options:
             self.error = f"No .map files found in {self.maps_dir}"
             self.error_visible_until = None
@@ -369,11 +370,13 @@ class MapViewer:
         ]
 
     def _draw_legend(self, surface: pygame.Surface) -> None:
-        """Draw the key bindings in a box at the bottom-left corner."""
+        """Draw the key bindings in a compact box at the bottom-left."""
         rows = self._legend_rows()
-        line_height = self.font.get_height()
-        key_width = self.font.size(rows[0][0])[0] + 8
-        content = max(self.font.size(action)[0] for _, action in rows)
+        line_height = self.legend_font.get_height()
+        key_width = self.legend_font.size(rows[0][0])[0] + 6
+        content = max(
+            self.legend_font.size(action)[0] for _, action in rows
+        )
         box_w = 2 * LEGEND_PADDING + key_width + content
         box_h = 2 * LEGEND_PADDING + line_height * len(rows)
         left = LEGEND_MARGIN
@@ -383,8 +386,8 @@ class MapViewer:
         pygame.draw.rect(surface, LEGEND_BORDER, box, 1)
         y = top + LEGEND_PADDING
         for key, action in rows:
-            key_label = self.font.render(key, True, _GOLD)
-            action_label = self.font.render(action, True, _TEXT)
+            key_label = self.legend_font.render(key, True, _GOLD)
+            action_label = self.legend_font.render(action, True, _TEXT)
             surface.blit(key_label, (left + LEGEND_PADDING, y))
             surface.blit(
                 action_label,
@@ -431,7 +434,7 @@ class MapViewer:
         return pygame.time.get_ticks() < self.error_visible_until
 
     def _draw_toast(self, surface: pygame.Surface) -> None:
-        """Draw the error message in a bottom-centered box."""
+        """Draw the error message in a top-centered box."""
         assert self.error is not None
         text_width = surface.get_width() - 2 * (
             TOAST_MARGIN + TOAST_PADDING
@@ -441,7 +444,7 @@ class MapViewer:
         box_w = surface.get_width() - 2 * TOAST_MARGIN
         box_h = 2 * TOAST_PADDING + line_height * len(lines)
         left = TOAST_MARGIN
-        top = surface.get_height() - TOAST_MARGIN - box_h
+        top = TOAST_MARGIN
 
         box = pygame.Rect(left, top, box_w, box_h)
         pygame.draw.rect(surface, TOAST_BG, box)
