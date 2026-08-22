@@ -15,7 +15,7 @@ class Drone(BaseModel):
     target_zone: str
     status: DroneStatus = DroneStatus.WAITING
     path: list[str] = Field(default_factory=list)
-    turns_in_transit: int = 0
+    turns_in_transit: int | float = 0
     transit_destination: str | None = None
 
     @property

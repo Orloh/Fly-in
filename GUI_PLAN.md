@@ -13,9 +13,10 @@ legend, the map picker, and the toast are all drawn to a low-res canvas
 and upscaled, so the whole frame reads as one cohesive arcade look in a
 single rose-pine palette and one pixel font.
 
-Shipped milestone: the **map picker** (keyboard-driven). The step
-forward/back and speed-cycle keys are wired as stubs; they drive the
-simulation once the engine lands.
+Shipped milestones: the **map picker** (keyboard-driven) and **pathfinding**
+(`find_path` + `_enter_cost` in `src/simulation/pathfinding.py`, 10 tests
+passing). The step forward/back and speed-cycle keys are wired as stubs;
+they drive the simulation once the engine lands.
 
 ## Libraries and technologies
 
@@ -113,6 +114,9 @@ re-laid-out when the window changes.
    error handling, low-res map rendering, rose-pine palette + pixel
    font. Shipped and headless-tested via `tests/conftest.py` dummy SDL
    drivers. [done]
-2. **Simulation GUI controls** — the `SPACE`/`BACKSPACE` step keys and
+2. **Pathfinding** — Dijkstra-based `find_path` with priority-zone
+   tie-breaks, restricted/blocked zone costs, 10 tests passing.
+   [`src/simulation/pathfinding.py`] [done]
+3. **Simulation GUI controls** — the `SPACE`/`BACKSPACE` step keys and
    the `+`/`-` speed cycle wired to the simulation engine once it lands.
-3. **Polish** — drone animation states, per-zone accents/status dots.
+4. **Polish** — drone animation states, per-zone accents/status dots.
