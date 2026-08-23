@@ -8,10 +8,10 @@ first-class landing pad for the future simulation controls.
 ## Main idea
 
 One window that renders the current map as chunky retro pixel-art with
-all controls on the keyboard — no mouse widgets. The map, the key
-legend, the map picker, and the toast are all drawn to a low-res canvas
-and upscaled, so the whole frame reads as one cohesive arcade look in a
-single rose-pine palette and one pixel font.
+all controls on the keyboard — no mouse widgets. The map, a bottom HUD
+bar (controls + messages + readouts), the map picker, and overlays are
+all drawn to a low-res canvas and upscaled, so the whole frame reads as
+one cohesive arcade look in a single rose-pine palette and one pixel font.
 
 Shipped milestones: the **map picker** (keyboard-driven), **pathfinding**
 (`find_path` + `_enter_cost` in `src/simulation/pathfinding.py`, 10 tests),
@@ -41,9 +41,13 @@ retro aesthetic better than any widget set.
   (`VIRTUAL = 640 × 360`), upscale to the window (`1280 × 720`,
   `SCALE = 2`) with `pygame.transform.scale` — nearest-neighbor, so
   pixels stay crisp and chunky. Every map pixel becomes a solid 2×2 block.
-- **UI on the same canvas:** the legend, the picker, and the toast are
-  drawn on the low-res canvas too, so they inherit the chunky look and
-  scale with the map on resize (no native-res layer).
+- **UI on the same canvas:** the map, a bottom HUD band, the picker, and
+  overlays are drawn on the low-res canvas too, so they inherit the chunky
+  look and scale with the map on resize (no native-res layer). The canvas
+  is partitioned vertically: the **map band** (top, height `MAP_HEIGHT`)
+  holds the simulation; the **HUD band** (bottom, `HUD_HEIGHT` ≈ 52px)
+  holds controls, readouts, and messages, separated by a divider line.
+  Zone layout uses the map-band height so nothing hides behind the HUD.
 - **Font:** Press Start 2P for UI text and map labels; small sizes
   (≈8–10px) on the low-res map canvas.
 - **Overlays:** flat, blocky boxes (thin borders, no shadows) so the UI
@@ -53,19 +57,19 @@ retro aesthetic better than any widget set.
 
 | Key | Scope | Behaviour |
 |---|---|---|
-| `SPACE` | global | Step the simulation forward (stub — engine landed, wire to `Simulation.step()`) |
-| `BACKSPACE` | global | Step the simulation back (stub) |
-| `+` / `-` | global | Cycle simulation speed through `0.5×, 1×, 2×, 4×` (wraps; shown live in the legend) |
+| `SPACE` | global | Play/pause; single-steps while paused (drives `Simulation.step()`) |
+| `BACKSPACE` | global | Rewind one turn (snapshot history) |
+| `+` / `-` | global | Cycle auto-play speed through `0.5×, 1×, 2×, 4×` (wraps; shown live in the HUD bar) |
 | `M` | global | Toggle the map picker (options refreshed on open) |
 | `↑` / `↓` | picker | Move the highlighted map |
 | `ENTER` | picker | Load the highlighted map, closing the picker |
 | `ESC` | picker / global | Close the picker; quit when the picker is closed |
 
-The bottom-left **legend** (`_draw_legend`) lists the bindings and the
-live speed. The **map picker** (`_draw_menu`) is a centered overlay on
-the `MapMenu` state machine; parse/IO failures show a 5s top-center
-toast (boxed, rose-bordered) and keep the current map (persistent toast
-when `maps/` is empty).
+The bottom **HUD bar** (`_draw_hud`) shows the bindings, live readouts
+(`Turn N`, `SPEED x`), and the current message (turn flash or load error),
+color-coded (foam = info, rose = error). The **map picker** (`_draw_menu`)
+is a centered overlay on the `MapMenu` state machine; parse/IO failures
+surface in the HUD bar (persistent when `maps/` is empty).
 
 ## Layout / architecture
 
@@ -89,8 +93,9 @@ Frame loop (`MapViewer.run`, per tick):
    `KEYDOWN` events route through `_handle_key`: the picker owns
    `↑`/`↓`/`ENTER`/`ESC`/`M` while open; otherwise the sim keys
    (`SPACE`, `BACKSPACE`, `+`/`-`, `M`) apply.
-2. Draw the map onto the 640 × 360 canvas (rose-pine palette, pixel
-   font), then the toast, the legend, and the picker overlay.
+ 2. Draw the map onto the top band of the 640 × 360 canvas (rose-pine
+    palette, pixel font), then the bottom HUD bar (controls, readouts,
+    message), and the picker overlay.
 3. `pygame.transform.scale(canvas, screen.get_size())` → blit → `flip()`.
    Load errors appear as a 5s top-center toast and the previous map
    stays current; empty `maps/` keeps a persistent toast.

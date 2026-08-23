@@ -29,6 +29,11 @@ _GOLDEN_ANGLE = 2.399963229063653
 SCALE = 2
 WINDOW = (DEFAULT_CANVAS[0] * SCALE, DEFAULT_CANVAS[1] * SCALE)
 
+#: Height of the bottom HUD band (controls, readouts, messages).
+HUD_HEIGHT = 52
+#: Height of the top map band (simulation rendering area).
+MAP_HEIGHT = DEFAULT_CANVAS[1] - HUD_HEIGHT
+
 _ASSETS_DIR = Path(__file__).resolve().parents[2] / "assets"
 _FONT_PATH = _ASSETS_DIR / "fonts" / "PressStart2P-Regular.ttf"
 
@@ -53,7 +58,6 @@ DRONE_COLOR = _GOLD
 DRONE_RING = _MUTED
 START_RING = _PINE
 END_RING = _ROSE
-ERROR_COLOR = _ROSE
 
 ZONE_RADIUS = 14
 DRONE_RADIUS = 5
@@ -188,6 +192,7 @@ class MapViewer:
     ) -> None:
         self.maps_dir = Path(maps_dir)
         self.canvas = canvas
+        self.map_canvas = (canvas[0], MAP_HEIGHT)
         self.current_map: str | None = None
         self.graph: Graph | None = None
         self.fleet: list[Drone] | None = None
@@ -229,7 +234,7 @@ class MapViewer:
 
     def _load_map(self, name: str) -> None:
         """Load a map by name, keeping the current one on failure."""
-        result, message = load_map(self.maps_dir / name, self.canvas)
+        result, message = load_map(self.maps_dir / name, self.map_canvas)
         if message is not None:
             self.error = message
             self.error_visible_until = (
@@ -427,11 +432,7 @@ class MapViewer:
         surface.fill(_BG)
         if self.graph is not None and self.positions is not None:
             self._draw_map(surface)
-        if self._toast_active():
-            self._draw_toast(surface)
-        if self._status_active():
-            self._draw_status(surface)
-        self._draw_legend(surface)
+        self._draw_hud(surface)
         self._draw_menu(surface)
         scaled = pygame.transform.scale(surface, self.screen.get_size())
         self.screen.blit(scaled, (0, 0))
@@ -457,31 +458,40 @@ class MapViewer:
             ("M", "MAPS"),
         ]
 
-    def _draw_legend(self, surface: pygame.Surface) -> None:
-        """Draw the key bindings in a compact box at the bottom-left."""
-        rows = self._legend_rows()
-        line_height = self.legend_font.get_height()
-        key_width = self.legend_font.size(rows[0][0])[0] + 6
-        content = max(
-            self.legend_font.size(action)[0] for _, action in rows
+    def _draw_hud(self, surface: pygame.Surface) -> None:
+        """Draw the bottom HUD bar: panel, controls, readouts, message."""
+        width = surface.get_width()
+        pygame.draw.rect(
+            surface, TOAST_BG, pygame.Rect(0, MAP_HEIGHT, width, HUD_HEIGHT)
         )
-        box_w = 2 * LEGEND_PADDING + key_width + content
-        box_h = 2 * LEGEND_PADDING + line_height * len(rows)
-        left = LEGEND_MARGIN
-        top = surface.get_height() - LEGEND_MARGIN - box_h
-        box = pygame.Rect(left, top, box_w, box_h)
-        pygame.draw.rect(surface, TOAST_BG, box)
-        pygame.draw.rect(surface, LEGEND_BORDER, box, 1)
-        y = top + LEGEND_PADDING
-        for key, action in rows:
-            key_label = self.legend_font.render(key, True, _GOLD)
-            action_label = self.legend_font.render(action, True, _TEXT)
-            surface.blit(key_label, (left + LEGEND_PADDING, y))
-            surface.blit(
-                action_label,
-                (left + LEGEND_PADDING + key_width, y),
-            )
-            y += line_height
+        pygame.draw.line(
+            surface, _MUTED, (0, MAP_HEIGHT), (width, MAP_HEIGHT), 1
+        )
+
+        line_height = self.legend_font.get_height()
+        controls = "   ".join(
+            f"{k} {a}" for k, a in self._legend_rows()
+        )
+        surface.blit(
+            self.legend_font.render(controls, True, _TEXT),
+            (LEGEND_PADDING, MAP_HEIGHT + LEGEND_PADDING),
+        )
+
+        turn = self.sim.state.turn if self.sim is not None else 0
+        speed = SPEEDS[self.speed_index]
+        readout = f"TURN {turn}   SPEED {speed:g}x"
+        y = MAP_HEIGHT + LEGEND_PADDING + line_height + 2
+        surface.blit(
+            self.legend_font.render(readout, True, _GOLD),
+            (LEGEND_PADDING, y),
+        )
+
+        message = self.error or self.status
+        if message:
+            color = _ROSE if self.error is not None else _FOAM
+            label = self.legend_font.render(message, True, color)
+            right = width - LEGEND_PADDING - label.get_width()
+            surface.blit(label, (right, y))
 
     def _draw_menu(self, surface: pygame.Surface) -> None:
         """Draw the map picker as a centered overlay when it is open."""
@@ -521,51 +531,6 @@ class MapViewer:
             return True
         return pygame.time.get_ticks() < self.error_visible_until
 
-    def _draw_toast(self, surface: pygame.Surface) -> None:
-        """Draw the error message in a top-centered box."""
-        assert self.error is not None
-        text_width = surface.get_width() - 2 * (
-            TOAST_MARGIN + TOAST_PADDING
-        )
-        lines = _wrap_text(self.font, self.error, text_width)
-        line_height = self.font.get_height()
-        box_w = surface.get_width() - 2 * TOAST_MARGIN
-        box_h = 2 * TOAST_PADDING + line_height * len(lines)
-        left = TOAST_MARGIN
-        top = TOAST_MARGIN
-
-        box = pygame.Rect(left, top, box_w, box_h)
-        pygame.draw.rect(surface, TOAST_BG, box)
-        pygame.draw.rect(
-            surface, TOAST_BORDER, box, TOAST_BORDER_WIDTH
-        )
-        y = top + TOAST_PADDING
-        for line in lines:
-            label = self.font.render(line, True, ERROR_COLOR)
-            surface.blit(label, (left + TOAST_PADDING, y))
-            y += line_height
-
-    def _draw_status(self, surface: pygame.Surface) -> None:
-        """Draw the transient status message in a top-centered box."""
-        assert self.status is not None
-        border = _ROSE if self._status_is_error else _FOAM
-        text_width = surface.get_width() - 2 * (TOAST_MARGIN + TOAST_PADDING)
-        lines = _wrap_text(self.font, self.status, text_width)
-        line_height = self.font.get_height()
-        box_w = surface.get_width() - 2 * TOAST_MARGIN
-        box_h = 2 * TOAST_PADDING + line_height * len(lines)
-        left = TOAST_MARGIN
-        top = TOAST_MARGIN
-
-        box = pygame.Rect(left, top, box_w, box_h)
-        pygame.draw.rect(surface, TOAST_BG, box)
-        pygame.draw.rect(surface, border, box, TOAST_BORDER_WIDTH)
-        y = top + TOAST_PADDING
-        for line in lines:
-            label = self.font.render(line, True, border)
-            surface.blit(label, (left + TOAST_PADDING, y))
-            y += line_height
-
     def _prune_error(self) -> None:
         """Clear the error once its toast window has elapsed."""
         if (
@@ -585,14 +550,6 @@ class MapViewer:
         ):
             self.status = None
             self.status_visible_until = None
-
-    def _status_active(self) -> bool:
-        """Whether the status toast should currently be drawn."""
-        if self.status is None:
-            return False
-        if self.status_visible_until is None:
-            return True
-        return pygame.time.get_ticks() < self.status_visible_until
 
     def _auto_step(self, dt_ms: int) -> None:
         """Advance the sim when playing and enough time has elapsed."""

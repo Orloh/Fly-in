@@ -12,7 +12,7 @@ from pathlib import Path
 import pygame
 import pygame.event as pygame_event
 
-from src.gui.app import SPEEDS, MapViewer, WINDOW
+from src.gui.app import MAP_HEIGHT, SPEEDS, MapViewer, WINDOW
 from src.models.enums import DroneStatus
 
 
@@ -240,6 +240,15 @@ class TestMapViewer:
         turn = viewer.sim.state.turn
         viewer._auto_step(500)
         assert viewer.sim.state.turn == turn
+
+    def test_positions_stay_within_map_band(self, tmp_path: Path) -> None:
+        _make_maps(tmp_path, ["a.map"])
+        viewer = MapViewer(tmp_path, starting_map="a.map")
+
+        assert viewer.positions is not None
+        for _name, (px, py) in viewer.positions.items():
+            assert px >= 0
+            assert py <= MAP_HEIGHT
 
     def test_legend_shows_live_speed(self, tmp_path: Path) -> None:
         _make_maps(tmp_path, ["a.map"])
