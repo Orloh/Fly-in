@@ -13,6 +13,7 @@ import pygame
 import pygame.event as pygame_event
 
 from src.gui.app import SPEEDS, MapViewer, WINDOW
+from src.models.enums import DroneStatus
 
 
 VALID_MAP = (
@@ -168,15 +169,77 @@ class TestMapViewer:
 
         assert SPEEDS[viewer.speed_index] == 2.0
 
-    def test_step_keys_are_noop_stubs(self, tmp_path: Path) -> None:
+    def test_space_advances_simulation(self, tmp_path: Path) -> None:
+        _make_maps(tmp_path, ["a.map"])
+        viewer = MapViewer(tmp_path, starting_map="a.map")
+
+        assert all(d.status == DroneStatus.WAITING for d in viewer.fleet)
+
+        viewer._handle_event(_key(pygame.K_SPACE))
+
+        assert viewer.current_map == "a.map"
+        assert viewer.running is True
+        assert any(
+            d.status == DroneStatus.IN_TRANSIT for d in viewer.fleet
+        )
+
+    def test_backspace_rewinds_simulation(self, tmp_path: Path) -> None:
         _make_maps(tmp_path, ["a.map"])
         viewer = MapViewer(tmp_path, starting_map="a.map")
 
         viewer._handle_event(_key(pygame.K_SPACE))
-        viewer._handle_event(_key(pygame.K_BACKSPACE))
+        assert any(
+            d.status == DroneStatus.IN_TRANSIT for d in viewer.fleet
+        )
 
-        assert viewer.current_map == "a.map"
-        assert viewer.running is True
+        viewer._handle_event(_key(pygame.K_BACKSPACE))
+        assert all(d.status == DroneStatus.WAITING for d in viewer.fleet)
+
+    def test_space_on_finished_is_noop(self, tmp_path: Path) -> None:
+        _make_maps(tmp_path, ["a.map"])
+        viewer = MapViewer(tmp_path, starting_map="a.map")
+
+        for _ in range(10):
+            viewer._step_forward()
+            if viewer.sim.finished:
+                break
+        assert viewer.sim.finished
+
+        turn = viewer.sim.state.turn
+        viewer._handle_event(_key(pygame.K_SPACE))
+        assert viewer.sim.state.turn == turn
+
+    def test_speed_keys_start_autoplay(self, tmp_path: Path) -> None:
+        _make_maps(tmp_path, ["a.map"])
+        viewer = MapViewer(tmp_path, starting_map="a.map")
+
+        viewer._handle_event(_key(pygame.K_PLUS))
+        assert viewer.playing is True
+        assert SPEEDS[viewer.speed_index] == 2.0
+
+    def test_space_toggles_pause(self, tmp_path: Path) -> None:
+        _make_maps(tmp_path, ["a.map"])
+        viewer = MapViewer(tmp_path, starting_map="a.map")
+
+        viewer._speed_up()
+        assert viewer.playing is True
+
+        viewer._handle_event(_key(pygame.K_SPACE))
+        assert viewer.playing is False
+
+    def test_auto_step_advances_while_playing(self, tmp_path: Path) -> None:
+        _make_maps(tmp_path, ["a.map"])
+        viewer = MapViewer(tmp_path, starting_map="a.map")
+        viewer.playing = True
+        viewer.speed_index = 0  # 0.5x -> 2s interval
+
+        before = viewer.sim.state.turn
+        viewer._auto_step(2500)
+        assert viewer.sim.state.turn == before + 1
+
+        turn = viewer.sim.state.turn
+        viewer._auto_step(500)
+        assert viewer.sim.state.turn == turn
 
     def test_legend_shows_live_speed(self, tmp_path: Path) -> None:
         _make_maps(tmp_path, ["a.map"])

@@ -76,11 +76,11 @@ make test         # uv run pytest tests || true   ← swallows failures
   pine `#31748f`, text `#e0def4`. Pixel font **Press Start 2P**
   (OFL-1.1, vendored under `assets/fonts/` with its license).
 - **Keyboard controls:** the bottom-left legend (`_draw_legend`) shows
-  the bindings. `SPACE` = step forward, `BACKSPACE` = step back (no-op
-  stubs until the sim engine), `+`/`-` = cycle speed
-  (`SPEEDS = 0.5/1/2/4×`, wraps, shown live), `M` = toggle the map
-  picker. In the picker: `UP`/`DOWN` move, `ENTER` loads, `ESC`/`M`
-  close. `ESC` quits when the picker is closed.
+  the bindings. `SPACE` = play/pause (single-steps while paused),
+  `BACKSPACE` = rewind one turn (snapshot history), `+`/`-` = set speed
+  and start auto-play (`SPEEDS = 0.5/1/2/4×` turns/sec, wraps, shown
+  live), `M` = toggle the map picker. In the picker: `UP`/`DOWN` move,
+  `ENTER` loads, `ESC`/`M` close. `ESC` quits when the picker is closed.
 - **Map picker:** hand-drawn centered overlay (`_draw_menu`) on top of
   the `MapMenu` state machine in `src/gui/menu.py` (pure, tested in
   `tests/test_gui_menu.py`). Options from `list_maps(maps_dir)`,

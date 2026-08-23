@@ -15,10 +15,10 @@ single rose-pine palette and one pixel font.
 
 Shipped milestones: the **map picker** (keyboard-driven), **pathfinding**
 (`find_path` + `_enter_cost` in `src/simulation/pathfinding.py`, 10 tests),
-and the **simulation engine** (`Simulation` in `src/simulation/engine.py`,
-10 tests: turn stepping, capacity/link conflicts, head-on swaps). The step
-forward/back and speed-cycle keys are wired as stubs ready to drive the
-engine.
+the **simulation engine** (`Simulation` in `src/simulation/engine.py`, 10
+tests: turn stepping, capacity/link conflicts, head-on swaps), and the
+**GUI controls** wired to it — `SPACE` play/pause + single-step,
+`BACKSPACE` rewind (snapshot history), `+`/`-` auto-play speed.
 
 ## Libraries and technologies
 
@@ -121,5 +121,5 @@ re-laid-out when the window changes.
    [`src/simulation/pathfinding.py`] [done]
 3. **Simulation GUI controls** — the `SPACE`/`BACKSPACE` step keys and
    the `+`/`-` speed cycle wired to `Simulation.step()` (engine landed:
-   `src/simulation/engine.py`).
+   `src/simulation/engine.py`). [done]
 4. **Polish** — drone animation states, per-zone accents/status dots.
