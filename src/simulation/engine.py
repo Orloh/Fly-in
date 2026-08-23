@@ -8,7 +8,7 @@ capacity, link at capacity) surface as conflicts on each ``TurnResult``.
 
 from __future__ import annotations
 
-from typing import TypeAlias
+from typing import TypeAlias, cast
 
 from src.models import (
     Drone,
@@ -24,9 +24,6 @@ from src.simulation.pathfinding import _enter_cost, find_path
 #: A human-readable capacity or routing failure reported on a turn.
 Conflict: TypeAlias = str
 
-#: Link key uses traversal direction (from_zone, to_zone) for link_usage.
-LinkKey: TypeAlias = tuple[str, str]
-
 
 class Simulation:
     """Turn-by-turn executor over a graph and a drone fleet."""
@@ -38,8 +35,6 @@ class Simulation:
         self.state = SimulationState(drones=drone_dict)
         # Reservations for destination zones: zone_name -> count
         self._zone_reservations: dict[str, int] = {}
-        # Departing drones this turn: zone_name -> count
-        self._departing: dict[str, int] = {}
 
     @property
     def finished(self) -> bool:
@@ -59,7 +54,6 @@ class Simulation:
 
         # Reset per-turn tracking
         self._zone_reservations.clear()
-        self._departing.clear()
 
         # Process in-transit drones (arrivals)
         for drone in self.state.drones.values():
@@ -89,8 +83,8 @@ class Simulation:
             if not waiting_drones:
                 break
 
-            # Pre-compute paths and intended next hops for all waiting drones
-            intended_moves: dict[int, str] = {}  # drone_id -> next_zone_name
+            # Pre-compute paths and intended next hops
+            intended_moves: dict[int, str] = {}
             for drone in waiting_drones:
                 self._ensure_path(drone)
                 if drone.status == DroneStatus.BLOCKED:
@@ -101,28 +95,29 @@ class Simulation:
                 elif drone.path:
                     intended_moves[drone.id] = drone.path[0]
 
-            # Compute departures: count drones intending to leave each zone
-            self._departing.clear()
-            for drone in self.state.drones.values():
+            # Compute departures: drones in each zone that intend to leave
+            departing: dict[str, int] = {}
+            for drone in waiting_drones:
                 if (
-                    drone.status == DroneStatus.WAITING
-                    and drone.id in intended_moves
+                    drone.id in intended_moves
+                    and drone.current_zone is not None
                 ):
-                    if drone.current_zone is not None:
-                        self._departing[drone.current_zone] = (
-                            self._departing.get(drone.current_zone, 0) + 1
-                        )
+                    departing[drone.current_zone] = (
+                        departing.get(drone.current_zone, 0) + 1
+                    )
 
             # Process moves in id order
             moved_any = False
             for drone in waiting_drones:
                 if drone.id not in intended_moves:
-                    continue  # blocked or no path
+                    continue
 
                 next_zone_name = intended_moves[drone.id]
                 next_zone = self.graph.zones[next_zone_name]
 
-                conflict = self._capacity_conflict(drone, next_zone)
+                conflict = self._capacity_conflict(
+                    drone, next_zone, departing
+                )
                 if conflict:
                     conflicts.append(conflict)
                     handled_drones.add(drone.id)
@@ -135,20 +130,9 @@ class Simulation:
                         self.state.update_occupancy()
 
             if not moved_any:
-                # No drone could move; remaining waiting drones are blocked
+                # No drone could move this iteration; remaining are handled
                 for drone in waiting_drones:
-                    if (
-                        drone.id not in handled_drones
-                        and drone.status == DroneStatus.WAITING
-                    ):
-                        if drone.path:
-                            next_zone_name = drone.path[0]
-                            next_zone = self.graph.zones[next_zone_name]
-                            conflict = self._capacity_conflict(
-                                drone, next_zone
-                            )
-                            if conflict:
-                                conflicts.append(conflict)
+                    if drone.id not in handled_drones:
                         handled_drones.add(drone.id)
                 break
 
@@ -174,28 +158,29 @@ class Simulation:
             drone.path = route[1:]
 
     def _capacity_conflict(
-        self, drone: Drone, dest: Zone
+        self,
+        drone: Drone,
+        dest: Zone,
+        departing: dict[str, int],
     ) -> Conflict | None:
         """Return the conflict blocking a hop into ``dest``, or None."""
         if drone.current_zone is None:
             return None
 
-        # Check zone capacity: load = physical + reserved - departing
+        # Zone capacity: load = physical + reserved - departing
         if dest.capacity is not None:
             physical = self.state.zone_occupancy.get(dest.name, 0)
             reserved = self._zone_reservations.get(dest.name, 0)
-            departing = self._departing.get(dest.name, 0)
-            load = physical + reserved - departing
-            if load >= dest.capacity:
+            leaving = departing.get(dest.name, 0)
+            if physical + reserved - leaving >= dest.capacity:
                 return f"drone {drone.id} zone {dest.name} at capacity"
 
-        # Check link capacity: undirected link, sum usage in both directions
+        # Link capacity: undirected link, sum usage in both directions
         zone_a, zone_b = drone.current_zone, dest.name
-        link_key = (zone_a, zone_b)  # traversal direction for storage
+        link_key = (zone_a, zone_b)
         canon_key = (zone_a, zone_b) if zone_a <= zone_b else (zone_b, zone_a)
         connection = self.graph.connections.get(canon_key)
         if connection is not None:
-            # Total usage on this undirected link (both directions)
             rev_key = (zone_b, zone_a)
             total_usage = (
                 self.state.link_usage.get(link_key, 0)
@@ -215,18 +200,18 @@ class Simulation:
         next_zone = self.graph.zones[next_zone_name]
 
         zone_a, zone_b = drone.current_zone, next_zone_name
-        link_key = (zone_a, zone_b)  # traversal direction
+        link_key = (zone_a, zone_b)
 
         drone.status = DroneStatus.IN_TRANSIT
         drone.transit_destination = next_zone_name
-        drone.turns_in_transit = int(_enter_cost(next_zone))
+        drone.turns_in_transit = cast(int, _enter_cost(next_zone))
 
         # Track link usage (traversal direction)
         self.state.link_usage[link_key] = (
             self.state.link_usage.get(link_key, 0) + 1
         )
 
-        # Track reservations
+        # Track reservations for destination zone
         self._zone_reservations[next_zone_name] = (
             self._zone_reservations.get(next_zone_name, 0) + 1
         )
@@ -244,7 +229,7 @@ class Simulation:
             return
 
         zone_a, zone_b = drone.current_zone, drone.transit_destination
-        link_key = (zone_a, zone_b)  # traversal direction
+        link_key = (zone_a, zone_b)
 
         # Release link usage
         if link_key in self.state.link_usage:
@@ -252,8 +237,7 @@ class Simulation:
                 0, self.state.link_usage[link_key] - 1
             )
 
-        # Release reservation on arrival zone (becomes physical
-        # via update_occupancy)
+        # Release reservation (drone becomes physical via update_occupancy)
         if zone_b in self._zone_reservations:
             self._zone_reservations[zone_b] = max(
                 0, self._zone_reservations[zone_b] - 1

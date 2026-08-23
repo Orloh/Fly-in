@@ -13,10 +13,12 @@ legend, the map picker, and the toast are all drawn to a low-res canvas
 and upscaled, so the whole frame reads as one cohesive arcade look in a
 single rose-pine palette and one pixel font.
 
-Shipped milestones: the **map picker** (keyboard-driven) and **pathfinding**
-(`find_path` + `_enter_cost` in `src/simulation/pathfinding.py`, 10 tests
-passing). The step forward/back and speed-cycle keys are wired as stubs;
-they drive the simulation once the engine lands.
+Shipped milestones: the **map picker** (keyboard-driven), **pathfinding**
+(`find_path` + `_enter_cost` in `src/simulation/pathfinding.py`, 10 tests),
+and the **simulation engine** (`Simulation` in `src/simulation/engine.py`,
+10 tests: turn stepping, capacity/link conflicts, head-on swaps). The step
+forward/back and speed-cycle keys are wired as stubs ready to drive the
+engine.
 
 ## Libraries and technologies
 
@@ -51,7 +53,7 @@ retro aesthetic better than any widget set.
 
 | Key | Scope | Behaviour |
 |---|---|---|
-| `SPACE` | global | Step the simulation forward (stub until the engine lands) |
+| `SPACE` | global | Step the simulation forward (stub — engine landed, wire to `Simulation.step()`) |
 | `BACKSPACE` | global | Step the simulation back (stub) |
 | `+` / `-` | global | Cycle simulation speed through `0.5×, 1×, 2×, 4×` (wraps; shown live in the legend) |
 | `M` | global | Toggle the map picker (options refreshed on open) |
@@ -118,5 +120,6 @@ re-laid-out when the window changes.
    tie-breaks, restricted/blocked zone costs, 10 tests passing.
    [`src/simulation/pathfinding.py`] [done]
 3. **Simulation GUI controls** — the `SPACE`/`BACKSPACE` step keys and
-   the `+`/`-` speed cycle wired to the simulation engine once it lands.
+   the `+`/`-` speed cycle wired to `Simulation.step()` (engine landed:
+   `src/simulation/engine.py`).
 4. **Polish** — drone animation states, per-zone accents/status dots.

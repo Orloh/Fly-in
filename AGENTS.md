@@ -32,13 +32,15 @@ make test         # uv run pytest tests || true   ← swallows failures
 - **Connections are undirected** — key is always `(a, b)` with `a <= b` (lexicographic sort).
 - **Start/end hubs** have unlimited capacity: `Zone.capacity` returns `None` for hubs, `max_drones` otherwise.
 - **Absolute imports** everywhere, including tests: `from src.*`. No relative imports.
-- **Build status:** parser, converter, GUI map selector, and **pathfinding**
-  are fully implemented and tested (`parse_map` + helpers, `build_graph`
-  + `_convert_zone` + `_convert_connection`, `src/gui/` with pure
-  helpers `transform.layout` + `maps.list_maps`/`load_map`, and the
-  `MapViewer` window with a working keyboard-driven map picker;
-  `find_path` + `_enter_cost` in `src/simulation/pathfinding.py`).
-  Simulation engine and drone movement are not built yet.
+- **Build status:** parser, converter, GUI map selector, **pathfinding**, and
+  the **simulation engine** are fully implemented and tested
+  (`parse_map` + helpers, `build_graph` + `_convert_zone` +
+  `_convert_connection`, `src/gui/` pure helpers `transform.layout` +
+  `maps.list_maps`/`load_map`, `MapViewer` with keyboard-driven map
+  picker; `find_path` + `_enter_cost` in `src/simulation/pathfinding.py`;
+  `Simulation` with capacity/link/route-conflict handling in
+  `src/simulation/engine.py` — 10 engine + 10 pathfinding tests passing).
+  Drone movement is handled inside the engine (no separate module).
 
 ## Deferred decisions
 
