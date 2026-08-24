@@ -74,10 +74,12 @@ make test         # uv run pytest tests || true   ← swallows failures
   (OFL-1.1, vendored under `assets/fonts/` with its license).
 - **Keyboard controls:** the bottom HUD bar (`_draw_hud`) shows the
   bindings, live readouts (`Turn N`, `SPEED x`), and messages. `SPACE` =
-  play/pause (single-steps while paused), `BACKSPACE` = rewind one turn
-  (snapshot history), `+`/`-` = set speed and start auto-play
-  (`SPEEDS = 0.5/1/2/4×` turns/sec, wraps, shown live), `M` = toggle the
-  map picker. In the picker: `UP`/`DOWN` move, `ENTER` loads, `ESC`/`M`
+  play/pause (resumes auto-play with a one-turn kickstart from the
+  current state; pauses when playing; never resets the sim), `BACKSPACE` = rewind one turn
+  (snapshot history), `+`/`-` = change speed only (never starts/pauses; SPACE does).
+  Displayed `SPEEDS` = 0.5/1/2/4×; actual `SPEED_RATES` = 0.25/0.5/1/2 turns/sec
+  (half, for watchability). Wraps, shown live. Default = index 1 (`1x` = 0.5 turns/sec),
+  `M` = toggle the map picker. In the picker: `UP`/`DOWN` move, `ENTER` loads, `ESC`/`M`
   close. `ESC` quits when the picker is closed.
 - **HUD bar ("hub display"):** `MapViewer._draw_hud` at
   `src/gui/app.py:336` draws the bottom band. Geometry: `HUD_HEIGHT
@@ -127,7 +129,8 @@ make test         # uv run pytest tests || true   ← swallows failures
   and logic (`step_forward`, `step_back`, `toggle_play`, `speed_up`,
   `speed_down`, `auto_step`, `flash`, `flash_turn`, `prune_status`).
   `MapViewer` delegates simulation control to `self.controller`.
-- **Shared constants:** `src/gui/constants.py` holds `SPEEDS` and
+- **Shared constants:** `src/gui/constants.py` holds `SPEEDS` (displayed
+  speeds), `SPEED_RATES` (actual turn rates for timing), and
   `TOAST_DURATION_MS` to avoid circular imports between `app.py` and
   `controller.py`.
 

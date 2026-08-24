@@ -11,7 +11,7 @@ from typing import TYPE_CHECKING
 
 import pygame
 
-from src.gui.constants import SPEEDS, TOAST_DURATION_MS
+from src.gui.constants import SPEEDS, SPEED_RATES, TOAST_DURATION_MS
 from src.models.drone import Drone
 from src.models.simulation import TurnResult
 from src.simulation.engine import Simulation
@@ -74,7 +74,8 @@ class SimController:
         return fleet_snap
 
     def toggle_play(self, fleet: list[Drone] | None) -> None:
-        """Pause auto-play, or single-step while paused."""
+        """Toggle auto-play: pause if playing, start playing (one-turn
+        kickstart) if paused."""
         if self.sim is None or fleet is None:
             self.flash("Load a map first", error=False)
             return
@@ -85,25 +86,24 @@ class SimController:
             self.playing = False
             self.flash("Paused", error=False)
         else:
+            self.playing = True
+            self._accum = 0.0
             result = self.step_forward(fleet)
             if result is not None:
                 self.flash_turn(result)
+            self.flash(f"Playing {SPEEDS[self.speed_index]:g}x", error=False)
 
     def speed_up(self) -> None:
-        """Cycle to next faster speed and start auto-play."""
+        """Cycle to next faster speed; does not start or pause auto-play."""
         self.speed_index = (self.speed_index + 1) % len(SPEEDS)
-        if self.sim is not None and not self.sim.finished:
-            self.playing = True
-            self._accum = 0.0
-            self.flash(f"Playing {SPEEDS[self.speed_index]:g}x", error=False)
+        self._accum = 0.0
+        self.flash(f"Speed {SPEEDS[self.speed_index]:g}x", error=False)
 
     def speed_down(self) -> None:
-        """Cycle to next slower speed and start auto-play."""
+        """Cycle to next slower speed; does not start or pause auto-play."""
         self.speed_index = (self.speed_index - 1) % len(SPEEDS)
-        if self.sim is not None and not self.sim.finished:
-            self.playing = True
-            self._accum = 0.0
-            self.flash(f"Playing {SPEEDS[self.speed_index]:g}x", error=False)
+        self._accum = 0.0
+        self.flash(f"Speed {SPEEDS[self.speed_index]:g}x", error=False)
 
     def auto_step(self, dt_ms: int, fleet: list[Drone] | None) -> None:
         """Advance simulation if playing and interval elapsed."""
@@ -112,7 +112,7 @@ class SimController:
         if fleet is None:
             return
         self._accum += dt_ms / 1000.0
-        interval = 1.0 / SPEEDS[self.speed_index]
+        interval = 1.0 / SPEED_RATES[self.speed_index]
         if self._accum >= interval:
             self._accum -= interval
             result = self.step_forward(fleet)

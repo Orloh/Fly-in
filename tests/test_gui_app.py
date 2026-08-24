@@ -214,13 +214,14 @@ class TestMapViewer:
         viewer._handle_event(_key(pygame.K_SPACE))
         assert viewer.controller.sim.state.turn == turn
 
-    def test_speed_keys_start_autoplay(self, tmp_path: Path) -> None:
+    def test_speed_keys_change_speed_not_autoplay(self, tmp_path: Path) -> None:
         _make_maps(tmp_path, ["a.map"])
         viewer = MapViewer(tmp_path, starting_map="a.map")
         assert viewer.fleet is not None
+        assert viewer.controller.playing is False
 
         viewer._handle_event(_key(pygame.K_PLUS))
-        assert viewer.controller.playing is True
+        assert viewer.controller.playing is False
         assert SPEEDS[viewer.controller.speed_index] == 2.0
 
     def test_space_toggles_pause(self, tmp_path: Path) -> None:
@@ -228,7 +229,7 @@ class TestMapViewer:
         viewer = MapViewer(tmp_path, starting_map="a.map")
         assert viewer.fleet is not None
 
-        viewer.controller.speed_up()
+        viewer.controller.playing = True
         assert viewer.controller.playing is True
 
         viewer._handle_event(_key(pygame.K_SPACE))
@@ -239,10 +240,10 @@ class TestMapViewer:
         viewer = MapViewer(tmp_path, starting_map="a.map")
         assert viewer.controller.sim is not None
         viewer.controller.playing = True
-        viewer.controller.speed_index = 0  # 0.5x -> 2s interval
+        viewer.controller.speed_index = 0  # 0.25x -> 4s interval
 
         before = viewer.controller.sim.state.turn
-        viewer.controller.auto_step(2500, viewer.fleet)
+        viewer.controller.auto_step(4500, viewer.fleet)
         assert viewer.controller.sim.state.turn == before + 1
 
         turn = viewer.controller.sim.state.turn
