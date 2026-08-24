@@ -18,9 +18,9 @@ make test         # uv run pytest tests || true   ← swallows failures
 
 - **`make test` masks failures** (`|| true` in the Makefile). For a real
   pass/fail signal run `uv run pytest tests` directly.
-- **`make run`/`make debug` exit with "simulation run not implemented
-  yet"** — the CLI simulation path is a stub. Use `make gui` to see a
-  rendered map instead.
+- **`make run`/`make debug`** now run the text-based simulation (stdout:
+  map header + per-turn `D{id}-{zone}` lines). Colors auto-disabled on
+  non-tty or `NO_COLOR`. Conflicts only shown with `--debug`.
 
 ## Architecture
 
@@ -32,15 +32,17 @@ make test         # uv run pytest tests || true   ← swallows failures
 - **Connections are undirected** — key is always `(a, b)` with `a <= b` (lexicographic sort).
 - **Start/end hubs** have unlimited capacity: `Zone.capacity` returns `None` for hubs, `max_drones` otherwise.
 - **Absolute imports** everywhere, including tests: `from src.*`. No relative imports.
-- **Build status:** parser, converter, GUI map selector, **pathfinding**, and
-  the **simulation engine** are fully implemented and tested
-  (`parse_map` + helpers, `build_graph` + `_convert_zone` +
+- **Build status:** parser, converter, GUI map selector, **pathfinding**,
+  the **simulation engine**, and the **CLI output** are fully implemented
+  and tested (`parse_map` + helpers, `build_graph` + `_convert_zone` +
   `_convert_connection`, `src/gui/` pure helpers `transform.layout` +
   `maps.list_maps`/`load_map`, `MapViewer` with keyboard-driven map
   picker; `find_path` + `_enter_cost` in `src/simulation/pathfinding.py`;
   `Simulation` with capacity/link/route-conflict handling in
-  `src/simulation/engine.py` — 10 engine + 10 pathfinding tests passing).
-  Drone movement is handled inside the engine (no separate module).
+  `src/simulation/engine.py`; `src/cli.py` with `format_map`,
+  `format_turn`, `simulate`, `run` — 10 engine + 10 pathfinding + CLI
+  tests passing). Drone movement is handled inside the engine (no
+  separate module).
 
 ## Deferred decisions
 
@@ -103,6 +105,25 @@ make test         # uv run pytest tests || true   ← swallows failures
   same-size events are ignored (loop guard). The canvas is stretched to
   fill the window, so nothing is re-laid-out on resize.
 - Keep the map folder named `maps/` (scanned by the picker).
+
+## CLI Output
+
+- **Module:** `src/cli.py` — pure, testable layer mirroring `src/gui/app.py`.
+- **Exports:** `format_map`, `format_turn`, `simulate`, `run`, plus
+  `PALETTE`/`paint` for ANSI truecolor.
+- **Format:** per-turn line `D{id}-{to_zone} ...` (drone-id order);
+  map header echoed first (normalized from `ParsedMap`); blank line
+  for turns with no movements (in-transit only).
+- **Termination:** deadlock guard — break when a turn yields no
+  movements AND no drone is `IN_TRANSIT`. Final arrival turn with no
+  movements is not printed.
+- **Colors:** rose-pine truecolor (gold/foam/rose/pine/text/muted),
+  auto-disabled when stdout is not a TTY or `NO_COLOR` is set.
+- **Conflicts:** printed to stderr only with `--debug` flag.
+- **Errors:** `ParseError`/`OSError` → `Error: {msg}` to stderr, exit 1.
+- **Tests:** `tests/test_cli.py` — pure formatter tests + `simulate`
+  integration tests reusing `_graph`/`_drone` helpers from
+  `tests/test_engine.py`.
 
 ## Map format
 

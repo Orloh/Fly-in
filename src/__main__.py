@@ -15,7 +15,12 @@ def main() -> None:
         "--gui", action="store_true", help="render the map in a window"
     )
     parser.add_argument(
-        "--debug", action="store_true", help="enable debug mode (no-op)"
+        "--debug",
+        action="store_true",
+        help="enable debug mode (conflicts to stderr)",
+    )
+    parser.add_argument(
+        "--no-color", action="store_true", help="disable ANSI color output"
     )
     args = parser.parse_args()
 
@@ -25,7 +30,9 @@ def main() -> None:
         run_gui(args.map)
         return
 
-    raise SystemExit("simulation run not implemented yet")
+    from src.cli import run as run_cli
+
+    run_cli(args.map, debug=args.debug, color=False if args.no_color else None)
 
 
 if __name__ == "__main__":
