@@ -22,7 +22,7 @@ clean:
 	find . -type d -name '*.egg-info' -exec rm -rf {} +
 
 lint:
-	uv run mypy src
+	uv run mypy src tests
 	uv run flake8 src
 
 test:

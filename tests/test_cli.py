@@ -76,7 +76,9 @@ def _graph(
     )
 
 
-def _parsed_zone(name: str, x: int, y: int, meta: dict[str, str] = None) -> ParsedZone:
+def _parsed_zone(
+    name: str, x: int, y: int, meta: dict[str, str] | None = None
+) -> ParsedZone:
     return ParsedZone(
         name=name,
         x=x,
@@ -86,7 +88,9 @@ def _parsed_zone(name: str, x: int, y: int, meta: dict[str, str] = None) -> Pars
     )
 
 
-def _parsed_conn(a: str, b: str, meta: dict[str, str] = None) -> ParsedConnection:
+def _parsed_conn(
+    a: str, b: str, meta: dict[str, str] | None = None
+) -> ParsedConnection:
     return ParsedConnection(
         zone_a=a,
         zone_b=b,

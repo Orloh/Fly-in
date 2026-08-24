@@ -7,6 +7,8 @@ cost, and ``None`` when no route exists.
 
 from __future__ import annotations
 
+from __future__ import annotations
+
 from src.models import Connection, Graph, Zone, ZoneType
 from src.simulation.pathfinding import find_path
 
@@ -65,6 +67,7 @@ class TestFindPath:
         )
 
         path = find_path(graph, "S", "G")
+        assert path is not None
 
         assert path[0] == "S"
         assert path[-1] == "G"
