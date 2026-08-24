@@ -9,7 +9,7 @@ from __future__ import annotations
 
 import os
 import sys
-from typing import Iterator
+from typing import Iterator, TypeAlias
 
 from src.models import (
     Drone,
@@ -23,6 +23,11 @@ from src.parser.errors import ParseError
 from src.parser.parser import parse_map
 from src.palette import PALETTE, color_role
 from src.simulation.engine import Simulation
+
+# Type aliases for clarity
+RGB: TypeAlias = tuple[int, int, int]
+Positions: TypeAlias = dict[str, tuple[int, int]]
+ZoneRoles: TypeAlias = dict[str, str]
 
 
 def paint(text: str, role: str, color: bool = False) -> str:
