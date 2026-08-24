@@ -186,31 +186,52 @@ def _detect_color() -> bool:
     return sys.stdout.isatty() and not os.getenv("NO_COLOR")
 
 
+def build_output(
+    map_path: str, debug: bool = False, color: bool | None = None
+) -> tuple[list[str], list[str], int]:
+    """Build the complete CLI output without side effects.
+
+    Returns a tuple of (stdout_lines, stderr_lines, exit_code).
+    exit_code is 0 for success, 1 for parse/IO errors.
+    """
+    use_color = _detect_color() if color is None else color
+    stdout_lines: list[str] = []
+    stderr_lines: list[str] = []
+
+    try:
+        parsed = parse_map(map_path)
+        graph, fleet = build_graph(parsed)
+    except ParseError as err:
+        stderr_lines.append(f"Error: {err}")
+        return stdout_lines, stderr_lines, 1
+    except OSError as err:
+        stderr_lines.append(f"Error: {err}")
+        return stdout_lines, stderr_lines, 1
+
+    # Map header
+    stdout_lines.extend(format_map(parsed, use_color))
+
+    # Simulation turns
+    for line, conflicts in _simulate_raw(graph, fleet, use_color):
+        stdout_lines.append(line)
+        if debug:
+            stderr_lines.extend(conflicts)
+
+    return stdout_lines, stderr_lines, 0
+
+
 def run(map_path: str, debug: bool = False, color: bool | None = None) -> None:
     """Parse map, run simulation, print turns.
 
     - ``debug``: print engine conflicts to stderr.
     - ``color``: force enable/disable ANSI color; None = auto-detect.
     """
-    use_color = _detect_color() if color is None else color
-
-    try:
-        parsed = parse_map(map_path)
-        graph, fleet = build_graph(parsed)
-    except ParseError as err:
-        print(f"Error: {err}", file=sys.stderr)
-        sys.exit(1)
-    except OSError as err:
-        print(f"Error: {err}", file=sys.stderr)
-        sys.exit(1)
-
-    # Print map header
-    for line in format_map(parsed, use_color):
+    stdout_lines, stderr_lines, exit_code = build_output(
+        map_path, debug, color
+    )
+    for line in stdout_lines:
         print(line)
-
-    # Print simulation turns (single pass; conflicts to stderr if debug)
-    for line, conflicts in _simulate_raw(graph, fleet, use_color):
-        print(line)
-        if debug:
-            for conflict in conflicts:
-                print(conflict, file=sys.stderr)
+    for line in stderr_lines:
+        print(line, file=sys.stderr)
+    if exit_code != 0:
+        sys.exit(exit_code)
