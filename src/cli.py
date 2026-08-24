@@ -13,6 +13,7 @@ from typing import Iterator, TypeAlias
 
 from src.models import (
     Drone,
+    DroneStatus,
     Graph,
     ParsedMap,
     ParsedZone,
@@ -171,7 +172,8 @@ def _simulate_raw(
         # Deadlock: nothing moved and nothing in flight -> nothing will ever
         # change
         in_transit = any(
-            d.status.value == "in_transit" for d in sim.state.drones.values()
+            d.status == DroneStatus.IN_TRANSIT
+            for d in sim.state.drones.values()
         )
         if not result.movements and not in_transit:
             break
