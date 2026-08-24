@@ -16,6 +16,7 @@ PALETTE: dict[str, tuple[int, int, int]] = {
     "text": (224, 222, 244),
     "muted": (110, 106, 134),
     "bg": (25, 23, 36),
+    "surface": (38, 35, 58),
 }
 
 #: Maps common color names (from map files) to rose-pine roles.

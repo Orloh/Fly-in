@@ -39,13 +39,13 @@ MAP_HEIGHT = DEFAULT_CANVAS[1] - HUD_HEIGHT
 _ASSETS_DIR = Path(__file__).resolve().parents[2] / "assets"
 _FONT_PATH = _ASSETS_DIR / "fonts" / "PressStart2P-Regular.ttf"
 
-_BG = (25, 23, 36)
-_GOLD = (246, 193, 119)
-_ROSE = (235, 111, 146)
-_FOAM = (156, 207, 216)
-_PINE = (49, 116, 143)
-_TEXT = (224, 222, 244)
-_MUTED = (110, 106, 134)
+_BG = PALETTE["bg"]
+_GOLD = PALETTE["gold"]
+_ROSE = PALETTE["rose"]
+_FOAM = PALETTE["foam"]
+_PINE = PALETTE["pine"]
+_TEXT = PALETTE["text"]
+_MUTED = PALETTE["muted"]
 
 ZONE_COLORS = {
     ZoneType.NORMAL: _FOAM,
@@ -65,16 +65,8 @@ ZONE_RADIUS = 14
 DRONE_RADIUS = 5
 RING_WIDTH = 3
 
-TOAST_MARGIN = 12
-TOAST_PADDING = 10
-TOAST_BORDER_WIDTH = 2
-TOAST_BG = (38, 35, 58)
-TOAST_BORDER = _ROSE
-
-LEGEND_MARGIN = 8
+TOAST_BG = PALETTE["surface"]
 LEGEND_PADDING = 4
-LEGEND_BORDER = _MUTED
-
 MENU_PADDING = 10
 MENU_BORDER = _ROSE
 
@@ -153,28 +145,6 @@ def _draw_drones(
         center = (px + dx, py + dy)
         pygame.draw.circle(surface, DRONE_COLOR, center, DRONE_RADIUS)
         pygame.draw.circle(surface, DRONE_RING, center, DRONE_RADIUS, 1)
-
-
-def _wrap_text(
-    font: pygame.font.Font, text: str, max_width: int
-) -> list[str]:
-    """Split ``text`` into lines that fit ``max_width`` pixels."""
-    lines: list[str] = []
-    for raw in text.splitlines() or [""]:
-        words = raw.split()
-        if not words:
-            lines.append("")
-            continue
-        current = words[0]
-        for word in words[1:]:
-            candidate = f"{current} {word}"
-            if font.size(candidate)[0] <= max_width:
-                current = candidate
-            else:
-                lines.append(current)
-                current = word
-        lines.append(current)
-    return lines
 
 
 class MapViewer:
