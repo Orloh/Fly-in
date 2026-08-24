@@ -176,14 +176,13 @@ def run(map_path: str, debug: bool = False, color: bool | None = None) -> None:
 
     try:
         parsed = parse_map(map_path)
+        graph, fleet = build_graph(parsed)
     except ParseError as err:
         print(f"Error: {err}", file=sys.stderr)
         sys.exit(1)
     except OSError as err:
         print(f"Error: {err}", file=sys.stderr)
         sys.exit(1)
-
-    graph, fleet = build_graph(parsed)
 
     # Print map header
     for line in format_map(parsed, use_color):
