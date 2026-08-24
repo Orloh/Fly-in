@@ -40,6 +40,7 @@ COLOR_NAME_TO_ROLE: dict[str, str] = {
     "cyan": "foam",
     "foam": "foam",
     "aqua": "foam",
+    "blue": "iris",
     # yellows / oranges
     "gold": "gold",
     "yellow": "gold",
