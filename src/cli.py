@@ -20,18 +20,8 @@ from src.models import (
 from src.parser.converter import build_graph
 from src.parser.errors import ParseError
 from src.parser.parser import parse_map
+from src.palette import PALETTE, color_role
 from src.simulation.engine import Simulation
-
-
-#: Rose-pine truecolor palette (r, g, b).
-PALETTE: dict[str, tuple[int, int, int]] = {
-    "gold": (246, 193, 119),
-    "foam": (156, 207, 216),
-    "rose": (235, 111, 146),
-    "pine": (49, 116, 143),
-    "text": (224, 222, 244),
-    "muted": (110, 106, 134),
-}
 
 
 def paint(text: str, role: str, color: bool = False) -> str:
@@ -53,63 +43,81 @@ def _format_metadata(meta: dict[str, str]) -> str:
     if not meta:
         return ""
     items = " ".join(f"{k}={v}" for k, v in sorted(meta.items()))
-    return f" [{items}]"
+    return " [" + items + "]"
 
 
 def format_map(parsed: ParsedMap, color: bool = False) -> list[str]:
     """Normalized map echo from ``ParsedMap``.
 
     Returns lines including a trailing blank separator line.
+    Zone names are painted with their ``color=`` metadata mapped to
+    rose-pine roles; uncolored zones keep the line's default role.
     """
     lines: list[str] = []
 
     lines.append(paint(f"nb_drones: {parsed.nb_drones}", "gold", color))
-    start_hub = parsed.start_hub
-    lines.append(
-        paint(
-            f"start_hub: {start_hub.name} {start_hub.x} {start_hub.y}",
-            "text",
-            color,
-        )
-        + _format_metadata(start_hub.metadata)
-    )
-    end_hub = parsed.end_hub
-    lines.append(
-        paint(
-            f"end_hub: {end_hub.name} {end_hub.x} {end_hub.y}",
-            "text",
-            color,
-        )
-        + _format_metadata(end_hub.metadata)
-    )
 
+    # Build name -> color_name lookup for all zones
+    zone_colors: dict[str, str] = {}
+    for z in [parsed.start_hub, parsed.end_hub, *parsed.zones]:
+        zone_colors[z.name] = z.metadata.get("color", "none")
+
+    # start_hub: default role = text
+    z = parsed.start_hub
+    name_role = color_role(zone_colors.get(z.name, "none")) or "text"
+    prefix = paint("start_hub: ", "text", color)
+    name = paint(z.name, name_role, color)
+    coords = paint(f"{z.x} {z.y}", "text", color)
+    lines.append(f"{prefix}{name} {coords}" + _format_metadata(z.metadata))
+
+    # end_hub: default role = text
+    z = parsed.end_hub
+    name_role = color_role(zone_colors.get(z.name, "none")) or "text"
+    prefix = paint("end_hub: ", "text", color)
+    name = paint(z.name, name_role, color)
+    coords = paint(f"{z.x} {z.y}", "text", color)
+    lines.append(f"{prefix}{name} {coords}" + _format_metadata(z.metadata))
+
+    # regular hubs: default role = foam
     for z in parsed.zones:
-        lines.append(
-            paint(f"hub: {z.name} {z.x} {z.y}", "foam", color)
-            + _format_metadata(z.metadata)
-        )
+        name_role = color_role(zone_colors.get(z.name, "none")) or "foam"
+        prefix = paint("hub: ", "foam", color)
+        name = paint(z.name, name_role, color)
+        coords = paint(f"{z.x} {z.y}", "foam", color)
+        lines.append(f"{prefix}{name} {coords}" + _format_metadata(z.metadata))
 
+    # connections: default role = pine, each endpoint independent
     for c in parsed.connections:
-        lines.append(
-            paint(f"connection: {c.zone_a}-{c.zone_b}", "pine", color)
-            + _format_metadata(c.metadata)
-        )
+        a_role = color_role(zone_colors.get(c.zone_a, "none")) or "pine"
+        b_role = color_role(zone_colors.get(c.zone_b, "none")) or "pine"
+        prefix = paint("connection: ", "pine", color)
+        name_a = paint(c.zone_a, a_role, color)
+        name_b = paint(c.zone_b, b_role, color)
+        line = f"{prefix}{name_a}-{name_b}" + _format_metadata(c.metadata)
+        lines.append(line)
 
     lines.append("")  # blank separator
     return lines
 
 
-def format_turn(result: TurnResult, color: bool = False) -> str:
+def format_turn(
+    result: TurnResult,
+    color: bool = False,
+    zone_roles: dict[str, str] | None = None,
+) -> str:
     """Format a single turn's movements as ``D{id}-{to_zone} ...``.
 
     Returns empty string when no movements.
+    ``zone_roles`` maps zone names to rose-pine roles; default for
+    unlisted zones is ``foam``.
     """
     if not result.movements:
         return ""
     parts = []
     for mv in sorted(result.movements, key=lambda m: m.drone_id):
         drone_part = paint(f"D{mv.drone_id}", "gold", color)
-        zone_part = paint(mv.to_zone, "foam", color)
+        role = (zone_roles or {}).get(mv.to_zone, "foam")
+        zone_part = paint(mv.to_zone, role, color)
         parts.append(f"{drone_part}-{zone_part}")
     return " ".join(parts)
 
@@ -128,13 +136,18 @@ def simulate(
     """
     sim = Simulation(graph, drones)
 
+    # Build zone_roles from graph: zone.name -> rose-pine role (default foam)
+    zone_roles: dict[str, str] = {}
+    for name, zone in graph.zones.items():
+        zone_roles[name] = color_role(zone.color) or "foam"
+
     while not sim.finished:
         result = sim.step()
 
         if sim.finished:
             # Final arrival turn: only emit if there were movements
             if result.movements:
-                yield format_turn(result, color)
+                yield format_turn(result, color, zone_roles)
             break
 
         # Deadlock: nothing moved and nothing in flight -> nothing will ever
@@ -145,7 +158,7 @@ def simulate(
         if not result.movements and not in_transit:
             break
 
-        yield format_turn(result, color)
+        yield format_turn(result, color, zone_roles)
 
 
 def _detect_color() -> bool:

@@ -22,6 +22,7 @@ from src.models.enums import ZoneType
 from src.models.graph import Graph
 from src.models.simulation import TurnResult
 from src.models.zone import Zone
+from src.palette import PALETTE, color_role
 from src.simulation.engine import Simulation
 
 _GOLDEN_ANGLE = 2.399963229063653
@@ -80,19 +81,16 @@ MENU_PADDING = 10
 MENU_BORDER = _ROSE
 
 
-def _parse_color(name: str) -> tuple[int, int, int]:
-    """Convert a color name or CSS value into an RGB triple."""
-    try:
-        color = pygame.Color(name)
-    except ValueError:
-        return (200, 200, 200)
-    return (color.r, color.g, color.b)
-
-
 def _zone_color(zone: Zone) -> tuple[int, int, int]:
-    """Return the fill color for a zone, honoring explicit colors."""
+    """Return the fill color for a zone, honoring explicit colors.
+
+    Explicit ``color=`` metadata is mapped to the rose-pine palette.
+    Unknown or ``none`` falls back to the zone-type default.
+    """
     if zone.color != "none":
-        return _parse_color(zone.color)
+        role = color_role(zone.color)
+        if role is not None:
+            return PALETTE[role]
     return ZONE_COLORS[zone.zone_type]
 
 

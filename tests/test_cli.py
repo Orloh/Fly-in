@@ -20,12 +20,16 @@ from src.models import (
 )
 from src.simulation.engine import Simulation
 from src.cli import (
-    PALETTE,
     paint,
     format_map,
     format_turn,
     simulate,
     run,
+)
+from src.palette import (
+    PALETTE,
+    COLOR_NAME_TO_ROLE,
+    color_role,
 )
 
 
@@ -35,6 +39,7 @@ def _zone(
     max_drones: int = 1,
     start: bool = False,
     end: bool = False,
+    color: str = "none",
 ) -> Zone:
     return Zone(
         name=name,
@@ -42,6 +47,7 @@ def _zone(
         y=0,
         zone_type=ztype,
         max_drones=max_drones,
+        color=color,
         is_start_hub=start,
         is_end_hub=end,
     )
@@ -99,6 +105,49 @@ def _parsed_map(nb_drones: int, zones: list[ParsedZone], conns: list[ParsedConne
     )
 
 
+class TestColorRole:
+    def test_red_maps_to_rose(self) -> None:
+        assert color_role("red") == "rose"
+        assert color_role("RED") == "rose"
+        assert color_role("Red") == "rose"
+
+    def test_blue_maps_to_iris(self) -> None:
+        assert color_role("blue") == "iris"
+        assert color_role("purple") == "iris"
+        assert color_role("violet") == "iris"
+
+    def test_green_maps_to_pine(self) -> None:
+        assert color_role("green") == "pine"
+        assert color_role("teal") == "pine"
+
+    def test_cyan_maps_to_foam(self) -> None:
+        assert color_role("cyan") == "foam"
+        assert color_role("aqua") == "foam"
+
+    def test_gold_maps_to_gold(self) -> None:
+        assert color_role("gold") == "gold"
+        assert color_role("yellow") == "gold"
+        assert color_role("orange") == "gold"
+
+    def test_neutrals(self) -> None:
+        assert color_role("white") == "text"
+        assert color_role("gray") == "muted"
+        assert color_role("grey") == "muted"
+
+    def test_none_returns_none(self) -> None:
+        assert color_role("none") is None
+        assert color_role("NONE") is None
+
+    def test_unknown_returns_none(self) -> None:
+        assert color_role("banana") is None
+
+    def test_synonyms_exist(self) -> None:
+        # Verify all map colors from maps/*.map are covered
+        for name in ("red", "blue", "green", "cyan", "gold"):
+            assert name in COLOR_NAME_TO_ROLE
+            assert color_role(name) is not None
+
+
 class TestFormatTurn:
     def test_single_movement(self) -> None:
         result = Movement(drone_id=1, from_zone="S", to_zone="A", turns_required=1)
@@ -115,12 +164,27 @@ class TestFormatTurn:
         turn = TurnResult(turn_number=2, movements=[])
         assert format_turn(turn) == ""
 
-    def test_colored_prefix(self) -> None:
+    def test_colored_default_foam(self) -> None:
         result = Movement(drone_id=1, from_zone="S", to_zone="A", turns_required=1)
         turn = TurnResult(turn_number=1, movements=[result])
         colored = format_turn(turn, color=True)
-        # D1-A with drone id gold, zone foam
+        # Default zone color is foam
         assert colored.startswith("\033[38;2;246;193;119mD1\033[0m-\033[38;2;156;207;216mA\033[0m")
+
+    def test_colored_with_zone_roles(self) -> None:
+        result = Movement(drone_id=1, from_zone="S", to_zone="A", turns_required=1)
+        turn = TurnResult(turn_number=1, movements=[result])
+        colored = format_turn(turn, zone_roles={"A": "rose"}, color=True)
+        # Zone A painted rose
+        assert colored.startswith("\033[38;2;246;193;119mD1\033[0m-\033[38;2;235;111;146mA\033[0m")
+
+    def test_multiple_zones_different_colors(self) -> None:
+        m1 = Movement(drone_id=1, from_zone="S", to_zone="A", turns_required=1)
+        m2 = Movement(drone_id=2, from_zone="S", to_zone="B", turns_required=1)
+        turn = TurnResult(turn_number=1, movements=[m1, m2])
+        colored = format_turn(turn, zone_roles={"A": "rose", "B": "iris"}, color=True)
+        assert "\033[38;2;235;111;146mA\033[0m" in colored
+        assert "\033[38;2;196;167;231mB\033[0m" in colored
 
 
 class TestFormatMap:
@@ -174,6 +238,61 @@ class TestFormatMap:
         # nb_drones line colored gold
         assert "\033[38;2;246;193;119mnb_drones: 2\033[0m" in lines[0]
 
+    def test_colored_zone_name_in_hub_line(self) -> None:
+        pmap = _parsed_map(
+            nb_drones=1,
+            zones=[
+                _parsed_zone("s", 0, 0),
+                _parsed_zone("t", 1, 1),
+                _parsed_zone("landing", 5, 5, {"color": "red"}),
+            ],
+            conns=[],
+        )
+        lines = format_map(pmap, color=True)
+        # hub line: name "landing" should be rose, rest foam
+        hub_line = lines[3]
+        assert "landing" in hub_line
+        assert "\033[38;2;235;111;146mlanding\033[0m" in hub_line
+        # Prefix "hub: " should still be foam
+        assert "\033[38;2;156;207;216mhub: \033[0m" in hub_line
+
+    def test_colored_zone_name_in_connection(self) -> None:
+        pmap = _parsed_map(
+            nb_drones=1,
+            zones=[
+                _parsed_zone("s", 0, 0),
+                _parsed_zone("t", 1, 1),
+                _parsed_zone("a", 2, 2, {"color": "red"}),
+                _parsed_zone("b", 3, 3, {"color": "blue"}),
+            ],
+            conns=[
+                _parsed_conn("a", "b"),
+            ],
+        )
+        lines = format_map(pmap, color=True)
+        # lines: 0=nb_drones, 1=start_hub, 2=end_hub, 3=hub a, 4=hub b, 5=connection, 6=blank
+        conn_line = lines[5]
+        # a should be rose, b should be iris
+        assert "\033[38;2;235;111;146ma\033[0m" in conn_line
+        assert "\033[38;2;196;167;231mb\033[0m" in conn_line
+        # connection prefix should be pine
+        assert "\033[38;2;49;116;143mconnection: \033[0m" in conn_line
+
+    def test_start_end_hub_colored(self) -> None:
+        pmap = _parsed_map(
+            nb_drones=1,
+            zones=[
+                _parsed_zone("start", 0, 0, {"color": "gold"}),
+                _parsed_zone("end", 10, 10, {"color": "green"}),
+            ],
+            conns=[],
+        )
+        lines = format_map(pmap, color=True)
+        # start_hub name should be gold (text default overridden)
+        assert "\033[38;2;246;193;119mstart\033[0m" in lines[1]
+        # end_hub name should be pine (green -> pine)
+        assert "\033[38;2;49;116;143mend\033[0m" in lines[2]
+
 
 class TestSimulate:
     def test_single_drone_finish(self) -> None:
@@ -214,6 +333,16 @@ class TestSimulate:
         lines = list(simulate(graph, [_drone(1, "S", "G"), _drone(2, "S", "G")]))
         # Both move S->A on turn 1
         assert "D1-A D2-A" in lines[0]
+
+    def test_colored_turn_lines(self) -> None:
+        graph = _graph(
+            [_zone("S", start=True), _zone("A", color="red"), _zone("G", end=True, color="green")],
+            [("S", "A"), ("A", "G")],
+        )
+        lines = list(simulate(graph, [_drone(1, "S", "G")], color=True))
+        # A should be rose, G should be pine
+        assert any("\033[38;2;235;111;146m" in line for line in lines if "A" in line)
+        assert any("\033[38;2;49;116;143m" in line for line in lines if "G" in line)
 
 
 class TestPaint:

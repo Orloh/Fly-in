@@ -1,47 +1,50 @@
-# CLI Output Implementation Plan
+# CLI Output + Zone Color Implementation Plan
 
 ## Summary
-Implement the text-based simulation output for `make run` and `make debug` (currently stubbed at `src/__main__.py:28`).
+Implement zone-name coloring by `color=` metadata in CLI output, and update GUI to use the same rose-pine palette mapping. Factor the shared palette into `src/palette.py`.
 
 ## Decisions (confirmed)
-- **Format**: `D{drone_id}-{to_zone}` per movement, joined by single space, drone-id order.
-- **Header**: Echo normalized map (`nb_drones`, zones, connections) before movement lines.
-- **Empty turns**: Print blank line for turns with no movements (in-transit only).
-- **Deadlock**: Break when a turn has no movements AND no drones `IN_TRANSIT`.
-- **Conflicts**: Print to stderr only with `--debug`.
-- **Colors**: ANSI truecolor (rose-pine palette), auto-disabled on non-tty or `NO_COLOR`.
-- **Errors**: `ParseError`/`OSError` → `Error: {msg}` to stderr, exit 1.
+- **Color mapping**: red→rose, blue→iris, green→pine, cyan→foam, gold→gold, plus synonyms (pink→rose, purple→iris, yellow→gold, teal→pine, white→text, gray→muted).
+- **Scope**: zone NAME tokens only — in map header (`format_map`) and turn lines (`format_turn`); uncolored zones keep current defaults.
+- **GUI consistency**: update `src/gui/app.py:_zone_color` to use rose-pine mapping instead of `pygame.Color`; remove dead `_parse_color`.
+- **Shared module**: `src/palette.py` — pure, no pygame; exports `PALETTE` (with `iris`), `COLOR_NAME_TO_ROLE`, `color_role`.
+- **Backward compat**: uncolored zones unchanged; existing CLI tests pass.
 
 ## Files to create/modify
 
-### 1. `src/cli.py` (new — mirrors `src/gui/app.py`)
-Pure, testable CLI layer.
+### 1. `src/palette.py` (new — shared)
+Pure, no pygame. Single source of truth for CLI + GUI.
 
 **Exports:**
-- `PALETTE` — dict of role→(r,g,b) (gold, foam, rose, pine, text, muted)
-- `paint(text: str, role: str, color: bool = False) -> str`
-- `format_map(parsed: ParsedMap, color: bool = False) -> list[str]`
-- `format_turn(result: TurnResult, color: bool = False) -> str`
-- `simulate(graph: Graph, drones: list[Drone], color: bool = False) -> Iterator[str]`
-- `run(map_path: str, debug: bool = False, color: bool | None = None) -> None`
+- `PALETTE: dict[str, tuple[int, int, int]]` — gold, foam, rose, pine, iris, text, muted, bg.
+- `COLOR_NAME_TO_ROLE: dict[str, str]` — color-name → rose-pine role (synonyms included).
+- `color_role(color_name: str) -> str | None` — returns mapped role or None for "none"/unknown (caller picks default). Lowercases input.
 
-### 2. `src/__main__.py`
-Replace the stub:
-```python
-from src.cli import run
-run(args.map, debug=args.debug)
-```
-Add `--no-color` flag for explicit control.
+### 2. `src/cli.py` (modify)
+- Import `PALETTE`, `COLOR_NAME_TO_ROLE`, `color_role` from `src.palette`; keep `paint`.
+- **`format_map`**: build `name→color_name` from all `ParsedMap` zones; restructure lines to paint **name token** with `color_role(zone_color) or <line_default>` (text for start/end hubs, foam for regular hubs, pine for connection endpoints — each independently). Prefix/coords keep line default; metadata unchanged.
+- **`format_turn`**: add `zone_roles: dict[str, str] | None = None`; paint `to_zone` with `zone_roles.get(to_zone, "foam")`.
+- **`simulate`**: build `zone_roles = {name: color_role(zone.color) or "foam" ...}` from `graph.zones`; pass to `format_turn`.
+- Re-export `PALETTE`, `COLOR_NAME_TO_ROLE`, `color_role` for test compatibility.
 
-### 3. `tests/test_cli.py` (TDD — write first)
-Reuse `_graph`/`_drone` helpers from `tests/test_engine.py`.
+### 3. `src/gui/app.py` (modify)
+- Import `PALETTE`, `color_role` from `src.palette`.
+- **`_zone_color`**: replace `_parse_color(zone.color)` with `PALETTE[color_role(zone.color)]` when mapped, else fall back to `ZONE_COLORS[zone.zone_type]` (unknown/`none` → type color).
+- Remove dead `_parse_color`.
 
-**Test coverage:**
-- `format_turn` — exact plain string, colored prefix, empty line, id ordering.
-- `format_map` — header structure, blank-line separator, metadata ordering.
-- `simulate` — single drone, restricted-zone empty line, deadlock break, multi-drone simultaneous moves.
+### 4. `src/__main__.py` (no change — already wired)
+CLI already calls `src.cli.run`; `--no-color` flag exists.
 
-## Output example
+### 5. `tests/test_cli.py` (TDD — update first)
+- `color_role`: red→rose, blue→iris, green→pine, cyan→foam, gold→gold, "none"→None, unknown→None.
+- `format_map` with `color=red` zone: name token wrapped in rose escape; plain mode unchanged.
+- `format_turn` with `zone_roles={"A": "rose"}`: `to_zone` rose; `None`→foam (existing `test_colored_prefix` passes).
+- `simulate` with graph whose zones have `color=`: colored names in yielded lines.
+
+### 6. `tests/test_gui_app.py` (update if needed)
+- Verify `_zone_color` with mapped colors (e.g., `color=blue`→iris RGB). Update any assertions.
+
+## Output example (CLI, with color enabled)
 ```
 nb_drones: 3
 start_hub: base 0 0
@@ -57,21 +60,14 @@ connection: base-landing
 connection: landing-target
 connection: roof1-vault
 
-D1-landing
-D2-landing
-
-D1-corridorA
-...
+D1-landing          ← "landing" in red (rose)
+D1-target D2-landing   ← "target" in green (pine), "landing" in red
+D2-target D3-landing
+D3-target
 ```
-(Blank line = empty turn; ANSI colors when tty)
 
 ## Verification
-- `uv run pytest tests` (real signal — `make test` masks failures via `|| true`)
+- `uv run pytest tests` (real signal — `make test` masks failures)
 - `make lint` (mypy strict + flake8, 79 cols)
-- `make run MAP=maps/example.map` / `make debug MAP=maps/island.map` to eyeball
-
-## Architecture notes
-- Mirrors GUI pattern: pure helpers in module, thin `run()` orchestrator.
-- No pygame, no side effects in formatters — fully unit-testable.
-- `--debug` gates conflict stderr output.
-- Color detection: `sys.stdout.isatty() and not os.getenv("NO_COLOR")`.
+- `make run MAP=maps/example.map` — zone names colored per their metadata
+- `make gui MAP=maps/example.map` — zone circles colored per rose-pine mapping

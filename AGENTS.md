@@ -114,16 +114,29 @@ make test         # uv run pytest tests || true   ← swallows failures
 - **Format:** per-turn line `D{id}-{to_zone} ...` (drone-id order);
   map header echoed first (normalized from `ParsedMap`); blank line
   for turns with no movements (in-transit only).
+- **Zone-name coloring:** each zone's `color=` metadata maps to a
+  rose-pine role (red→rose, blue→iris, green→pine, cyan→foam,
+  gold→gold, plus synonyms). The zone NAME token is painted with that
+  role in the map header and in `D{id}-{to_zone}` turn lines.
+  Uncolored zones keep their current default (text/foam/pine).
 - **Termination:** deadlock guard — break when a turn yields no
   movements AND no drone is `IN_TRANSIT`. Final arrival turn with no
   movements is not printed.
-- **Colors:** rose-pine truecolor (gold/foam/rose/pine/text/muted),
+- **Colors:** rose-pine truecolor (gold/foam/rose/pine/iris/text/muted),
   auto-disabled when stdout is not a TTY or `NO_COLOR` is set.
 - **Conflicts:** printed to stderr only with `--debug` flag.
 - **Errors:** `ParseError`/`OSError` → `Error: {msg}` to stderr, exit 1.
 - **Tests:** `tests/test_cli.py` — pure formatter tests + `simulate`
   integration tests reusing `_graph`/`_drone` helpers from
   `tests/test_engine.py`.
+
+## Shared Palette
+
+- **Module:** `src/palette.py` — pure, no pygame. Single source of
+  truth for both CLI (ANSI) and GUI (RGB).
+- **Exports:** `PALETTE` (role→RGB, adds `iris`), `COLOR_NAME_TO_ROLE`,
+  `color_role(color_name) -> str | None`.
+- Both CLI and GUI import from here; no cross-layer coupling.
 
 ## Map format
 
