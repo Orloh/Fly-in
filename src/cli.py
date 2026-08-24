@@ -134,6 +134,14 @@ def simulate(
     - Deadlock guard: breaks when a turn has no movements AND no drone
       is ``IN_TRANSIT``.
     """
+    for line, _ in _simulate_raw(graph, drones, color):
+        yield line
+
+
+def _simulate_raw(
+    graph: Graph, drones: list[Drone], color: bool = False
+) -> Iterator[tuple[str, list[str]]]:
+    """Internal: step simulation, yielding (line, conflicts) per turn."""
     sim = Simulation(graph, drones)
 
     # Build zone_roles from graph: zone.name -> rose-pine role (default foam)
@@ -147,7 +155,7 @@ def simulate(
         if sim.finished:
             # Final arrival turn: only emit if there were movements
             if result.movements:
-                yield format_turn(result, color, zone_roles)
+                yield format_turn(result, color, zone_roles), result.conflicts
             break
 
         # Deadlock: nothing moved and nothing in flight -> nothing will ever
@@ -158,7 +166,7 @@ def simulate(
         if not result.movements and not in_transit:
             break
 
-        yield format_turn(result, color, zone_roles)
+        yield format_turn(result, color, zone_roles), result.conflicts
 
 
 def _detect_color() -> bool:
@@ -188,16 +196,9 @@ def run(map_path: str, debug: bool = False, color: bool | None = None) -> None:
     for line in format_map(parsed, use_color):
         print(line)
 
-    # Print simulation turns
-    for line in simulate(graph, fleet, use_color):
+    # Print simulation turns (single pass; conflicts to stderr if debug)
+    for line, conflicts in _simulate_raw(graph, fleet, use_color):
         print(line)
-
-    # Debug: re-run to print conflicts to stderr
-    if debug:
-        sim = Simulation(graph, fleet)
-        while not sim.finished:
-            result = sim.step()
-            for conflict in result.conflicts:
+        if debug:
+            for conflict in conflicts:
                 print(conflict, file=sys.stderr)
-            if sim.finished:
-                break
