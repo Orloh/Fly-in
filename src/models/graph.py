@@ -7,6 +7,7 @@ from functools import cached_property
 from pydantic import BaseModel, Field
 
 from src.models.connection import Connection
+from src.models.graph_utils import canonical_key
 from src.models.zone import Zone
 
 
@@ -39,8 +40,4 @@ class Graph(BaseModel):
         self, zone_a: str, zone_b: str
     ) -> Connection | None:
         """The connection linking two zones, if any."""
-        if zone_a <= zone_b:
-            key = (zone_a, zone_b)
-        else:
-            key = (zone_b, zone_a)
-        return self.connections.get(key)
+        return self.connections.get(canonical_key(zone_a, zone_b))

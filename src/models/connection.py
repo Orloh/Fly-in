@@ -4,6 +4,8 @@ from __future__ import annotations
 
 from pydantic import BaseModel, Field
 
+from src.models.graph_utils import canonical_key
+
 
 class Connection(BaseModel):
     """A bidirectional link between two zones.
@@ -19,8 +21,7 @@ class Connection(BaseModel):
     @property
     def key(self) -> tuple[str, str]:
         """Canonical (sorted) key identifying this undirected edge."""
-        a, b = self.zone_a, self.zone_b
-        return (a, b) if a <= b else (b, a)
+        return canonical_key(self.zone_a, self.zone_b)
 
     def other(self, zone_name: str) -> str:
         """Return the endpoint opposite to ``zone_name``."""

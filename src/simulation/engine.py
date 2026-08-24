@@ -19,6 +19,7 @@ from src.models import (
     TurnResult,
     Zone,
 )
+from src.models.graph_utils import canonical_key
 from src.simulation.pathfinding import _enter_cost, find_path
 
 #: A human-readable capacity or routing failure reported on a turn.
@@ -178,7 +179,7 @@ class Simulation:
         # Link capacity: undirected link, sum usage in both directions
         zone_a, zone_b = drone.current_zone, dest.name
         link_key = (zone_a, zone_b)
-        canon_key = (zone_a, zone_b) if zone_a <= zone_b else (zone_b, zone_a)
+        canon_key = canonical_key(zone_a, zone_b)
         connection = self.graph.connections.get(canon_key)
         if connection is not None:
             rev_key = (zone_b, zone_a)
