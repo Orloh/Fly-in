@@ -12,7 +12,8 @@ from pathlib import Path
 import pygame
 import pygame.event as pygame_event
 
-from src.gui.app import MAP_HEIGHT, SPEEDS, MapViewer, WINDOW
+from src.gui.app import MAP_HEIGHT, MapViewer, WINDOW
+from src.gui.constants import SPEEDS
 from src.models.enums import DroneStatus
 
 
@@ -150,16 +151,16 @@ class TestMapViewer:
         _make_maps(tmp_path, ["a.map"])
         viewer = MapViewer(tmp_path, starting_map="a.map")
 
-        assert SPEEDS[viewer.speed_index] == 1.0
+        assert SPEEDS[viewer.controller.speed_index] == 1.0
 
         viewer._handle_event(_key(pygame.K_PLUS))
-        assert SPEEDS[viewer.speed_index] == 2.0
+        assert SPEEDS[viewer.controller.speed_index] == 2.0
         viewer._handle_event(_key(pygame.K_PLUS))
-        assert SPEEDS[viewer.speed_index] == 4.0
+        assert SPEEDS[viewer.controller.speed_index] == 4.0
         viewer._handle_event(_key(pygame.K_PLUS))
-        assert SPEEDS[viewer.speed_index] == 0.5
+        assert SPEEDS[viewer.controller.speed_index] == 0.5
         viewer._handle_event(_key(pygame.K_MINUS))
-        assert SPEEDS[viewer.speed_index] == 4.0
+        assert SPEEDS[viewer.controller.speed_index] == 4.0
 
     def test_equals_key_acts_as_plus(self, tmp_path: Path) -> None:
         _make_maps(tmp_path, ["a.map"])
@@ -167,7 +168,7 @@ class TestMapViewer:
 
         viewer._handle_event(_key(pygame.K_EQUALS))
 
-        assert SPEEDS[viewer.speed_index] == 2.0
+        assert SPEEDS[viewer.controller.speed_index] == 2.0
 
     def test_space_advances_simulation(self, tmp_path: Path) -> None:
         _make_maps(tmp_path, ["a.map"])
@@ -200,17 +201,18 @@ class TestMapViewer:
     def test_space_on_finished_is_noop(self, tmp_path: Path) -> None:
         _make_maps(tmp_path, ["a.map"])
         viewer = MapViewer(tmp_path, starting_map="a.map")
-        assert viewer.sim is not None
+        assert viewer.controller.sim is not None
+        assert viewer.fleet is not None
 
         for _ in range(10):
-            viewer._step_forward()
-            if viewer.sim.finished:
+            viewer.controller.step_forward(viewer.fleet)
+            if viewer.controller.sim.finished:
                 break
-        assert viewer.sim.finished
+        assert viewer.controller.sim.finished
 
-        turn = viewer.sim.state.turn
+        turn = viewer.controller.sim.state.turn
         viewer._handle_event(_key(pygame.K_SPACE))
-        assert viewer.sim.state.turn == turn
+        assert viewer.controller.sim.state.turn == turn
 
     def test_speed_keys_start_autoplay(self, tmp_path: Path) -> None:
         _make_maps(tmp_path, ["a.map"])
@@ -218,34 +220,34 @@ class TestMapViewer:
         assert viewer.fleet is not None
 
         viewer._handle_event(_key(pygame.K_PLUS))
-        assert viewer.playing is True
-        assert SPEEDS[viewer.speed_index] == 2.0
+        assert viewer.controller.playing is True
+        assert SPEEDS[viewer.controller.speed_index] == 2.0
 
     def test_space_toggles_pause(self, tmp_path: Path) -> None:
         _make_maps(tmp_path, ["a.map"])
         viewer = MapViewer(tmp_path, starting_map="a.map")
         assert viewer.fleet is not None
 
-        viewer._speed_up()
-        assert viewer.playing is True
+        viewer.controller.speed_up()
+        assert viewer.controller.playing is True
 
         viewer._handle_event(_key(pygame.K_SPACE))
-        assert viewer.playing is False
+        assert viewer.controller.playing is False
 
     def test_auto_step_advances_while_playing(self, tmp_path: Path) -> None:
         _make_maps(tmp_path, ["a.map"])
         viewer = MapViewer(tmp_path, starting_map="a.map")
-        assert viewer.sim is not None
-        viewer.playing = True
-        viewer.speed_index = 0  # 0.5x -> 2s interval
+        assert viewer.controller.sim is not None
+        viewer.controller.playing = True
+        viewer.controller.speed_index = 0  # 0.5x -> 2s interval
 
-        before = viewer.sim.state.turn
-        viewer._auto_step(2500)
-        assert viewer.sim.state.turn == before + 1
+        before = viewer.controller.sim.state.turn
+        viewer.controller.auto_step(2500, viewer.fleet)
+        assert viewer.controller.sim.state.turn == before + 1
 
-        turn = viewer.sim.state.turn
-        viewer._auto_step(500)
-        assert viewer.sim.state.turn == turn
+        turn = viewer.controller.sim.state.turn
+        viewer.controller.auto_step(500, viewer.fleet)
+        assert viewer.controller.sim.state.turn == turn
 
     def test_positions_stay_within_map_band(self, tmp_path: Path) -> None:
         _make_maps(tmp_path, ["a.map"])
@@ -262,7 +264,7 @@ class TestMapViewer:
 
         assert ("+/-", "SPEED 1x") in viewer._legend_rows()
 
-        viewer._speed_up()
+        viewer.controller.speed_up()
         assert ("+/-", "SPEED 2x") in viewer._legend_rows()
 
     def test_quit_event_stops_loop(self, tmp_path: Path) -> None:

@@ -15,12 +15,13 @@ from pathlib import Path
 
 import pygame
 
+from src.gui.constants import SPEEDS, TOAST_DURATION_MS
+from src.gui.controller import SimController
 from src.gui.maps import DEFAULT_CANVAS, list_maps, load_map
 from src.gui.menu import MapMenu
 from src.models.drone import Drone
 from src.models.enums import ZoneType
 from src.models.graph import Graph
-from src.models.simulation import TurnResult
 from src.models.zone import Zone
 from src.palette import PALETTE, color_role
 from src.simulation.engine import Simulation
@@ -64,14 +65,11 @@ ZONE_RADIUS = 14
 DRONE_RADIUS = 5
 RING_WIDTH = 3
 
-TOAST_DURATION_MS = 5000
 TOAST_MARGIN = 12
 TOAST_PADDING = 10
 TOAST_BORDER_WIDTH = 2
 TOAST_BG = (38, 35, 58)
 TOAST_BORDER = _ROSE
-
-SPEEDS = (0.5, 1.0, 2.0, 4.0)
 
 LEGEND_MARGIN = 8
 LEGEND_PADDING = 4
@@ -198,15 +196,8 @@ class MapViewer:
         self.error: str | None = None
         self.error_visible_until: int | None = None
         self.running = True
-        self.speed_index = 1
         self.menu = MapMenu(list_maps(self.maps_dir))
-        self.sim: Simulation | None = None
-        self.history: list[tuple[list[Drone], int]] = []
-        self.playing = False
-        self._accum = 0.0
-        self.status: str | None = None
-        self.status_visible_until: int | None = None
-        self._status_is_error = False
+        self.controller = SimController()
 
         self.screen = self._init_window()
         self.clock = pygame.time.Clock()
@@ -247,13 +238,7 @@ class MapViewer:
         self.current_map = name
         self.error = None
         self.error_visible_until = None
-        self.sim = Simulation(graph, fleet)
-        self.history = []
-        self.playing = False
-        self._accum = 0.0
-        self.status = None
-        self.status_visible_until = None
-        self._status_is_error = False
+        self.controller.set_simulation(Simulation(graph, fleet))
         pygame.display.set_caption(self._caption())
 
     def _handle_event(self, event: pygame.event.Event) -> None:
@@ -284,13 +269,15 @@ class MapViewer:
         if key == pygame.K_ESCAPE:
             self.running = False
         elif key == pygame.K_SPACE:
-            self._toggle_play()
+            self.controller.toggle_play(self.fleet)
         elif key == pygame.K_BACKSPACE:
-            self._step_back()
+            fleet = self.controller.step_back(self.graph)
+            if fleet is not None:
+                self.fleet = fleet
         elif key in (pygame.K_PLUS, pygame.K_EQUALS):
-            self._speed_up()
+            self.controller.speed_up()
         elif key == pygame.K_MINUS:
-            self._speed_down()
+            self.controller.speed_down()
         elif key == pygame.K_m:
             self._toggle_map_menu()
 
@@ -302,87 +289,6 @@ class MapViewer:
             self.menu.move(1 if key == pygame.K_DOWN else -1)
         elif key in (pygame.K_RETURN, pygame.K_KP_ENTER):
             self._select_menu_map()
-
-    def _step_forward(self) -> None:
-        """Advance the simulation by one turn, syncing the fleet."""
-        if self.sim is None or self.fleet is None:
-            self._flash("Load a map first", error=False)
-            return
-        if self.sim.finished:
-            self._flash("Simulation complete", error=False)
-            return
-        snapshot = [d.model_copy(deep=True) for d in self.fleet]
-        self.history.append((snapshot, self.sim.state.turn))
-        result = self.sim.step()
-        self._flash_turn(result)
-
-    def _step_back(self) -> None:
-        """Rewind the simulation by one turn via snapshot history."""
-        if self.sim is None or self.graph is None or self.fleet is None:
-            self._flash("Load a map first", error=False)
-            return
-        if not self.history:
-            self._flash("Nothing to rewind", error=False)
-            return
-        fleet_snap, turn = self.history.pop()
-        graph = self.graph
-        self.fleet = fleet_snap
-        self.sim = Simulation(graph, fleet_snap)
-        self.sim.state.turn = turn
-        self.playing = False
-        self._accum = 0.0
-        self._flash("Rewound one turn", error=False)
-
-    def _toggle_play(self) -> None:
-        """Pause auto-play, or single-step while paused."""
-        if self.sim is None:
-            self._flash("Load a map first", error=False)
-            return
-        if self.sim.finished:
-            self._flash("Simulation complete", error=False)
-            return
-        if self.playing:
-            self.playing = False
-            self._flash("Paused", error=False)
-        else:
-            self._step_forward()
-
-    def _speed_up(self) -> None:
-        """Cycle to the next faster speed and start auto-play."""
-        self.speed_index = (self.speed_index + 1) % len(SPEEDS)
-        self._start_autoplay()
-
-    def _speed_down(self) -> None:
-        """Cycle to the next slower speed and start auto-play."""
-        self.speed_index = (self.speed_index - 1) % len(SPEEDS)
-        self._start_autoplay()
-
-    def _start_autoplay(self) -> None:
-        """Begin auto-advancing at the currently selected speed."""
-        if self.sim is None or self.sim.finished:
-            return
-        self.playing = True
-        self._accum = 0.0
-        self._flash(f"Playing {SPEEDS[self.speed_index]:g}x", error=False)
-
-    def _flash(self, message: str, error: bool) -> None:
-        """Show a transient status message in the top toast slot."""
-        self.status = message
-        self._status_is_error = error
-        self.status_visible_until = (
-            pygame.time.get_ticks() + TOAST_DURATION_MS
-        )
-
-    def _flash_turn(self, result: TurnResult) -> None:
-        """Summarize a turn's movements and conflicts as a status flash."""
-        parts: list[str] = []
-        if result.movements:
-            parts.append(f"{len(result.movements)} move")
-        if result.conflicts:
-            parts.append(f"{len(result.conflicts)} conflict")
-        if not parts:
-            parts.append("no moves")
-        self._flash(", ".join(parts), error=bool(result.conflicts))
 
     def _toggle_map_menu(self) -> None:
         """Open the map picker with fresh options, or close it."""
@@ -448,13 +354,14 @@ class MapViewer:
 
     def _legend_rows(self) -> list[tuple[str, str]]:
         """Return the key legend as (key, action) rows."""
-        speed = SPEEDS[self.speed_index]
-        return [
+        speed = SPEEDS[self.controller.speed_index]
+        rows = [
             ("SPACE", "PLAY/PAUSE"),
             ("BKSP", "STEP -1"),
             ("+/-", f"SPEED {speed:g}x"),
             ("M", "MAPS"),
         ]
+        return rows
 
     def _draw_hud(self, surface: pygame.Surface) -> None:
         """Draw the bottom HUD bar: panel, controls, readouts, message."""
@@ -475,8 +382,12 @@ class MapViewer:
             (LEGEND_PADDING, MAP_HEIGHT + LEGEND_PADDING),
         )
 
-        turn = self.sim.state.turn if self.sim is not None else 0
-        speed = SPEEDS[self.speed_index]
+        turn = (
+            self.controller.sim.state.turn
+            if self.controller.sim is not None
+            else 0
+        )
+        speed = SPEEDS[self.controller.speed_index]
         readout = f"TURN {turn}   SPEED {speed:g}x"
         y = MAP_HEIGHT + LEGEND_PADDING + line_height + 2
         surface.blit(
@@ -484,7 +395,7 @@ class MapViewer:
             (LEGEND_PADDING, y),
         )
 
-        message = self.error or self.status
+        message = self.error or self.controller.status
         if message:
             color = _ROSE if self.error is not None else _FOAM
             label = self.legend_font.render(message, True, color)
@@ -527,7 +438,9 @@ class MapViewer:
             return False
         if self.error_visible_until is None:
             return True
-        return pygame.time.get_ticks() < self.error_visible_until
+        return (
+            pygame.time.get_ticks() < self.error_visible_until
+        )
 
     def _prune_error(self) -> None:
         """Clear the error once its toast window has elapsed."""
@@ -541,26 +454,7 @@ class MapViewer:
 
     def _prune_status(self) -> None:
         """Clear the status message once its window has elapsed."""
-        if (
-            self.status is not None
-            and self.status_visible_until is not None
-            and pygame.time.get_ticks() >= self.status_visible_until
-        ):
-            self.status = None
-            self.status_visible_until = None
-
-    def _auto_step(self, dt_ms: int) -> None:
-        """Advance the sim when playing and enough time has elapsed."""
-        if not self.playing or self.sim is None or self.sim.finished:
-            return
-        self._accum += dt_ms / 1000.0
-        interval = 1.0 / SPEEDS[self.speed_index]
-        if self._accum >= interval:
-            self._accum -= interval
-            self._step_forward()
-            if self.sim.finished:
-                self.playing = False
-                self._flash("Simulation complete", error=False)
+        self.controller.prune_status()
 
     def run(self) -> None:
         """Run the frame loop until the window is closed."""
@@ -570,7 +464,7 @@ class MapViewer:
             self._prune_status()
             for event in pygame.event.get():
                 self._handle_event(event)
-            self._auto_step(dt)
+            self.controller.auto_step(dt, self.fleet)
             self._render()
             pygame.display.flip()
         pygame.quit()

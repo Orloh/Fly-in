@@ -33,16 +33,17 @@ make test         # uv run pytest tests || true   ← swallows failures
 - **Start/end hubs** have unlimited capacity: `Zone.capacity` returns `None` for hubs, `max_drones` otherwise.
 - **Absolute imports** everywhere, including tests: `from src.*`. No relative imports.
 - **Build status:** parser, converter, GUI map selector, **pathfinding**,
-  the **simulation engine**, and the **CLI output** are fully implemented
-  and tested (`parse_map` + helpers, `build_graph` + `_convert_zone` +
-  `_convert_connection`, `src/gui/` pure helpers `transform.layout` +
-  `maps.list_maps`/`load_map`, `MapViewer` with keyboard-driven map
-  picker; `find_path` + `_enter_cost` in `src/simulation/pathfinding.py`;
-  `Simulation` with capacity/link/route-conflict handling in
-  `src/simulation/engine.py`; `src/cli.py` with `format_map`,
-  `format_turn`, `simulate`, `run` — 10 engine + 10 pathfinding + CLI
-  tests passing). Drone movement is handled inside the engine (no
-  separate module).
+  the **simulation engine**, the **CLI output**, and the **GUI controller**
+  are fully implemented and tested (`parse_map` + helpers,
+  `build_graph` + `_convert_zone` + `_convert_connection`,
+  `src/gui/` pure helpers `transform.layout` + `maps.list_maps`/`load_map`,
+  `MapViewer` with keyboard-driven map picker; `find_path` + `_enter_cost`
+  in `src/simulation/pathfinding.py`; `Simulation` with capacity/link/
+  route-conflict handling in `src/simulation/engine.py`;
+  `src/cli.py` with `format_map`, `format_turn`, `simulate`, `run`,
+  `src/gui/controller.py` with `SimController` — 10 engine + 10
+  pathfinding + CLI + GUI controller tests passing). Drone movement is
+  handled inside the engine (no separate module).
 
 ## Deferred decisions
 
@@ -73,7 +74,7 @@ make test         # uv run pytest tests || true   ← swallows failures
   drawn to a low-res canvas (`VIRTUAL = (640, 360)`) in the pixel font
   and upscaled with `pygame.transform.scale` (nearest-neighbor = crisp
   pixels). Detailed outline in `GUI_PLAN.md`.
-- **Palette:** rose-pine (code constants in `app.py`) — bg `#191724`,
+- **Palette:** rose-pine (code constants in `constants.py`) — bg `#191724`,
   gold `#f6c177`, rose `#eb6f92`, foam `#9ccfd8`, iris `#c4a7e7`,
   pine `#31748f`, text `#e0def4`. Pixel font **Press Start 2P**
   (OFL-1.1, vendored under `assets/fonts/` with its license).
@@ -93,7 +94,8 @@ make test         # uv run pytest tests || true   ← swallows failures
   toast and no picker.
 - **GUI layer lives in `src/gui/`**, decoupled from the simulation
   engine: pure helpers (`transform.layout`, `maps.list_maps`,
-  `menu.MapMenu`) plus the pygame/app drawing code (`app.py`).
+  `menu.MapMenu`, `controller.SimController`) plus the pygame/app
+  drawing code (`app.py`).
 - **Headless GUI tests:** `tests/conftest.py` sets `SDL_VIDEODRIVER` /
   `SDL_AUDIODRIVER = dummy` before pygame initializes, so `MapViewer`
   smoke tests (`tests/test_gui_app.py`) run without a display. pytest
@@ -105,6 +107,14 @@ make test         # uv run pytest tests || true   ← swallows failures
   same-size events are ignored (loop guard). The canvas is stretched to
   fill the window, so nothing is re-laid-out on resize.
 - Keep the map folder named `maps/` (scanned by the picker).
+- **Controller:** `src/gui/controller.py` (`SimController`) holds all
+  simulation state (`sim`, `history`, `playing`, `speed_index`, `status`)
+  and logic (`step_forward`, `step_back`, `toggle_play`, `speed_up`,
+  `speed_down`, `auto_step`, `flash`, `flash_turn`, `prune_status`).
+  `MapViewer` delegates simulation control to `self.controller`.
+- **Shared constants:** `src/gui/constants.py` holds `SPEEDS` and
+  `TOAST_DURATION_MS` to avoid circular imports between `app.py` and
+  `controller.py`.
 
 ## CLI Output
 
@@ -137,6 +147,8 @@ make test         # uv run pytest tests || true   ← swallows failures
 - **Exports:** `PALETTE` (role→RGB, adds `iris`), `COLOR_NAME_TO_ROLE`,
   `color_role(color_name) -> str | None`.
 - Both CLI and GUI import from here; no cross-layer coupling.
+- **GUI constants:** `src/gui/constants.py` holds `SPEEDS` and
+  `TOAST_DURATION_MS` shared between `app.py` and `controller.py`.
 
 ## Map format
 
