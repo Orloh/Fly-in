@@ -15,6 +15,7 @@ from src.models import (
     Drone,
     Graph,
     ParsedMap,
+    ParsedZone,
     TurnResult,
 )
 from src.parser.converter import build_graph
@@ -36,6 +37,21 @@ def paint(text: str, role: str, color: bool = False) -> str:
         return text
     r, g, b = rgb
     return f"\033[38;2;{r};{g};{b}m{text}\033[0m"
+
+
+def _format_zone_line(
+    prefix: str,
+    zone: ParsedZone,
+    default_role: str,
+    zone_colors: dict[str, str],
+    color: bool,
+) -> str:
+    """Format a single zone line: prefix + painted name + coords + metadata."""
+    name_role = color_role(zone_colors.get(zone.name, "none")) or default_role
+    prefix_p = paint(prefix, default_role, color)
+    name = paint(zone.name, name_role, color)
+    coords = paint(f"{zone.x} {zone.y}", default_role, color)
+    return f"{prefix_p}{name} {coords}" + _format_metadata(zone.metadata)
 
 
 def _format_metadata(meta: dict[str, str]) -> str:
@@ -62,31 +78,20 @@ def format_map(parsed: ParsedMap, color: bool = False) -> list[str]:
     for z in [parsed.start_hub, parsed.end_hub, *parsed.zones]:
         zone_colors[z.name] = z.metadata.get("color", "none")
 
-    # start_hub: default role = text
-    z = parsed.start_hub
-    name_role = color_role(zone_colors.get(z.name, "none")) or "text"
-    prefix = paint("start_hub: ", "text", color)
-    name = paint(z.name, name_role, color)
-    coords = paint(f"{z.x} {z.y}", "text", color)
-    lines.append(f"{prefix}{name} {coords}" + _format_metadata(z.metadata))
+    lines.append(
+        _format_zone_line(
+            "start_hub: ", parsed.start_hub, "text", zone_colors, color
+        )
+    )
+    lines.append(
+        _format_zone_line(
+            "end_hub: ", parsed.end_hub, "text", zone_colors, color
+        )
+    )
 
-    # end_hub: default role = text
-    z = parsed.end_hub
-    name_role = color_role(zone_colors.get(z.name, "none")) or "text"
-    prefix = paint("end_hub: ", "text", color)
-    name = paint(z.name, name_role, color)
-    coords = paint(f"{z.x} {z.y}", "text", color)
-    lines.append(f"{prefix}{name} {coords}" + _format_metadata(z.metadata))
-
-    # regular hubs: default role = foam
     for z in parsed.zones:
-        name_role = color_role(zone_colors.get(z.name, "none")) or "foam"
-        prefix = paint("hub: ", "foam", color)
-        name = paint(z.name, name_role, color)
-        coords = paint(f"{z.x} {z.y}", "foam", color)
-        lines.append(f"{prefix}{name} {coords}" + _format_metadata(z.metadata))
+        lines.append(_format_zone_line("hub: ", z, "foam", zone_colors, color))
 
-    # connections: default role = pine, each endpoint independent
     for c in parsed.connections:
         a_role = color_role(zone_colors.get(c.zone_a, "none")) or "pine"
         b_role = color_role(zone_colors.get(c.zone_b, "none")) or "pine"
