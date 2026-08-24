@@ -9,7 +9,7 @@ make install      # uv sync --group dev
 make run MAP=maps/example.map   # uv run python -m src <map>
 make gui MAP=maps/example.map   # uv run python -m src --gui <map>
 make debug MAP=maps/example.map # uv run python -X dev -m src --debug <map>
-make lint         # mypy src && flake8 src
+make lint         # mypy src tests && flake8 src
 make clean        # nuke .venv, __pycache__, .mypy_cache
 make test         # uv run pytest tests || true   ← swallows failures
 ```
@@ -32,18 +32,12 @@ make test         # uv run pytest tests || true   ← swallows failures
 - **Connections are undirected** — key is always `(a, b)` with `a <= b` (lexicographic sort).
 - **Start/end hubs** have unlimited capacity: `Zone.capacity` returns `None` for hubs, `max_drones` otherwise.
 - **Absolute imports** everywhere, including tests: `from src.*`. No relative imports.
-- **Build status:** parser, converter, GUI map selector, **pathfinding**,
-  the **simulation engine**, the **CLI output**, and the **GUI controller**
-  are fully implemented and tested (`parse_map` + helpers,
-  `build_graph` + `_convert_zone` + `_convert_connection`,
-  `src/gui/` pure helpers `transform.layout` + `maps.list_maps`/`load_map`,
-  `MapViewer` with keyboard-driven map picker; `find_path` + `_enter_cost`
-  in `src/simulation/pathfinding.py`; `Simulation` with capacity/link/
-  route-conflict handling in `src/simulation/engine.py`;
-  `src/cli.py` with `format_map`, `format_turn`, `simulate`, `run`,
-  `src/gui/controller.py` with `SimController` — 10 engine + 10
-  pathfinding + CLI + GUI controller tests passing). Drone movement is
-  handled inside the engine (no separate module).
+- **Implemented:** parser + converter (`src/models/parsing.py`,
+  `src/parser/`, `build_graph`), pathfinding (`find_path` in
+  `src/simulation/pathfinding.py`), simulation engine (`Simulation`
+  in `src/simulation/engine.py`), CLI output (`src/cli.py`), and the
+  GUI layer (`src/gui/`: pure helpers + `MapViewer` app). Drone
+  movement lives in the engine.
 
 ## Deferred decisions
 
@@ -85,6 +79,27 @@ make test         # uv run pytest tests || true   ← swallows failures
   (`SPEEDS = 0.5/1/2/4×` turns/sec, wraps, shown live), `M` = toggle the
   map picker. In the picker: `UP`/`DOWN` move, `ENTER` loads, `ESC`/`M`
   close. `ESC` quits when the picker is closed.
+- **HUD bar ("hub display"):** `MapViewer._draw_hud` at
+  `src/gui/app.py:336` draws the bottom band. Geometry: `HUD_HEIGHT
+  = 48` (`app.py:35`), starts at `y = MAP_HEIGHT = canvas[1] -
+  HUD_HEIGHT` (`app.py:37`); drawn on the 640×360 canvas, upscaled
+  with the map. Current layout: three stacked rows — line 1
+  `Message: {turn message}` (label muted, text foam=info / rose=error);
+  line 2 `TURN N  SPEED Xx` (gold); line 3 controls. Fonts/padding:
+  `legend_font` = Press Start 2P size 7 (`app.py:176`),
+  `LEGEND_PADDING = 4`, `line_height = legend_font.get_height()`.
+  Data sources: controls ← `_legend_rows()` (`app.py:325`); turn/
+  speed ← `controller.sim.state.turn` + `SPEEDS[controller.speed_index]`;
+  messages ← `self.error or controller.status` (status set by
+  `controller.flash`/`flash_turn`, auto-clears after
+  `TOAST_DURATION_MS` = 5s).
+  Tests to keep green: `test_legend_shows_live_speed` requires
+  `_legend_rows()` to keep `("+/-", "SPEED Nx")`;
+  `test_positions_stay_within_map_band` requires zone positions ≤
+  `MAP_HEIGHT` — bumping `HUD_HEIGHT` shrinks `MAP_HEIGHT`, so
+  `transform.layout` positions must stay in band.
+  New tests: `test_hud_has_three_stacked_rows`,
+  `test_hud_height_fits_three_lines`.
 - **Map picker:** hand-drawn centered overlay (`_draw_menu`) on top of
   the `MapMenu` state machine in `src/gui/menu.py` (pure, tested in
   `tests/test_gui_menu.py`). Options from `list_maps(maps_dir)`,
@@ -147,8 +162,6 @@ make test         # uv run pytest tests || true   ← swallows failures
 - **Exports:** `PALETTE` (role→RGB, adds `iris`), `COLOR_NAME_TO_ROLE`,
   `color_role(color_name) -> str | None`.
 - Both CLI and GUI import from here; no cross-layer coupling.
-- **GUI constants:** `src/gui/constants.py` holds `SPEEDS` and
-  `TOAST_DURATION_MS` shared between `app.py` and `controller.py`.
 
 ## Map format
 

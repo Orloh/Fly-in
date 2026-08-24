@@ -32,7 +32,7 @@ SCALE = 2
 WINDOW = (DEFAULT_CANVAS[0] * SCALE, DEFAULT_CANVAS[1] * SCALE)
 
 #: Height of the bottom HUD band (controls, readouts, messages).
-HUD_HEIGHT = 52
+HUD_HEIGHT = 48
 #: Height of the top map band (simulation rendering area).
 MAP_HEIGHT = DEFAULT_CANVAS[1] - HUD_HEIGHT
 
@@ -333,8 +333,19 @@ class MapViewer:
         ]
         return rows
 
+    def _hud_row_ys(self) -> tuple[int, int, int]:
+        """Return the top-y of the three stacked HUD rows."""
+        line_height = self.legend_font.get_height()
+        gap = 4
+        base = MAP_HEIGHT + LEGEND_PADDING + 4
+        return (
+            base,
+            base + line_height + gap,
+            base + 2 * (line_height + gap),
+        )
+
     def _draw_hud(self, surface: pygame.Surface) -> None:
-        """Draw the bottom HUD bar: panel, controls, readouts, message."""
+        """Draw the bottom HUD bar: three stacked rows."""
         width = surface.get_width()
         pygame.draw.rect(
             surface, TOAST_BG, pygame.Rect(0, MAP_HEIGHT, width, HUD_HEIGHT)
@@ -342,15 +353,17 @@ class MapViewer:
         pygame.draw.line(
             surface, _MUTED, (0, MAP_HEIGHT), (width, MAP_HEIGHT), 1
         )
+        y_msg, y_stat, y_ctrl = self._hud_row_ys()
 
-        line_height = self.legend_font.get_height()
-        controls = "   ".join(
-            f"{k} {a}" for k, a in self._legend_rows()
-        )
-        surface.blit(
-            self.legend_font.render(controls, True, _TEXT),
-            (LEGEND_PADDING, MAP_HEIGHT + LEGEND_PADDING),
-        )
+        label = self.legend_font.render("Message:", True, _MUTED)
+        surface.blit(label, (LEGEND_PADDING, y_msg))
+        message = self.error or self.controller.status
+        if message is not None:
+            color = _ROSE if self.error is not None else _FOAM
+            text = self.legend_font.render(message, True, color)
+            surface.blit(
+                text, (LEGEND_PADDING + label.get_width() + 4, y_msg)
+            )
 
         turn = (
             self.controller.sim.state.turn
@@ -359,18 +372,18 @@ class MapViewer:
         )
         speed = SPEEDS[self.controller.speed_index]
         readout = f"TURN {turn}   SPEED {speed:g}x"
-        y = MAP_HEIGHT + LEGEND_PADDING + line_height + 2
         surface.blit(
             self.legend_font.render(readout, True, _GOLD),
-            (LEGEND_PADDING, y),
+            (LEGEND_PADDING, y_stat),
         )
 
-        message = self.error or self.controller.status
-        if message:
-            color = _ROSE if self.error is not None else _FOAM
-            label = self.legend_font.render(message, True, color)
-            right = width - LEGEND_PADDING - label.get_width()
-            surface.blit(label, (right, y))
+        controls = "   ".join(
+            f"{k} {a}" for k, a in self._legend_rows()
+        )
+        surface.blit(
+            self.legend_font.render(controls, True, _TEXT),
+            (LEGEND_PADDING, y_ctrl),
+        )
 
     def _draw_menu(self, surface: pygame.Surface) -> None:
         """Draw the map picker as a centered overlay when it is open."""

@@ -12,7 +12,7 @@ from pathlib import Path
 import pygame
 import pygame.event as pygame_event
 
-from src.gui.app import MAP_HEIGHT, MapViewer, WINDOW
+from src.gui.app import HUD_HEIGHT, LEGEND_PADDING, MAP_HEIGHT, MapViewer, WINDOW
 from src.gui.constants import SPEEDS
 from src.models.enums import DroneStatus
 
@@ -266,6 +266,21 @@ class TestMapViewer:
 
         viewer.controller.speed_up()
         assert ("+/-", "SPEED 2x") in viewer._legend_rows()
+
+    def test_hud_has_three_stacked_rows(self, tmp_path: Path) -> None:
+        _make_maps(tmp_path, ["a.map"])
+        viewer = MapViewer(tmp_path, starting_map="a.map")
+        y0, y1, y2 = viewer._hud_row_ys()
+        assert y0 < y1 < y2
+        assert y0 >= MAP_HEIGHT
+        line_h = viewer.legend_font.get_height()
+        assert y2 + line_h <= MAP_HEIGHT + HUD_HEIGHT
+
+    def test_hud_height_fits_three_lines(self, tmp_path: Path) -> None:
+        _make_maps(tmp_path, ["a.map"])
+        viewer = MapViewer(tmp_path, starting_map="a.map")
+        line_h = viewer.legend_font.get_height()
+        assert 2 * LEGEND_PADDING + 3 * line_h + 2 * 4 + 4 <= HUD_HEIGHT
 
     def test_quit_event_stops_loop(self, tmp_path: Path) -> None:
         _make_maps(tmp_path, ["a.map"])

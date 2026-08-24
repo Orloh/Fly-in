@@ -45,7 +45,7 @@ retro aesthetic better than any widget set.
   overlays are drawn on the low-res canvas too, so they inherit the chunky
   look and scale with the map on resize (no native-res layer). The canvas
   is partitioned vertically: the **map band** (top, height `MAP_HEIGHT`)
-  holds the simulation; the **HUD band** (bottom, `HUD_HEIGHT` ≈ 52px)
+  holds the simulation; the **HUD band** (bottom, `HUD_HEIGHT` ≈ 48px)
   holds controls, readouts, and messages, separated by a divider line.
   Zone layout uses the map-band height so nothing hides behind the HUD.
 - **Font:** Press Start 2P for UI text and map labels; small sizes
@@ -65,11 +65,11 @@ retro aesthetic better than any widget set.
 | `ENTER` | picker | Load the highlighted map, closing the picker |
 | `ESC` | picker / global | Close the picker; quit when the picker is closed |
 
-The bottom **HUD bar** (`_draw_hud`) shows the bindings, live readouts
-(`Turn N`, `SPEED x`), and the current message (turn flash or load error),
-color-coded (foam = info, rose = error). The **map picker** (`_draw_menu`)
-is a centered overlay on the `MapMenu` state machine; parse/IO failures
-surface in the HUD bar (persistent when `maps/` is empty).
+The bottom **HUD bar** (`_draw_hud`) shows three stacked rows:
+line 1 `Message: {turn message}` (label muted, text foam=info / rose=error),
+line 2 `Turn N  SPEED x`, line 3 the key bindings. The **map picker**
+(`_draw_menu`) is a centered overlay on the `MapMenu` state machine;
+parse/IO failures surface in the HUD bar (persistent when `maps/` is empty).
 
 ## Layout / architecture
 
