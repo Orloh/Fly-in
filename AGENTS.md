@@ -9,8 +9,8 @@ make install      # uv sync --group dev
 make run MAP=maps/example.map   # uv run python -m src <map>
 make gui MAP=maps/example.map   # uv run python -m src --gui <map>
 make debug MAP=maps/example.map # uv run python -X dev -m src --debug <map>
-make lint         # mypy src tests && flake8 src
-make clean        # nuke .venv, __pycache__, .mypy_cache
+make lint         # uv run mypy src tests && uv run flake8 src
+make clean        # nuke .venv, .mypy_cache
 make test         # uv run pytest tests || true   ← swallows failures
 ```
 
@@ -18,159 +18,167 @@ make test         # uv run pytest tests || true   ← swallows failures
 
 - **`make test` masks failures** (`|| true` in the Makefile). For a real
   pass/fail signal run `uv run pytest tests` directly.
-- **`make run`/`make debug`** now run the text-based simulation (stdout:
-  map header + per-turn `D{id}-{zone}` lines). Colors auto-disabled on
+- **`make run`/`make debug`** run the text-based simulation (stdout:
+  map header + per-turn `D{id}-{zone}` lines). Colors auto-disable on
   non-tty or `NO_COLOR`. Conflicts only shown with `--debug`.
+- **Single test:** `uv run pytest tests/test_engine.py::Class::test_name`
+  or `uv run pytest tests/test_pathfinding.py -k pattern`.
+- **Required order:** edit → `make lint` (mypy + flake8) →
+  `uv run pytest tests` (never `make test`).
 
 ## Architecture
 
-- **Entry point:** `src/__main__.py` — invoked as `python -m src <map_file>`.
-- **`pyproject.toml`** has `package = false` — this is an application, not a distributable library.
-- **Domain models** live in `src/models/`, all subclass `pydantic.BaseModel`.
-- **Parsing is two-stage:** `src/models/parsing.py` holds raw-file models (`ParsedMap`, `ParsedZone`, `ParsedConnection`). These convert into domain models (`Zone`, `Connection`, `Graph`) in a separate step.
-- **`Graph`** wraps `dict[str, Zone]` + `dict[tuple[str,str], Connection]` with a `cached_property` adjacency index.
-- **Connections are undirected** — key is always `(a, b)` with `a <= b` (lexicographic sort).
-- **Start/end hubs** have unlimited capacity: `Zone.capacity` returns `None` for hubs, `max_drones` otherwise.
-- **Absolute imports** everywhere, including tests: `from src.*`. No relative imports.
-- **Implemented:** parser + converter (`src/models/parsing.py`,
-  `src/parser/`, `build_graph`), pathfinding (`find_path` in
-  `src/simulation/pathfinding.py`), simulation engine (`Simulation`
-  in `src/simulation/engine.py`), CLI output (`src/cli.py`), and the
-  GUI layer (`src/gui/`: pure helpers + `MapViewer` app). Drone
-  movement lives in the engine.
+- **Entry point:** `src/__main__.py` — invoked as `python -m src <map>`.
+  Dispatches `--gui` → `src/gui/app.py`, else → `src/cli.py`.
+- **`pyproject.toml`** has `package = false` — application, not a library.
+- **Domain models** in `src/models/`, all `pydantic.BaseModel`. Parsing
+  is two-stage: `src/models/parsing.py` holds raw-file models
+  (`ParsedMap`, `ParsedZone`, `ParsedConnection`) that convert into
+  `Zone`/`Connection`/`Graph` via `build_graph`.
+- **`Graph`** wraps `dict[str, Zone]` + `dict[tuple[str,str], Connection]`
+  with a `cached_property` adjacency index. Connections are undirected —
+  key is always `(a, b)` with `a <= b`; use `canonical_key` in
+  `src/models/graph_utils.py`.
+- **Start/end hubs** have unlimited capacity: `Zone.capacity` returns
+  `None` for hubs, `max_drones` otherwise.
+- **Absolute imports** everywhere, including tests (`from src.*`).
 
-## Deferred decisions
+## Algorithm & objective gap (fix planned: CBS)
 
-- **Self-loop connections (`connection: A-A`)**: not yet decided. The
-  parser currently accepts them and the converter does not reject them.
-  Left open until real `maps/*.map` files clarify whether self-loops are
-  allowed; if disallowed, add a check (and test) in `_convert_connection`.
+`Summary.md` states the primary goal: *"all drones reach their
+destination in the fewest possible simulation turns"* (makespan). The
+current code does NOT achieve it — `find_path` is per-drone Dijkstra
+and the engine block-and-retries conflicts, so same-goal drones queue
+on one route instead of splitting. **Decision made: implement
+optimal-makespan Conflict-Based Search (CBS). Read `CBS_PLAN.md` before
+touching `src/simulation/`** — it holds the full design, tradeoffs,
+measured baselines, test matrix, and phased TDD plan.
+
+Locked decisions (do not re-litigate):
+- Planner/executor split: `Planner` computes a `Schedule` once in
+  `Simulation.__init__`; `step()` replays it as a cursor. Offline only —
+  no online re-planning.
+- `find_path` is deleted → `find_path_timed` (time-expanded A*) +
+  `dist_to_goal` (reverse-Dijkstra heuristic) in `pathfinding.py`. The
+  priority-zone tie-break moves into the A* heap ordering.
+- Planned waits are silent — no conflict string when the schedule holds
+  a drone back. Conflicts remain only for no-route (`BLOCKED`) and
+  safety-net planner violations.
+- Conflict model is capacity-based (N+1th drone at a `(zone, turn)` or
+  link interval); link budgets are shared across both directions;
+  arrived drones keep occupying finite-capacity goals.
+- Measured baseline: `bottleneck.map` 19 → optimal 11 and
+  `example.map` 5 → 4 are the gap maps. `parallel_paths.map` 9 = 9,
+  `priority_blocked.map` 8 = 8, `complex_cycle.map` 9 = 9 are
+  merge/exit-bound regression maps, NOT gap maps.
+
+Until implementation lands, this section describes planned state, not
+current state. When it lands, rewrite this section as implemented and
+document the new entry points (`planner.py`, `find_path_timed`,
+`src/models/schedule.py`).
 
 ## Constraints
 
-- **No external graph libraries** — no `networkx`, no `graphlib`. All pathfinding must be hand-written.
-- **Line length:** 79 chars (flake8 config in pyproject.toml).
+- **No external graph libraries** — no `networkx`, no `graphlib`. All
+  pathfinding hand-written.
+- **Line length:** 79 chars (flake8 in pyproject.toml).
 - **mypy strict mode** — `strict = true`, `check_untyped_defs = true`.
-- **Zone names** cannot contain `-` or spaces (validated in `Zone` model).
-- All models use `from __future__ import annotations` for deferred evaluation.
+- **Zone names** cannot contain `-` or spaces (validated in `Zone`).
+- All models use `from __future__ import annotations`.
 
 ## Workflow
 
-- **Before committing:** always show the commit message and wait for explicit approval before running `git commit`.
-- **Docstrings:** every class, method, and function must have a docstring. 4 lines max — state what it does, not how.
-- **Test-driven:** write tests in `tests/` before implementing; run them with `uv run pytest tests` (see gotcha above — `make test` hides failures).
-- **After lint:** run `make lint` after any code change and fix all issues before declaring work done.
-
-## GUI
-
-- **Stack:** `pygame-ce` only — all controls are keyboard-driven, no
-  widget library. The map, key legend, map picker, and toast are all
-  drawn to a low-res canvas (`VIRTUAL = (640, 360)`) in the pixel font
-  and upscaled with `pygame.transform.scale` (nearest-neighbor = crisp
-  pixels). Detailed outline in `GUI_PLAN.md`.
-- **Palette:** rose-pine (code constants in `constants.py`) — bg `#191724`,
-  gold `#f6c177`, rose `#eb6f92`, foam `#9ccfd8`, iris `#c4a7e7`,
-  pine `#31748f`, text `#e0def4`. Pixel font **Press Start 2P**
-  (OFL-1.1, vendored under `assets/fonts/` with its license).
-- **Keyboard controls:** the bottom HUD bar (`_draw_hud`) shows the
-  bindings, live readouts (`Turn N`, `SPEED x`), and messages. `SPACE` =
-  play/pause (resumes auto-play with a one-turn kickstart from the
-  current state; pauses when playing; never resets the sim), `BACKSPACE` = rewind one turn
-  (snapshot history), `+`/`-` = change speed only (never starts/pauses; SPACE does).
-  Displayed `SPEEDS` = 0.5/1/2/4×; actual `SPEED_RATES` = 0.25/0.5/1/2 turns/sec
-  (half, for watchability). Wraps, shown live. Default = index 1 (`1x` = 0.5 turns/sec),
-  `M` = toggle the map picker. In the picker: `UP`/`DOWN` move, `ENTER` loads, `ESC`/`M`
-  close. `ESC` quits when the picker is closed.
-- **HUD bar ("hub display"):** `MapViewer._draw_hud` at
-  `src/gui/app.py:336` draws the bottom band. Geometry: `HUD_HEIGHT
-  = 48` (`app.py:35`), starts at `y = MAP_HEIGHT = canvas[1] -
-  HUD_HEIGHT` (`app.py:37`); drawn on the 640×360 canvas, upscaled
-  with the map. Current layout: three stacked rows — line 1
-  `Message: {turn message}` (label muted, text foam=info / rose=error);
-  line 2 `TURN N  SPEED Xx` (gold); line 3 controls. Fonts/padding:
-  `legend_font` = Press Start 2P size 7 (`app.py:176`),
-  `LEGEND_PADDING = 4`, `line_height = legend_font.get_height()`.
-  Data sources: controls ← `_legend_rows()` (`app.py:325`); turn/
-  speed ← `controller.sim.state.turn` + `SPEEDS[controller.speed_index]`;
-  messages ← `self.error or controller.status` (status set by
-  `controller.flash`/`flash_turn`, auto-clears after
-  `TOAST_DURATION_MS` = 5s).
-  Tests to keep green: `test_legend_shows_live_speed` requires
-  `_legend_rows()` to keep `("+/-", "SPEED Nx")`;
-  `test_positions_stay_within_map_band` requires zone positions ≤
-  `MAP_HEIGHT` — bumping `HUD_HEIGHT` shrinks `MAP_HEIGHT`, so
-  `transform.layout` positions must stay in band.
-  New tests: `test_hud_has_three_stacked_rows`,
-  `test_hud_height_fits_three_lines`.
-- **Map picker:** hand-drawn centered overlay (`_draw_menu`) on top of
-  the `MapMenu` state machine in `src/gui/menu.py` (pure, tested in
-  `tests/test_gui_menu.py`). Options from `list_maps(maps_dir)`,
-  refreshed on open, current map pre-highlighted. Parse/IO failures
-  show a 5-second top-center toast (boxed, rose-bordered) and keep
-  the current map; an empty `maps/` yields a persistent "no maps found"
-  toast and no picker.
-- **GUI layer lives in `src/gui/`**, decoupled from the simulation
-  engine: pure helpers (`transform.layout`, `maps.list_maps`,
-  `menu.MapMenu`, `controller.SimController`) plus the pygame/app
-  drawing code (`app.py`).
-- **Headless GUI tests:** `tests/conftest.py` sets `SDL_VIDEODRIVER` /
-  `SDL_AUDIODRIVER = dummy` before pygame initializes, so `MapViewer`
-  smoke tests (`tests/test_gui_app.py`) run without a display. pytest
-  must run from the project root (the font path is CWD-relative).
-- **Resizable window:** opens at `WINDOW = (1280, 720)` with
-  `pygame.RESIZABLE`. On `VIDEORESIZE`/`WINDOWRESIZED`/
-  `WINDOWSIZECHANGED`, `_on_resized` re-creates the window at the new
-  size (pygame-ce reports the size in `x`/`y` for `WINDOWSIZECHANGED`);
-  same-size events are ignored (loop guard). The canvas is stretched to
-  fill the window, so nothing is re-laid-out on resize.
-- Keep the map folder named `maps/` (scanned by the picker).
-- **Controller:** `src/gui/controller.py` (`SimController`) holds all
-  simulation state (`sim`, `history`, `playing`, `speed_index`, `status`)
-  and logic (`step_forward`, `step_back`, `toggle_play`, `speed_up`,
-  `speed_down`, `auto_step`, `flash`, `flash_turn`, `prune_status`).
-  `MapViewer` delegates simulation control to `self.controller`.
-- **Shared constants:** `src/gui/constants.py` holds `SPEEDS` (displayed
-  speeds), `SPEED_RATES` (actual turn rates for timing), and
-  `TOAST_DURATION_MS` to avoid circular imports between `app.py` and
-  `controller.py`.
-
-## CLI Output
-
-- **Module:** `src/cli.py` — pure, testable layer mirroring `src/gui/app.py`.
-- **Exports:** `format_map`, `format_turn`, `simulate`, `run`, plus
-  `PALETTE`/`paint` for ANSI truecolor.
-- **Format:** per-turn line `D{id}-{to_zone} ...` (drone-id order);
-  map header echoed first (normalized from `ParsedMap`); blank line
-  for turns with no movements (in-transit only).
-- **Zone-name coloring:** each zone's `color=` metadata maps to a
-  rose-pine role (red→rose, blue→iris, green→pine, cyan→foam,
-  gold→gold, plus synonyms). The zone NAME token is painted with that
-  role in the map header and in `D{id}-{to_zone}` turn lines.
-  Uncolored zones keep their current default (text/foam/pine).
-- **Termination:** deadlock guard — break when a turn yields no
-  movements AND no drone is `IN_TRANSIT`. Final arrival turn with no
-  movements is not printed.
-- **Colors:** rose-pine truecolor (gold/foam/rose/pine/iris/text/muted),
-  auto-disabled when stdout is not a TTY or `NO_COLOR` is set.
-- **Conflicts:** printed to stderr only with `--debug` flag.
-- **Errors:** `ParseError`/`OSError` → `Error: {msg}` to stderr, exit 1.
-- **Tests:** `tests/test_cli.py` — pure formatter tests + `simulate`
-  integration tests reusing `_graph`/`_drone` helpers from
-  `tests/test_engine.py`.
-
-## Shared Palette
-
-- **Module:** `src/palette.py` — pure, no pygame. Single source of
-  truth for both CLI (ANSI) and GUI (RGB).
-- **Exports:** `PALETTE` (role→RGB, adds `iris`), `COLOR_NAME_TO_ROLE`,
-  `color_role(color_name) -> str | None`.
-- Both CLI and GUI import from here; no cross-layer coupling.
+- **Before committing:** show the commit message and wait for explicit
+  approval before running `git commit`.
+- **Docstrings:** every class, method, and function must have one. 4
+  lines max — state what, not how.
+- **Test-driven:** write tests in `tests/` before implementing; run
+  `uv run pytest tests` (not `make test`).
+- **After any code change:** run `make lint` and fix all issues before
+  declaring work done.
 
 ## Map format
 
 Defined in `input_format.md`. Key rules:
-- First line: `nb_drones: <int>`
-- Exactly one `start_hub:` and one `end_hub:`
-- Connections: `connection: <zoneA>-<zoneB> [metadata]`
-- Zone types: `normal` (cost 1), `priority` (cost 1), `restricted` (cost 2), `blocked` (inaccessible)
-- Error on any parse failure — halt with line number and cause.
+- First line: `nb_drones: <int>`. Exactly one `start_hub:` and one
+  `end_hub:`.
+- Zones: `start_hub`/`end_hub`/`hub: <name> <x> <y> [metadata]`. Hubs
+  have infinite capacity.
+- Connections: `connection: <zoneA>-<zoneB> [metadata]`, strictly
+  bidirectional; duplicates (`a-b` after `b-a`) are invalid.
+- Zone types: `normal` (cost 1), `priority` (cost 1, preferred),
+  `restricted` (cost 2), `blocked` (inaccessible). Invalid type →
+  parse error.
+- Metadata (any order in `[...]`): `zone=`, `color=`,
+  `max_drones=` (default 1), `max_link_capacity=` (default 1).
+- Any parse failure halts with line number and cause.
+
+## CLI Output
+
+- **Module:** `src/cli.py` — pure, testable layer mirroring
+  `src/gui/app.py`.
+- **Exports:** `format_map`, `format_turn`, `simulate`, `run`, plus
+  `PALETTE`/`paint` for ANSI truecolor.
+- **Format:** per-turn line `D{id}-{to_zone} ...` (drone-id order); map
+  header echoed first (normalized from `ParsedMap`); blank line for
+  turns with no movements (in-transit only).
+- **Zone-name coloring:** a zone's `color=` metadata maps to a rose-pine
+  role (red→rose, blue→iris, green→pine, cyan→foam, gold→gold, plus
+  synonyms). The zone NAME token is painted in the map header and in
+  `D{id}-{to_zone}` lines.
+- **Termination:** deadlock guard — break when a turn yields no
+  movements AND no drone is `IN_TRANSIT`. Final arrival turn with no
+  movements is not printed.
+- **Colors:** rose-pine truecolor, auto-disabled when stdout is not a
+  TTY or `NO_COLOR` is set.
+- **Conflicts:** stderr only with `--debug`. **Errors:**
+  `ParseError`/`OSError` → `Error: {msg}` to stderr, exit 1.
+- **Tests:** `tests/test_cli.py` — pure formatter tests + `simulate`
+  integration tests with **own fixtures** (it does **not** share
+  `_graph`/`_drone` from `tests/test_engine.py`).
+
+## Shared Palette
+
+- **Module:** `src/palette.py` — pure, no pygame. Single source of truth
+  for both CLI (ANSI) and GUI (RGB).
+- **Exports:** `PALETTE` (role→RGB), `COLOR_NAME_TO_ROLE`,
+  `color_role(color_name) -> str | None`. Both CLI and GUI import from
+  here; no cross-layer coupling.
+
+## GUI
+
+- **Stack:** `pygame-ce` only — keyboard-driven, no widget library.
+  Drawn on a low-res canvas (`VIRTUAL = (640, 360)`) in the pixel font
+  **Press Start 2P** (OFL-1.1, vendored under `assets/fonts/`),
+  upscaled with `pygame.transform.scale` (crisp pixels). Full design
+  outline in `GUI_PLAN.md`.
+- **Palette:** rose-pine (constants in `src/gui/constants.py` and
+  `src/palette.py`).
+- **Controls:** `SPACE` play/pause, `BACKSPACE` rewind, `+`/`-` speed
+  (wraps), `M` map picker (↑/↓ move, ENTER load, ESC/M close), `ESC`
+  quit. Displayed `SPEEDS` = 0.5/1/2/4×; actual `SPEED_RATES` are half,
+  for watchability.
+- **Layering:** `src/gui/` is decoupled from the engine — pure helpers
+  (`transform.layout`, `maps.list_maps`, `menu.MapMenu`,
+  `controller.SimController`) plus the pygame/app drawing code
+  (`app.py`). `MapViewer` delegates sim control to `self.controller`.
+- **Shared constants:** `src/gui/constants.py` holds `SPEEDS`,
+  `SPEED_RATES`, `TOAST_DURATION_MS` to avoid circular imports between
+  `app.py` and `controller.py`.
+- **Headless GUI tests:** `tests/conftest.py` sets
+  `SDL_VIDEODRIVER`/`SDL_AUDIODRIVER = dummy` before pygame init.
+  pytest must run from project root (the font path is CWD-relative).
+- Keep the map folder named `maps/` (scanned by the picker).
+
+## Deferred decisions
+
+- **Self-loop connections (`connection: A-A`)**: undecided. The parser
+  accepts them and the converter does not reject them; `input_format.md`
+  is silent. If disallowed, add a check (and test) in
+  `_convert_connection`.
+
+## Known gaps
+
+- **No `README.md`** at root, though `Summary.md` lists it as a required
+  deliverable (project description, running instructions, resources, AI
+  utilization, algorithm explanation). Needs to be written.
