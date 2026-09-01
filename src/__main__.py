@@ -25,7 +25,7 @@ def main() -> None:
     args = parser.parse_args()
 
     if args.gui:
-        from src.gui.app import run as run_gui
+        from src.gui import run_gui
 
         run_gui(args.map)
         return

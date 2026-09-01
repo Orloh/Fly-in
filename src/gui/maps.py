@@ -12,9 +12,7 @@ from typing import TypeAlias
 
 from src.gui.transform import layout
 from src.models import Drone, Graph
-from src.parser.converter import build_graph
-from src.parser.errors import ParseError
-from src.parser.parser import parse_map
+from src.parser import build_graph, ParseError, parse_map
 
 #: Shape of a successfully loaded map: graph, fleet, and pixel positions.
 LoadedMap: TypeAlias = tuple[

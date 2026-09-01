@@ -19,9 +19,7 @@ from src.models import (
     ParsedZone,
     TurnResult,
 )
-from src.parser.converter import build_graph
-from src.parser.errors import ParseError
-from src.parser.parser import parse_map
+from src.parser import build_graph, ParseError, parse_map
 from src.palette import PALETTE, color_role
 from src.simulation.engine import Simulation
 
