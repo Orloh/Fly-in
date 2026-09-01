@@ -1,0 +1,6 @@
+nb_drones: 10
+start_hub: base 0 0 [color=blue]
+hub: middle 300 0 [max_drones=8 color=gold]
+end_hub: target 600 0 [color=red]
+connection: base-middle [max_link_capacity=5]
+connection: middle-target [max_link_capacity=3]

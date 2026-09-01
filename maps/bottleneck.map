@@ -1,0 +1,11 @@
+nb_drones: 8
+start_hub: base 0 0 [color=blue]
+hub: choke1 200 -50 [zone=restricted max_drones=1 color=gold]
+hub: choke2 200 50 [zone=restricted max_drones=1 color=gold]
+hub: wide 400 0 [max_drones=4 color=green]
+end_hub: target 600 0 [color=red]
+connection: base-choke1 [max_link_capacity=1]
+connection: base-choke2 [max_link_capacity=1]
+connection: choke1-wide [max_link_capacity=2]
+connection: choke2-wide [max_link_capacity=2]
+connection: wide-target [max_link_capacity=4]

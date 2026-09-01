@@ -1,0 +1,11 @@
+nb_drones: 6
+start_hub: base 0 0 [color=blue]
+hub: upper 200 -100 [zone=priority color=cyan]
+hub: lower 200 100 [zone=restricted color=gold]
+hub: merge 400 0 [color=green]
+end_hub: target 600 0 [color=red]
+connection: base-upper
+connection: base-lower
+connection: upper-merge
+connection: lower-merge
+connection: merge-target

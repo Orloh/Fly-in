@@ -1,0 +1,8 @@
+nb_drones: 4
+start_hub: base 0 0 [color=blue]
+hub: waypoint1 150 0 [color=cyan]
+hub: waypoint2 300 0 [color=green]
+end_hub: target 450 0 [color=red]
+connection: base-waypoint1
+connection: waypoint1-waypoint2
+connection: waypoint2-target

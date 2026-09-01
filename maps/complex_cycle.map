@@ -1,0 +1,16 @@
+nb_drones: 5
+start_hub: base 0 0 [color=blue]
+hub: a 150 -150 [color=cyan]
+hub: b 150 150 [zone=priority color=green]
+hub: c 300 -150 [zone=restricted color=gold]
+hub: d 300 150 [color=magenta]
+hub: e 450 0 [color=orange]
+end_hub: target 600 0 [color=red]
+connection: base-a
+connection: base-b
+connection: a-c
+connection: b-d
+connection: c-d
+connection: c-e
+connection: d-e
+connection: e-target

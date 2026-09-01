@@ -1,0 +1,17 @@
+nb_drones: 4
+start_hub: base 0 0 [color=blue]
+hub: fast1 150 -100 [zone=priority color=cyan]
+hub: fast2 300 -100 [zone=priority color=cyan]
+hub: slow1 150 100 [zone=restricted color=gold]
+hub: slow2 300 100 [zone=restricted color=gold]
+hub: blocked_zone 225 0 [zone=blocked color=gray]
+hub: merge 450 0 [color=green]
+end_hub: target 600 0 [color=red]
+connection: base-fast1
+connection: fast1-fast2
+connection: fast2-merge
+connection: base-slow1
+connection: slow1-slow2
+connection: slow2-merge
+connection: merge-target
+# blocked_zone is isolated (no connections) - pathfinder must avoid it
