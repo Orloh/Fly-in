@@ -26,7 +26,7 @@ from src.parser.converter import build_graph
 from src.simulation.engine import Simulation
 for name in ("bottleneck", "parallel_paths", "example",
              "complex_cycle", "simple_line", "priority_blocked"):
-    graph, drones = build_graph(parse_map(f"maps/{name}.map"))
+    graph, drones = build_graph(parse_map(f"maps/personal/{name}.txt"))
     sim = Simulation(graph, drones)
     while not sim.finished:
         sim.step()
@@ -36,18 +36,18 @@ EOF
 
 | Map | Drones | Turns (current) | Turns (optimal) | Role |
 |---|---|---|---|---|
-| `bottleneck.map` | 8 | 19 | 11 | **gap map** — both chokes must be used |
-| `example.map` | 3 | 5 | 4 | **gap map** — split landing/roof1 routes |
-| `parallel_paths.map` | 6 | 9 | 9 | regression — merge-target binds at 1/turn |
-| `priority_blocked.map` | 4 | 8 | 8 | regression — merge-target binds |
-| `complex_cycle.map` | 5 | 9 | 9 | regression — e-target binds |
-| `simple_line.map` | 4 | 7 | 7 | regression — chain, no alternatives |
+| `bottleneck.txt` | 8 | 19 | 11 | **gap map** — both chokes must be used |
+| `example.txt` | 3 | 5 | 4 | **gap map** — split landing/roof1 routes |
+| `parallel_paths.txt` | 6 | 9 | 9 | regression — merge-target binds at 1/turn |
+| `priority_blocked.txt` | 4 | 8 | 8 | regression — merge-target binds |
+| `complex_cycle.txt` | 5 | 9 | 9 | regression — e-target binds |
+| `simple_line.txt` | 4 | 7 | 7 | regression — chain, no alternatives |
 
-Correction from earlier discussion: `parallel_paths.map` was assumed to
+Correction from earlier discussion: `parallel_paths.txt` was assumed to
 be the gap demo. Measured + computed analysis shows its `merge` zone and
 `merge-target` link (both capacity 1) bound throughput to 1 drone/turn,
 so greedy already matches optimal (9). The real gap maps are
-`bottleneck.map` (19 → 11) and `example.map` (5 → 4).
+`bottleneck.txt` (19 → 11) and `example.txt` (5 → 4).
 
 ## Verified movement contract
 
@@ -396,16 +396,16 @@ movement contract; each lower bound is the binding-capacity argument):
 
 | Scenario | Greedy | Optimal | Bound argument |
 |---|---|---|---|
-| `bottleneck.map` | 19 | **11** | each choke admits 1 entry / 2 turns (cap-1 link, 2-turn hold) → last entry ≥ T7 → arrival ≥ T7+4 |
-| `example.map` | 5 | **4** | landing route serializes 1/turn (first T3); roof1 route earliest T4 → ≥ 2 drones arrive ≥ T4 |
+| `bottleneck.txt` | 19 | **11** | each choke admits 1 entry / 2 turns (cap-1 link, 2-turn hold) → last entry ≥ T7 → arrival ≥ T7+4 |
+| `example.txt` | 5 | **4** | landing route serializes 1/turn (first T3); roof1 route earliest T4 → ≥ 2 drones arrive ≥ T4 |
 | synthetic split: S→A→G ∥ S→B→G, all cap 1, 2 drones | 4 | **3** | single-drone makespan is 3; disjoint routes let both arrive T3 |
 | single drone S→A→G (normal) | 3 | **3** | `1 + Σ costs` (existing test) |
 | single drone S→R→G (restricted) | 4 | **4** | `1 + (2+1)` (existing test) |
 | head-on A↔B, link cap 1 | 3 | **3** | one traverses T1, other waits, traverses T2, arrives T3 |
-| `parallel_paths.map` | 9 | **9** | merge-target 1/turn from T4 → arrivals T4..T9 |
-| `priority_blocked.map` | 8 | **8** | merge-target binds |
-| `complex_cycle.map` | 9 | **9** | e-target binds |
-| `simple_line.map` | 7 | **7** | chain, no alternatives |
+| `parallel_paths.txt` | 9 | **9** | merge-target 1/turn from T4 → arrivals T4..T9 |
+| `priority_blocked.txt` | 8 | **8** | merge-target binds |
+| `complex_cycle.txt` | 9 | **9** | e-target binds |
+| `simple_line.txt` | 7 | **7** | chain, no alternatives |
 
 `tests/test_engine.py` changes (D4 — silent planned waits; movement and
 turn-count assertions all stay):
@@ -440,9 +440,9 @@ turn-count assertions all stay):
 ```
 make lint                       # mypy strict + flake8, must be clean
 uv run pytest tests             # real signal (make test masks failures)
-make run MAP=maps/bottleneck.map    # expect 11 turns (was 19)
-make run MAP=maps/example.map       # expect 4 turns (was 5)
-make run MAP=maps/parallel_paths.map  # expect 9 (unchanged — regression)
-make debug MAP=maps/bottleneck.map  # conflicts absent (silent waits)
-make gui MAP=maps/bottleneck.map    # replay + rewind still work
+make run MAP=maps/personal/bottleneck.txt    # expect 11 turns (was 19)
+make run MAP=maps/personal/example.txt       # expect 4 turns (was 5)
+make run MAP=maps/personal/parallel_paths.txt  # expect 9 (unchanged — regression)
+make debug MAP=maps/personal/bottleneck.txt  # conflicts absent (silent waits)
+make gui MAP=maps/personal/bottleneck.txt    # replay + rewind still work
 ```

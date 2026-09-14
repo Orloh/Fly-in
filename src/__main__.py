@@ -10,7 +10,7 @@ def main() -> None:
     parser = argparse.ArgumentParser(
         prog="fly-in", description="Drone fleet routing simulation"
     )
-    parser.add_argument("map", help="path to the .map file")
+    parser.add_argument("map", help="path to the map file")
     parser.add_argument(
         "--gui", action="store_true", help="render the map in a window"
     )

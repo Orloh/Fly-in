@@ -29,13 +29,20 @@ VALID_MAP = (
 
 def _write_map(path: Path, content: str = VALID_MAP) -> None:
     """Write a map file at the given path."""
+    path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(content, encoding="utf-8")
 
 
 def _make_maps(tmp_path: Path, names: list[str]) -> None:
-    """Create one valid map file per name in ``tmp_path``."""
+    """Create one valid map file per name in ``tmp_path/maps/``."""
     for name in names:
-        _write_map(tmp_path / name)
+        _write_map(tmp_path / "maps" / name)
+
+
+def _make_personal_maps(tmp_path: Path, names: list[str]) -> None:
+    """Create one valid map file per name in ``tmp_path/personal/``."""
+    for name in names:
+        _write_map(tmp_path / "personal" / name)
 
 
 def _key(key: int) -> pygame_event.Event:
@@ -47,35 +54,35 @@ class TestMapViewer:
     """Smoke tests for the pygame map viewer window state."""
 
     def test_renders_frame_at_window_size(self, tmp_path: Path) -> None:
-        _make_maps(tmp_path, ["a.map"])
-        viewer = MapViewer(tmp_path, starting_map="a.map")
+        _make_maps(tmp_path, ["a.txt"])
+        viewer = MapViewer(tmp_path, starting_map="maps/a.txt")
 
         assert viewer._render().get_size() == WINDOW
 
     def test_loads_starting_map_state(self, tmp_path: Path) -> None:
-        _make_maps(tmp_path, ["a.map"])
-        viewer = MapViewer(tmp_path, starting_map="a.map")
+        _make_maps(tmp_path, ["a.txt"])
+        viewer = MapViewer(tmp_path, starting_map="maps/a.txt")
 
-        assert viewer.current_map == "a.map"
+        assert viewer.current_map == "maps/a.txt"
         assert viewer.error is None
         assert viewer.graph is not None
         assert set(viewer.graph.zones) == {"base", "target", "roof1"}
 
     def test_m_key_toggles_map_menu(self, tmp_path: Path) -> None:
-        _make_maps(tmp_path, ["a.map", "b.map"])
-        viewer = MapViewer(tmp_path, starting_map="a.map")
+        _make_maps(tmp_path, ["a.txt", "b.txt"])
+        viewer = MapViewer(tmp_path, starting_map="maps/a.txt")
 
         viewer._handle_event(_key(pygame.K_m))
         assert viewer.menu.visible is True
-        assert viewer.menu.options == ["a.map", "b.map"]
+        assert viewer.menu.options == ["maps/a.txt", "maps/b.txt"]
         assert viewer.menu.selected == 0
 
         viewer._handle_event(_key(pygame.K_m))
         assert viewer.menu.visible is False
 
     def test_arrow_keys_move_menu_selection(self, tmp_path: Path) -> None:
-        _make_maps(tmp_path, ["a.map", "b.map", "c.map"])
-        viewer = MapViewer(tmp_path, starting_map="a.map")
+        _make_maps(tmp_path, ["a.txt", "b.txt", "c.txt"])
+        viewer = MapViewer(tmp_path, starting_map="maps/a.txt")
         viewer._handle_event(_key(pygame.K_m))
 
         viewer._handle_event(_key(pygame.K_DOWN))
@@ -85,56 +92,56 @@ class TestMapViewer:
         assert viewer.menu.selected == 0
 
     def test_enter_loads_selected_map(self, tmp_path: Path) -> None:
-        _make_maps(tmp_path, ["a.map", "b.map"])
-        viewer = MapViewer(tmp_path, starting_map="a.map")
+        _make_maps(tmp_path, ["a.txt", "b.txt"])
+        viewer = MapViewer(tmp_path, starting_map="maps/a.txt")
 
         viewer._handle_event(_key(pygame.K_m))
         viewer._handle_event(_key(pygame.K_DOWN))
         viewer._handle_event(_key(pygame.K_RETURN))
 
-        assert viewer.current_map == "b.map"
+        assert viewer.current_map == "maps/b.txt"
         assert viewer.menu.visible is False
         assert viewer.error is None
 
     def test_enter_on_current_map_is_noop(self, tmp_path: Path) -> None:
-        _make_maps(tmp_path, ["a.map"])
-        viewer = MapViewer(tmp_path, starting_map="a.map")
+        _make_maps(tmp_path, ["a.txt"])
+        viewer = MapViewer(tmp_path, starting_map="maps/a.txt")
 
         viewer._handle_event(_key(pygame.K_m))
         viewer._handle_event(_key(pygame.K_RETURN))
 
-        assert viewer.current_map == "a.map"
+        assert viewer.current_map == "maps/a.txt"
         assert viewer.menu.visible is False
 
     def test_menu_selection_keeps_current_on_parse_failure(
         self, tmp_path: Path
     ) -> None:
-        _make_maps(tmp_path, ["a.map"])
-        (tmp_path / "bad.map").write_text("not a map\n", encoding="utf-8")
-        viewer = MapViewer(tmp_path, starting_map="a.map")
+        _make_maps(tmp_path, ["a.txt"])
+        _write_map(tmp_path / "maps" / "bad.txt", "not a map\n")
+        viewer = MapViewer(tmp_path, starting_map="maps/a.txt")
 
         viewer._handle_event(_key(pygame.K_m))
         viewer._handle_event(_key(pygame.K_DOWN))
         viewer._handle_event(_key(pygame.K_RETURN))
 
-        assert viewer.current_map == "a.map"
+        assert viewer.current_map == "maps/a.txt"
         assert viewer.error is not None
         assert "line 1" in viewer.error
 
     def test_escape_closes_menu_without_loading(self, tmp_path: Path) -> None:
-        _make_maps(tmp_path, ["a.map", "b.map"])
-        viewer = MapViewer(tmp_path, starting_map="a.map")
+        _make_maps(tmp_path, ["a.txt", "b.txt"])
+        viewer = MapViewer(tmp_path, starting_map="maps/a.txt")
 
         viewer._handle_event(_key(pygame.K_m))
         viewer._handle_event(_key(pygame.K_DOWN))
         viewer._handle_event(_key(pygame.K_ESCAPE))
 
         assert viewer.menu.visible is False
-        assert viewer.current_map == "a.map"
+        assert viewer.current_map == "maps/a.txt"
 
     def test_escape_quits_when_menu_closed(self, tmp_path: Path) -> None:
-        _make_maps(tmp_path, ["a.map"])
-        viewer = MapViewer(tmp_path, starting_map="a.map")
+        _make_maps(tmp_path, ["a.txt"])
+        viewer = MapViewer(tmp_path, starting_map="maps/a.txt")
 
         viewer._handle_event(_key(pygame.K_ESCAPE))
 
@@ -148,8 +155,8 @@ class TestMapViewer:
         assert viewer.menu.visible is False
 
     def test_speed_keys_cycle_with_wrap(self, tmp_path: Path) -> None:
-        _make_maps(tmp_path, ["a.map"])
-        viewer = MapViewer(tmp_path, starting_map="a.map")
+        _make_maps(tmp_path, ["a.txt"])
+        viewer = MapViewer(tmp_path, starting_map="maps/a.txt")
 
         assert SPEEDS[viewer.controller.speed_index] == 1.0
 
@@ -163,31 +170,31 @@ class TestMapViewer:
         assert SPEEDS[viewer.controller.speed_index] == 4.0
 
     def test_equals_key_acts_as_plus(self, tmp_path: Path) -> None:
-        _make_maps(tmp_path, ["a.map"])
-        viewer = MapViewer(tmp_path, starting_map="a.map")
+        _make_maps(tmp_path, ["a.txt"])
+        viewer = MapViewer(tmp_path, starting_map="maps/a.txt")
 
         viewer._handle_event(_key(pygame.K_EQUALS))
 
         assert SPEEDS[viewer.controller.speed_index] == 2.0
 
     def test_space_advances_simulation(self, tmp_path: Path) -> None:
-        _make_maps(tmp_path, ["a.map"])
-        viewer = MapViewer(tmp_path, starting_map="a.map")
+        _make_maps(tmp_path, ["a.txt"])
+        viewer = MapViewer(tmp_path, starting_map="maps/a.txt")
         assert viewer.fleet is not None
 
         assert all(d.status == DroneStatus.WAITING for d in viewer.fleet)
 
         viewer._handle_event(_key(pygame.K_SPACE))
 
-        assert viewer.current_map == "a.map"
+        assert viewer.current_map == "maps/a.txt"
         assert viewer.running is True
         assert any(
             d.status == DroneStatus.IN_TRANSIT for d in viewer.fleet
         )
 
     def test_backspace_rewinds_simulation(self, tmp_path: Path) -> None:
-        _make_maps(tmp_path, ["a.map"])
-        viewer = MapViewer(tmp_path, starting_map="a.map")
+        _make_maps(tmp_path, ["a.txt"])
+        viewer = MapViewer(tmp_path, starting_map="maps/a.txt")
         assert viewer.fleet is not None
 
         viewer._handle_event(_key(pygame.K_SPACE))
@@ -199,8 +206,8 @@ class TestMapViewer:
         assert all(d.status == DroneStatus.WAITING for d in viewer.fleet)
 
     def test_space_on_finished_is_noop(self, tmp_path: Path) -> None:
-        _make_maps(tmp_path, ["a.map"])
-        viewer = MapViewer(tmp_path, starting_map="a.map")
+        _make_maps(tmp_path, ["a.txt"])
+        viewer = MapViewer(tmp_path, starting_map="maps/a.txt")
         assert viewer.controller.sim is not None
         assert viewer.fleet is not None
 
@@ -215,8 +222,8 @@ class TestMapViewer:
         assert viewer.controller.sim.state.turn == turn
 
     def test_speed_keys_change_speed_not_autoplay(self, tmp_path: Path) -> None:
-        _make_maps(tmp_path, ["a.map"])
-        viewer = MapViewer(tmp_path, starting_map="a.map")
+        _make_maps(tmp_path, ["a.txt"])
+        viewer = MapViewer(tmp_path, starting_map="maps/a.txt")
         assert viewer.fleet is not None
         assert viewer.controller.playing is False
 
@@ -225,8 +232,8 @@ class TestMapViewer:
         assert SPEEDS[viewer.controller.speed_index] == 2.0
 
     def test_space_toggles_pause(self, tmp_path: Path) -> None:
-        _make_maps(tmp_path, ["a.map"])
-        viewer = MapViewer(tmp_path, starting_map="a.map")
+        _make_maps(tmp_path, ["a.txt"])
+        viewer = MapViewer(tmp_path, starting_map="maps/a.txt")
         assert viewer.fleet is not None
 
         viewer.controller.playing = True
@@ -236,8 +243,8 @@ class TestMapViewer:
         assert viewer.controller.playing is False
 
     def test_auto_step_advances_while_playing(self, tmp_path: Path) -> None:
-        _make_maps(tmp_path, ["a.map"])
-        viewer = MapViewer(tmp_path, starting_map="a.map")
+        _make_maps(tmp_path, ["a.txt"])
+        viewer = MapViewer(tmp_path, starting_map="maps/a.txt")
         assert viewer.controller.sim is not None
         viewer.controller.playing = True
         viewer.controller.speed_index = 0  # 0.25x -> 4s interval
@@ -251,8 +258,8 @@ class TestMapViewer:
         assert viewer.controller.sim.state.turn == turn
 
     def test_positions_stay_within_map_band(self, tmp_path: Path) -> None:
-        _make_maps(tmp_path, ["a.map"])
-        viewer = MapViewer(tmp_path, starting_map="a.map")
+        _make_maps(tmp_path, ["a.txt"])
+        viewer = MapViewer(tmp_path, starting_map="maps/a.txt")
 
         assert viewer.positions is not None
         for _name, (px, py) in viewer.positions.items():
@@ -260,8 +267,8 @@ class TestMapViewer:
             assert py <= MAP_HEIGHT
 
     def test_legend_shows_live_speed(self, tmp_path: Path) -> None:
-        _make_maps(tmp_path, ["a.map"])
-        viewer = MapViewer(tmp_path, starting_map="a.map")
+        _make_maps(tmp_path, ["a.txt"])
+        viewer = MapViewer(tmp_path, starting_map="maps/a.txt")
 
         assert ("+/-", "SPEED 1x") in viewer._legend_rows()
 
@@ -269,8 +276,8 @@ class TestMapViewer:
         assert ("+/-", "SPEED 2x") in viewer._legend_rows()
 
     def test_hud_has_three_stacked_rows(self, tmp_path: Path) -> None:
-        _make_maps(tmp_path, ["a.map"])
-        viewer = MapViewer(tmp_path, starting_map="a.map")
+        _make_maps(tmp_path, ["a.txt"])
+        viewer = MapViewer(tmp_path, starting_map="maps/a.txt")
         y0, y1, y2 = viewer._hud_row_ys()
         assert y0 < y1 < y2
         assert y0 >= MAP_HEIGHT
@@ -278,14 +285,14 @@ class TestMapViewer:
         assert y2 + line_h <= MAP_HEIGHT + HUD_HEIGHT
 
     def test_hud_height_fits_three_lines(self, tmp_path: Path) -> None:
-        _make_maps(tmp_path, ["a.map"])
-        viewer = MapViewer(tmp_path, starting_map="a.map")
+        _make_maps(tmp_path, ["a.txt"])
+        viewer = MapViewer(tmp_path, starting_map="maps/a.txt")
         line_h = viewer.legend_font.get_height()
         assert 2 * LEGEND_PADDING + 3 * line_h + 2 * 4 + 4 <= HUD_HEIGHT
 
     def test_quit_event_stops_loop(self, tmp_path: Path) -> None:
-        _make_maps(tmp_path, ["a.map"])
-        viewer = MapViewer(tmp_path, starting_map="a.map")
+        _make_maps(tmp_path, ["a.txt"])
+        viewer = MapViewer(tmp_path, starting_map="maps/a.txt")
 
         viewer._handle_event(pygame_event.Event(pygame.QUIT))
 
@@ -294,9 +301,9 @@ class TestMapViewer:
     def test_toast_active_after_bad_menu_selection(
         self, tmp_path: Path
     ) -> None:
-        _make_maps(tmp_path, ["a.map"])
-        (tmp_path / "bad.map").write_text("not a map\n", encoding="utf-8")
-        viewer = MapViewer(tmp_path, starting_map="a.map")
+        _make_maps(tmp_path, ["a.txt"])
+        _write_map(tmp_path / "maps" / "bad.txt", "not a map\n")
+        viewer = MapViewer(tmp_path, starting_map="maps/a.txt")
 
         viewer._handle_event(_key(pygame.K_m))
         viewer._handle_event(_key(pygame.K_DOWN))
@@ -305,9 +312,9 @@ class TestMapViewer:
         assert viewer._toast_active() is True
 
     def test_toast_inactive_after_window_elapses(self, tmp_path: Path) -> None:
-        _make_maps(tmp_path, ["a.map"])
-        (tmp_path / "bad.map").write_text("not a map\n", encoding="utf-8")
-        viewer = MapViewer(tmp_path, starting_map="a.map")
+        _make_maps(tmp_path, ["a.txt"])
+        _write_map(tmp_path / "maps" / "bad.txt", "not a map\n")
+        viewer = MapViewer(tmp_path, starting_map="maps/a.txt")
 
         viewer._handle_event(_key(pygame.K_m))
         viewer._handle_event(_key(pygame.K_DOWN))
@@ -317,9 +324,9 @@ class TestMapViewer:
         assert viewer._toast_active() is False
 
     def test_successful_reload_clears_toast(self, tmp_path: Path) -> None:
-        _make_maps(tmp_path, ["a.map", "b.map"])
-        (tmp_path / "bad.map").write_text("not a map\n", encoding="utf-8")
-        viewer = MapViewer(tmp_path, starting_map="a.map")
+        _make_maps(tmp_path, ["a.txt", "b.txt"])
+        _write_map(tmp_path / "maps" / "bad.txt", "not a map\n")
+        viewer = MapViewer(tmp_path, starting_map="maps/a.txt")
 
         viewer._handle_event(_key(pygame.K_m))
         viewer._handle_event(_key(pygame.K_DOWN))
@@ -344,9 +351,9 @@ class TestMapViewer:
     def test_render_with_toast_returns_window_size(
         self, tmp_path: Path
     ) -> None:
-        _make_maps(tmp_path, ["a.map"])
-        (tmp_path / "bad.map").write_text("not a map\n", encoding="utf-8")
-        viewer = MapViewer(tmp_path, starting_map="a.map")
+        _make_maps(tmp_path, ["a.txt"])
+        _write_map(tmp_path / "maps" / "bad.txt", "not a map\n")
+        viewer = MapViewer(tmp_path, starting_map="maps/a.txt")
 
         viewer._handle_event(_key(pygame.K_m))
         viewer._handle_event(_key(pygame.K_DOWN))
@@ -357,15 +364,15 @@ class TestMapViewer:
     def test_render_with_open_menu_returns_window_size(
         self, tmp_path: Path
     ) -> None:
-        _make_maps(tmp_path, ["a.map"])
-        viewer = MapViewer(tmp_path, starting_map="a.map")
+        _make_maps(tmp_path, ["a.txt"])
+        viewer = MapViewer(tmp_path, starting_map="maps/a.txt")
         viewer._handle_event(_key(pygame.K_m))
 
         assert viewer._render().get_size() == WINDOW
 
     def test_video_resize_scales_window(self, tmp_path: Path) -> None:
-        _make_maps(tmp_path, ["a.map"])
-        viewer = MapViewer(tmp_path, starting_map="a.map")
+        _make_maps(tmp_path, ["a.txt"])
+        viewer = MapViewer(tmp_path, starting_map="maps/a.txt")
 
         viewer._handle_event(
             pygame_event.Event(pygame.VIDEORESIZE, size=(1600, 900))
@@ -375,8 +382,8 @@ class TestMapViewer:
         assert viewer._render().get_size() == (1600, 900)
 
     def test_window_size_changed_resizes_screen(self, tmp_path: Path) -> None:
-        _make_maps(tmp_path, ["a.map"])
-        viewer = MapViewer(tmp_path, starting_map="a.map")
+        _make_maps(tmp_path, ["a.txt"])
+        viewer = MapViewer(tmp_path, starting_map="maps/a.txt")
 
         viewer._handle_event(
             pygame_event.Event(pygame.WINDOWSIZECHANGED, x=800, y=500)
@@ -385,8 +392,8 @@ class TestMapViewer:
         assert viewer.screen.get_size() == (800, 500)
 
     def test_resize_to_same_size_is_noop(self, tmp_path: Path) -> None:
-        _make_maps(tmp_path, ["a.map"])
-        viewer = MapViewer(tmp_path, starting_map="a.map")
+        _make_maps(tmp_path, ["a.txt"])
+        viewer = MapViewer(tmp_path, starting_map="maps/a.txt")
         current = viewer.screen
 
         viewer._handle_event(
@@ -396,3 +403,13 @@ class TestMapViewer:
         )
 
         assert viewer.screen is current
+
+    def test_map_menu_includes_personal_maps(self, tmp_path: Path) -> None:
+        """Map picker shows both maps/ and personal/ maps."""
+        _make_maps(tmp_path, ["a.txt"])
+        _make_personal_maps(tmp_path, ["custom.txt"])
+        viewer = MapViewer(tmp_path, starting_map="maps/a.txt")
+
+        viewer._handle_event(_key(pygame.K_m))
+
+        assert viewer.menu.options == ["maps/a.txt", "personal/custom.txt"]

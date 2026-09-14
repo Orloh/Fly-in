@@ -22,40 +22,50 @@ LoadedMap: TypeAlias = tuple[
 #: Default low-res canvas the map is laid out onto (see GUI_PLAN.md).
 DEFAULT_CANVAS = (640, 360)
 
+#: Subdirectories under maps_root to search for map files.
+MAP_SUBDIRS = ("maps", "personal")
 
-def list_maps(maps_dir: str | Path) -> list[str]:
+
+def list_maps(maps_root: str | Path) -> list[str]:
     """
-    Return the sorted names of every ``*.map`` file in the directory.
+    Return the sorted relative paths of every ``*.txt`` file under
+    ``maps_root/maps/`` and ``maps_root/personal/``.
 
-    Missing or empty directories yield an empty list; only top-level
-    files count, never subdirectories.
+    Missing or empty directories yield an empty list; files in
+    subdirectories are included with their relative path from
+    ``maps_root`` (e.g. ``"maps/easy/01_linear_path.txt"``).
     """
-    path = Path(maps_dir)
+    root = Path(maps_root)
+    results: list[str] = []
 
-    if not path.is_dir():
-        return []
+    for subdir in MAP_SUBDIRS:
+        subdir_path = root / subdir
+        if not subdir_path.is_dir():
+            continue
 
-    maps = [
-        entry.name
-        for entry in path.iterdir()
-        if entry.is_file() and entry.name.endswith('.map')
-    ]
+        for entry in subdir_path.rglob("*.txt"):
+            if entry.is_file():
+                # Get relative path from maps_root
+                rel_path = entry.relative_to(root)
+                results.append(str(rel_path))
 
-    return sorted(maps)
+    return sorted(results)
 
 
 def load_map(
-    map_path: str | Path,
+    maps_root: str | Path,
+    rel_path: str | Path,
     canvas: tuple[int, int] = DEFAULT_CANVAS,
 ) -> tuple[LoadedMap | None, str | None]:
     """
-    Load and lay out a map, returning state or a short error message.
+    Load and lay out a map by relative path from maps_root.
 
     Parses the file, converts it to a graph + fleet, and maps world
     coordinates onto the canvas. Any parse or IO failure yields
     ``(None, message)`` instead of raising.
     """
-    path = Path(map_path)
+    root = Path(maps_root)
+    path = root / rel_path
 
     try:
         parsed = parse_map(str(path))

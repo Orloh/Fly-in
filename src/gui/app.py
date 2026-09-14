@@ -152,11 +152,11 @@ class MapViewer:
 
     def __init__(
         self,
-        maps_dir: str | Path,
+        maps_root: str | Path,
         starting_map: str | None = None,
         canvas: tuple[int, int] = DEFAULT_CANVAS,
     ) -> None:
-        self.maps_dir = Path(maps_dir)
+        self.maps_root = Path(maps_root)
         self.canvas = canvas
         self.map_canvas = (canvas[0], MAP_HEIGHT)
         self.current_map: str | None = None
@@ -166,7 +166,7 @@ class MapViewer:
         self.error: str | None = None
         self.error_visible_until: int | None = None
         self.running = True
-        self.menu = MapMenu(list_maps(self.maps_dir))
+        self.menu = MapMenu(list_maps(self.maps_root))
         self.controller = SimController()
 
         self.screen = self._init_window()
@@ -175,7 +175,10 @@ class MapViewer:
         self.font = pygame.font.Font(str(_FONT_PATH), 8)
         self.legend_font = pygame.font.Font(str(_FONT_PATH), 7)
         if not self.menu.options:
-            self.error = f"No .map files found in {self.maps_dir}"
+            self.error = (
+                f"No .txt files found in {self.maps_root}/maps/ "
+                f"or {self.maps_root}/personal/"
+            )
             self.error_visible_until = None
         if starting_map is not None:
             self._load_map(starting_map)
@@ -192,8 +195,8 @@ class MapViewer:
         return f"Fly-in: {self.current_map}" if self.current_map else "Fly-in"
 
     def _load_map(self, name: str) -> None:
-        """Load a map by name, keeping the current one on failure."""
-        result, message = load_map(self.maps_dir / name, self.map_canvas)
+        """Load a map by relative name, keeping the current one on failure."""
+        result, message = load_map(self.maps_root, name, self.map_canvas)
         if message is not None:
             self.error = message
             self.error_visible_until = (
@@ -262,7 +265,7 @@ class MapViewer:
 
     def _toggle_map_menu(self) -> None:
         """Open the map picker with fresh options, or close it."""
-        self.menu.options = list_maps(self.maps_dir)
+        self.menu.options = list_maps(self.maps_root)
         if self.menu.visible:
             self.menu.close()
             return
@@ -454,7 +457,24 @@ class MapViewer:
 
 
 def run(map_path: str) -> None:
-    """Open a viewer for the map's directory and run until closed."""
-    path = Path(map_path)
-    viewer = MapViewer(path.parent, starting_map=path.name)
+    """Open a viewer for the map's directory and run until closed.
+
+    ``map_path`` is the relative path from the maps root (e.g.,
+    "maps/easy/01_linear_path.txt" or "personal/example.txt").
+    The maps root is the directory containing both "maps/" and "personal/"
+    subdirectories (e.g., for "maps/easy/a.txt", root is "maps").
+    """
+    path = Path(map_path).resolve()
+    maps_root = None
+    for parent in path.parents:
+        if (parent / "maps").is_dir() and (parent / "personal").is_dir():
+            maps_root = parent
+            break
+    if maps_root is None:
+        maps_root = Path("maps").resolve()
+    try:
+        starting_map: str = str(path.relative_to(maps_root))
+    except ValueError:
+        starting_map = map_path
+    viewer = MapViewer(maps_root, starting_map=starting_map)
     viewer.run()

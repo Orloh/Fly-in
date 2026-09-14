@@ -1,6 +1,6 @@
 PYTHON := uv run python
 
-MAP ?= maps/example.map
+MAP ?= maps/easy/01_linear_path.txt
 
 .PHONY: install run gui debug clean lint test
 
