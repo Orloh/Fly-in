@@ -31,8 +31,8 @@ class TestDistToGoal:
     def test_restricted_costs_two(self, restricted_graph: Graph) -> None:
         dist = dist_to_goal(restricted_graph, "G")
         assert dist["G"] == 0
-        assert dist["R"] == 1  # R->G costs enter_cost(G) = 1 (G is normal)
-        assert dist["S"] == 3  # S->R->G = enter_cost(R) + enter_cost(G) = 2 + 1 = 3
+        assert dist["R"] == 1  # R->G costs enter_cost(G) = 1
+        assert dist["S"] == 3  # S->R->G = enter_cost(R)+enter_cost(G) = 2+1=3
 
     def test_blocked_zone_infinite(self, blocked_zone_graph: Graph) -> None:
         dist = dist_to_goal(blocked_zone_graph, "G")
@@ -45,6 +45,50 @@ class TestDistToGoal:
         dist = dist_to_goal(disconnected_graph, "G")
         assert dist["G"] == 0
         assert dist["S"] == float("inf")
+
+    def test_priority_zone_cost_one(self, priority_tie_graph: Graph) -> None:
+        """Priority zone costs 1 (same as normal)."""
+        dist = dist_to_goal(priority_tie_graph, "G")
+        assert dist["G"] == 0
+        assert dist["P"] == 1
+        assert dist["N"] == 1
+        assert dist["S"] == 2  # min(S->P->G, S->N->G) = 2
+
+    def test_multiple_paths_choose_cheapest(self) -> None:
+        """Graph with two paths to goal, different costs."""
+        zones = {
+            "S": Zone(name="S", x=0, y=0, zone_type=ZoneType.NORMAL,
+                      is_start_hub=True, max_drones=1),
+            "A": Zone(name="A", x=1, y=1,
+                      zone_type=ZoneType.NORMAL, max_drones=1),
+            "B": Zone(name="B", x=1, y=-1,
+                      zone_type=ZoneType.RESTRICTED, max_drones=1),
+            "G": Zone(name="G", x=2, y=0, zone_type=ZoneType.NORMAL,
+                      is_end_hub=True, max_drones=1),
+        }
+        connections = {
+            canonical_key("S", "A"): Connection(
+                zone_a="S", zone_b="A", max_link_capacity=1),
+            canonical_key("A", "G"): Connection(
+                zone_a="A", zone_b="G", max_link_capacity=1),
+            canonical_key("S", "B"): Connection(
+                zone_a="S", zone_b="B", max_link_capacity=1),
+            canonical_key("B", "G"): Connection(
+                zone_a="B", zone_b="G", max_link_capacity=1),
+        }
+        graph = Graph(zones=zones, connections=connections)
+        dist = dist_to_goal(graph, "G")
+        assert dist["G"] == 0
+        assert dist["A"] == 1
+        assert dist["B"] == 1  # B->G = enter_cost(G) = 1
+        assert dist["S"] == 2  # S->A->G = 2 (cheaper than S->B->G = 3)
+
+    def test_goal_is_start_hub(self, simple_graph: Graph) -> None:
+        """Goal can be a start_hub (unlimited capacity)."""
+        dist = dist_to_goal(simple_graph, "S")
+        assert dist["S"] == 0
+        assert dist["A"] == 1
+        assert dist["G"] == 2
 
 
 class TestFindPathTimed:
