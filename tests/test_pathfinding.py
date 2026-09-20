@@ -12,16 +12,12 @@ from src.simulation.pathfinding import (
 )
 
 
-# --- Constraints helper ---
 def no_constraints() -> tuple[set[VertexConstraint], set[LinkConstraint]]:
     return set(), set()
 
 
-# Type alias for constraints tuple
 Constraints = tuple[set[VertexConstraint], set[LinkConstraint]]
 
-
-# --- dist_to_goal tests ---
 
 class TestDistToGoal:
     """Reverse Dijkstra heuristic table."""
@@ -35,8 +31,8 @@ class TestDistToGoal:
     def test_restricted_costs_two(self, restricted_graph: Graph) -> None:
         dist = dist_to_goal(restricted_graph, "G")
         assert dist["G"] == 0
-        assert dist["R"] == 2
-        assert dist["S"] == 3
+        assert dist["R"] == 1  # R->G costs enter_cost(G) = 1 (G is normal)
+        assert dist["S"] == 3  # S->R->G = enter_cost(R) + enter_cost(G) = 2 + 1 = 3
 
     def test_blocked_zone_infinite(self, blocked_zone_graph: Graph) -> None:
         dist = dist_to_goal(blocked_zone_graph, "G")
@@ -50,8 +46,6 @@ class TestDistToGoal:
         assert dist["G"] == 0
         assert dist["S"] == float("inf")
 
-
-# --- find_path_timed tests ---
 
 class TestFindPathTimed:
     """Time-expanded A* returning TimedRoute =
@@ -156,7 +150,9 @@ class TestFindPathTimed:
 
     def test_shortest_beats_longer_priority(
             self, priority_longer_graph: Graph) -> None:
-        """Cost 2 (normal) beats cost 3 (priority) even with priority zones."""
+        """
+        Cost 2 (normal) beats cost 3 (priority) even with priority zones.
+        """
         dist = dist_to_goal(priority_longer_graph, "G")
         route = find_path_timed(
             priority_longer_graph, "S", "G", *no_constraints(),
@@ -198,7 +194,8 @@ class TestFindPathTimedWithConstraints:
         """LinkConstraint on S-A during turn 1 forces wait."""
         dist = dist_to_goal(simple_graph, "G")
         constraints: Constraints = (
-            set(), {LinkConstraint(link=canonical_key("S", "A"), turn=1)})
+            set(), {LinkConstraint(link=canonical_key("S", "A"), turn=1)}
+        )
         route = find_path_timed(
             simple_graph, "S", "G", *constraints,
             start_turn=1, horizon=10, dist=dist

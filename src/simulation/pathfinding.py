@@ -40,7 +40,7 @@ _ZONE_COSTS: dict[ZoneType, int | float] = {
 }
 
 #: Dijkstra queue entry: (cost, negated priority count, zone name).
-_QueueEntry: TypeAlias = tuple[int | float, int, str]
+_QueueEntry: TypeAlias = tuple[int | float, str]
 
 
 def dist_to_goal(graph: Graph, goal: str) -> Heuristic:
@@ -49,7 +49,34 @@ def dist_to_goal(graph: Graph, goal: str) -> Heuristic:
     Edge weight u->v = enter_cost(v). Returns dict[zone, min_turns_to_goal].
     Goal zone has distance 0. Blocked zones = inf.
     """
-    raise NotImplementedError("dist_to_goal not yet implemented")
+    heuristic_table: Heuristic = {
+        zone_name: float("inf") for zone_name in graph.zones
+    }
+    heuristic_table[goal] = 0
+
+    priority_queue: list[_QueueEntry] = [(0, goal)]
+
+    while priority_queue:
+        current_distance, current_zone_name = heapq.heappop(priority_queue)
+
+        if current_distance > heuristic_table[current_zone_name]:
+            continue
+
+        for neighbor in graph.neighbors(current_zone_name):
+            neighbor_zone = graph.zones[neighbor]
+
+            if neighbor_zone.zone_type == ZoneType.BLOCKED:
+                continue
+
+            new_distance = current_distance + _enter_cost(
+                graph.zones[current_zone_name]
+            )
+
+            if new_distance < heuristic_table[neighbor]:
+                heuristic_table[neighbor] = new_distance
+                heapq.heappush(priority_queue, (new_distance, neighbor))
+
+    return heuristic_table
 
 
 def find_path_timed(
@@ -88,7 +115,7 @@ def find_path(graph: Graph, start: str, goal: str) -> Route | None:
     if start == goal:
         return [start]
 
-    priority_queue: list[_QueueEntry] = [(0, 0, start)]
+    priority_queue: list[tuple[int | float, int, str]] = [(0, 0, start)]
     breadcrumbs: dict[str, str] = {}
     zone_reach: dict[str, tuple[int | float, int]] = {start: (0, 0)}
 
