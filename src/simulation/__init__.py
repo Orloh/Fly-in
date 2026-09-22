@@ -12,6 +12,7 @@ from src.simulation.pathfinding import (
     find_path,
     Route,
 )
+from src.simulation.planner import Planner
 
 __all__ = [
     "Conflict",
@@ -23,4 +24,5 @@ __all__ = [
     "find_path_timed",
     "find_path",
     "Route",
+    "Planner",
 ]

@@ -17,6 +17,7 @@ class Drone(BaseModel):
     path: list[str] = Field(default_factory=list)
     turns_in_transit: int | float = 0
     transit_destination: str | None = None
+    blocked_reason: str | None = None
 
     @property
     def arrived(self) -> bool:
