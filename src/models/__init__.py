@@ -11,6 +11,7 @@ from src.models.graph import Graph
 from src.models.parsing import ParsedConnection, ParsedMap, ParsedZone
 from src.models.simulation import SimulationState, TurnResult
 from src.models.zone import Zone
+from src.models.graph_utils import canonical_key
 
 __all__ = [
     "Connection",
@@ -25,4 +26,5 @@ __all__ = [
     "TurnResult",
     "Zone",
     "ZoneType",
+    "canonical_key",
 ]

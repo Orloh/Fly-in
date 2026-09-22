@@ -16,7 +16,7 @@ from __future__ import annotations
 import heapq
 from typing import TypeAlias
 
-from src.models import Graph, Zone, ZoneType
+from src.models import Graph, Zone, ZoneType, canonical_key
 
 #: A TimedRoute is an ordered list of (zone, arrival_turn) pairs,
 # start to goal inclusive.
@@ -26,9 +26,12 @@ VertexConstraint: TypeAlias = tuple[str, int]
 #: LinkConstraint(canonical_link, turn) — never be on that link
 #: during that turn.
 LinkConstraint: TypeAlias = tuple[tuple[str, str], int]
-
 #: Heuristic table: zone -> min travel time to goal (reverse Dijkstra).
 Heuristic: TypeAlias = dict[str, int | float]
+#: PriorityCount: (zone, turn) -> count of priority zones on path to state
+PriorityCount: TypeAlias = dict[tuple[str, int], int]
+#: Breadcrumbs for path reconstruction
+Breadcrumbs: TypeAlias = dict[tuple[str, int], tuple[str, int] | None]
 
 
 #: Turn cost of entering a zone, keyed by zone type (blocked = infinite).
@@ -41,6 +44,71 @@ _ZONE_COSTS: dict[ZoneType, int | float] = {
 
 #: Dijkstra queue entry: (cost, negated priority count, zone name).
 _QueueEntry: TypeAlias = tuple[int | float, str]
+
+#: Timed queue entry: (f-score, priority_count, turn, zone_name)
+_TQueueEntry: TypeAlias = tuple[
+    int | float,
+    int,
+    int,
+    str
+]
+
+
+def _reconstruct_path(
+    breadcrumbs: Breadcrumbs,
+    goal_state: tuple[str, int]
+) -> TimedRoute:
+    """Rebuild path from goal back to start using breadcrumbs."""
+    route: TimedRoute = []
+    current: tuple[str, int] | None = goal_state
+    while current is not None:
+        route.append(current)
+        current = breadcrumbs[current]
+    route.reverse()
+    return route
+
+
+def _is_link_blocked(
+    link_key: tuple[str, str],
+    start_turn: int,
+    end_turn: int,
+    link_constraints: set[LinkConstraint]
+) -> bool:
+    """Check if link is constrained during any turn in
+    [start_turn, end_turn - 1]."""
+    for t in range(start_turn, end_turn):
+        if (link_key, t) in link_constraints:
+            return True
+    return False
+
+
+def _vertex_blocked(
+    state: tuple[str, int],
+    vertex_constraints: set[VertexConstraint]
+) -> bool:
+    """Check if state is vertex-constrained."""
+    return state in vertex_constraints
+
+
+def _push_state(
+    pq: list[_TQueueEntry],
+    breadcrumbs: Breadcrumbs,
+    priority_count: PriorityCount,
+    best_g: dict[tuple[str, int], int],
+    dist: Heuristic,
+    state: tuple[str, int],
+    prev_state: tuple[str, int] | None,
+    new_priority: int,
+) -> None:
+    """Push state onto priority queue if it improves g-score."""
+    zone, turn = state
+    g = turn
+    if g < best_g.get(state, float("inf")):
+        best_g[state] = g
+        breadcrumbs[state] = prev_state
+        priority_count[state] = new_priority
+        f = g + dist[zone]
+        heapq.heappush(pq, (f, -new_priority, turn, zone))
 
 
 def dist_to_goal(graph: Graph, goal: str) -> Heuristic:
@@ -96,7 +164,84 @@ def find_path_timed(
     Constraints prune states/transitions. Heuristic f = turn + dist[zone].
     Returns list[(zone, arrival_turn)] or None if no route within horizon.
     """
-    raise NotImplementedError("find_path_timed not yet implemented")
+    if graph.zones[goal].zone_type == ZoneType.BLOCKED:
+        return None
+
+    if start == goal:
+        return [(start, start_turn)]
+
+    start_state = (start, start_turn)
+    initial_f = start_turn + dist[start]
+    initial_priority = (
+        1 if graph.zones[start].zone_type == ZoneType.PRIORITY else 0
+    )
+    priority_queue: list[_TQueueEntry] = [
+        (initial_f, -initial_priority, start_turn, start)
+    ]
+    #: Key: (zone, turn) -> Value: (prev_zone, prev_turn)
+    breadcrumbs: Breadcrumbs = {start_state: None}
+    priority_count: PriorityCount = {start_state: initial_priority}
+    best_g: dict[tuple[str, int], int] = {start_state: start_turn}
+
+    while priority_queue:
+        f_score, neg_priority, turn, zone_name = heapq.heappop(priority_queue)
+        state = (zone_name, turn)
+
+        if turn > best_g.get(state, float("inf")):
+            continue
+
+        if zone_name == goal:
+            return _reconstruct_path(breadcrumbs, state)
+
+        wait_turn = turn + 1
+        if wait_turn <= horizon:
+            wait_state = (zone_name, wait_turn)
+            if not _vertex_blocked(wait_state, vertex_constraints):
+                _push_state(
+                    priority_queue, breadcrumbs,
+                    priority_count, best_g,
+                    dist, wait_state,
+                    state, priority_count[state]
+                )
+
+        for neighbor_name in graph.neighbors(zone_name):
+            neighbor_zone = graph.zones[neighbor_name]
+
+            if neighbor_zone.zone_type == ZoneType.BLOCKED:
+                continue
+
+            cost = _enter_cost(neighbor_zone)
+            assert isinstance(cost, int), (
+                "Cost should be int for non-blocked zones"
+            )
+            arrive_turn = turn + cost
+
+            if arrive_turn > horizon:
+                continue
+
+            move_state = (neighbor_name, arrive_turn)
+
+            if _vertex_blocked(move_state, vertex_constraints):
+                continue
+
+            link_key = canonical_key(zone_name, neighbor_name)
+            if _is_link_blocked(
+                link_key, turn, arrive_turn, link_constraints
+            ):
+                continue
+
+            new_priority = priority_count[state] + (
+                1 if neighbor_zone.zone_type == ZoneType.PRIORITY else 0
+            )
+
+            _push_state(
+                priority_queue, breadcrumbs,
+                priority_count, best_g,
+                dist, move_state,
+                state, new_priority
+            )
+
+    return None
 
 
 # --- Legacy find_path (used by engine.py until Phase 4) ---

@@ -268,7 +268,7 @@ def priority_longer_graph() -> Graph:
 
 
 @pytest.fixture
-def drones_at_start() -> Callable[[int, str, str], list[Drone]]:
+def drones_at_start() -> Callable[..., list[Drone]]:
     """Factory: n drones at start_zone targeting goal_zone."""
     def _make(n: int, start: str = "S", goal: str = "G") -> list[Drone]:
         return [

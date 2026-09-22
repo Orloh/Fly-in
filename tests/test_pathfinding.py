@@ -155,9 +155,9 @@ class TestFindPathTimed:
 
     def test_none_unreachable(self, disconnected_graph: Graph) -> None:
         """No spatial path returns None."""
-        dist = dist_to_goal(disconnected_graph, "G")
+        dist = dist_to_goal(disconnected_graph, "unreachable")
         route = find_path_timed(
-            disconnected_graph, "S", "G", *no_constraints(),
+            disconnected_graph, "S", "unreachable", *no_constraints(),
             start_turn=1, horizon=10, dist=dist
         )
         assert route is None
@@ -225,7 +225,7 @@ class TestFindPathTimedWithConstraints:
         """VertexConstraint on A at turn 2 forces wait."""
         dist = dist_to_goal(simple_graph, "G")
         constraints: Constraints = (
-            {VertexConstraint(zone="A", turn=2)}, set())
+            {("A", 2)}, set())
         route = find_path_timed(
             simple_graph, "S", "G", *constraints,
             start_turn=1, horizon=10, dist=dist
@@ -238,8 +238,7 @@ class TestFindPathTimedWithConstraints:
         """LinkConstraint on S-A during turn 1 forces wait."""
         dist = dist_to_goal(simple_graph, "G")
         constraints: Constraints = (
-            set(), {LinkConstraint(link=canonical_key("S", "A"), turn=1)}
-        )
+            set(), {(canonical_key("S", "A"), 1)})
         route = find_path_timed(
             simple_graph, "S", "G", *constraints,
             start_turn=1, horizon=10, dist=dist
