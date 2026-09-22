@@ -66,7 +66,7 @@ class TestPlannerSynthetic:
         simple_graph: Graph,
         drones_at_start: Callable[..., list[Drone]],
     ) -> None:
-        drones = drones_at_start(1, "start", "goal")
+        drones = drones_at_start(1, "S", "G")
         schedule, _ = Planner(simple_graph).plan(drones)
         assert schedule.makespan == 3
 
@@ -75,7 +75,7 @@ class TestPlannerSynthetic:
         simple_graph: Graph,
         drones_at_start: Callable[..., list[Drone]],
     ) -> None:
-        drones = drones_at_start(1, "start", "goal")
+        drones = drones_at_start(1, "S", "G")
         schedule, _ = Planner(simple_graph).plan(drones)
         assert schedule.makespan == 4
 
@@ -84,7 +84,7 @@ class TestPlannerSynthetic:
         split_graph: Graph,
         drones_at_start: Callable[..., list[Drone]],
     ) -> None:
-        drones = drones_at_start(2, "start", "goal")
+        drones = drones_at_start(2, "S", "G")
         schedule, _ = Planner(split_graph).plan(drones)
         assert schedule.makespan == 3
 

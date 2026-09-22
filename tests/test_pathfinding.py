@@ -7,16 +7,12 @@ from src.models.graph_utils import canonical_key
 from src.simulation.pathfinding import (
     dist_to_goal,
     find_path_timed,
-    VertexConstraint,
-    LinkConstraint,
+    Constraints,
 )
 
 
-def no_constraints() -> tuple[set[VertexConstraint], set[LinkConstraint]]:
+def no_constraints() -> Constraints:
     return set(), set()
-
-
-Constraints = tuple[set[VertexConstraint], set[LinkConstraint]]
 
 
 class TestDistToGoal:
@@ -99,7 +95,7 @@ class TestFindPathTimed:
         """S-A-G: start_turn=1 -> arrive G at turn 3."""
         dist = dist_to_goal(simple_graph, "G")
         route = find_path_timed(
-            simple_graph, "S", "G", *no_constraints(),
+            simple_graph, "S", "G", no_constraints(),
             start_turn=1, horizon=10, dist=dist
         )
         assert route is not None
@@ -108,7 +104,7 @@ class TestFindPathTimed:
     def test_both_endpoints_in_route(self, simple_graph: Graph) -> None:
         dist = dist_to_goal(simple_graph, "G")
         route = find_path_timed(
-            simple_graph, "S", "G", *no_constraints(),
+            simple_graph, "S", "G", no_constraints(),
             start_turn=1, horizon=10, dist=dist
         )
         assert route is not None
@@ -120,7 +116,7 @@ class TestFindPathTimed:
         """S-A-G (cost 2) preferred over S-R-G (cost 3)."""
         dist = dist_to_goal(restricted_alternative_graph, "G")
         route = find_path_timed(
-            restricted_alternative_graph, "S", "G", *no_constraints(),
+            restricted_alternative_graph, "S", "G", no_constraints(),
             start_turn=1, horizon=10, dist=dist
         )
         assert route is not None
@@ -133,7 +129,7 @@ class TestFindPathTimed:
         """S -> R(restricted) -> G is only path."""
         dist = dist_to_goal(restricted_graph, "G")
         route = find_path_timed(
-            restricted_graph, "S", "G", *no_constraints(),
+            restricted_graph, "S", "G", no_constraints(),
             start_turn=1, horizon=10, dist=dist
         )
         assert route is not None
@@ -145,7 +141,7 @@ class TestFindPathTimed:
         """Blocked zone A skipped, takes S-B-G."""
         dist = dist_to_goal(blocked_zone_graph, "G")
         route = find_path_timed(
-            blocked_zone_graph, "S", "G", *no_constraints(),
+            blocked_zone_graph, "S", "G", no_constraints(),
             start_turn=1, horizon=10, dist=dist
         )
         assert route is not None
@@ -157,7 +153,7 @@ class TestFindPathTimed:
         """No spatial path returns None."""
         dist = dist_to_goal(disconnected_graph, "unreachable")
         route = find_path_timed(
-            disconnected_graph, "S", "unreachable", *no_constraints(),
+            disconnected_graph, "S", "unreachable", no_constraints(),
             start_turn=1, horizon=10, dist=dist
         )
         assert route is None
@@ -176,7 +172,7 @@ class TestFindPathTimed:
         }
         graph = Graph(zones=zones, connections=connections)
         dist = dist_to_goal(graph, "G")
-        route = find_path_timed(graph, "S", "G", *no_constraints(),
+        route = find_path_timed(graph, "S", "G", no_constraints(),
                                 start_turn=1, horizon=10, dist=dist)
         assert route is None
 
@@ -184,7 +180,7 @@ class TestFindPathTimed:
         """Both routes cost 2, priority route (via P) preferred."""
         dist = dist_to_goal(priority_tie_graph, "G")
         route = find_path_timed(
-            priority_tie_graph, "S", "G", *no_constraints(),
+            priority_tie_graph, "S", "G", no_constraints(),
             start_turn=1, horizon=10, dist=dist
         )
         assert route is not None
@@ -199,7 +195,7 @@ class TestFindPathTimed:
         """
         dist = dist_to_goal(priority_longer_graph, "G")
         route = find_path_timed(
-            priority_longer_graph, "S", "G", *no_constraints(),
+            priority_longer_graph, "S", "G", no_constraints(),
             start_turn=1, horizon=10, dist=dist
         )
         assert route is not None
@@ -211,7 +207,7 @@ class TestFindPathTimed:
         """Start == goal returns [(start, start_turn)]."""
         dist = dist_to_goal(simple_graph, "S")
         route = find_path_timed(
-            simple_graph, "S", "S", *no_constraints(),
+            simple_graph, "S", "S", no_constraints(),
             start_turn=5, horizon=10, dist=dist
         )
         assert route == [("S", 5)]
@@ -227,7 +223,7 @@ class TestFindPathTimedWithConstraints:
         constraints: Constraints = (
             {("A", 2)}, set())
         route = find_path_timed(
-            simple_graph, "S", "G", *constraints,
+            simple_graph, "S", "G", constraints,
             start_turn=1, horizon=10, dist=dist
         )
         assert route is not None
@@ -240,7 +236,7 @@ class TestFindPathTimedWithConstraints:
         constraints: Constraints = (
             set(), {(canonical_key("S", "A"), 1)})
         route = find_path_timed(
-            simple_graph, "S", "G", *constraints,
+            simple_graph, "S", "G", constraints,
             start_turn=1, horizon=10, dist=dist
         )
         assert route is not None
@@ -250,7 +246,7 @@ class TestFindPathTimedWithConstraints:
         """Horizon too small returns None."""
         dist = dist_to_goal(simple_graph, "G")
         route = find_path_timed(
-            simple_graph, "S", "G", *no_constraints(),
+            simple_graph, "S", "G", no_constraints(),
             start_turn=1, horizon=2, dist=dist
         )
         assert route is None
