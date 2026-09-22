@@ -335,26 +335,29 @@ find_path_timed(graph, start, goal, constraints, start_turn, horizon,
 
 1. **`src/models/schedule.py`** (new) — `ScheduledAction`, `Schedule`;
    exported from `src/models/__init__.py`.
-2. **`src/simulation/pathfinding.py`** (rewrite) — `dist_to_goal`,
-   `find_path_timed`, keep `_enter_cost`; delete `find_path`/`Route`.
+2. **`src/simulation/pathfinding.py`** (rewrite) — ✅ DONE (Phase 2).
+   `dist_to_goal` + `find_path_timed` implemented with `State`,
+   `Constraints`, `TimedRoute`, `VertexConstraint`, `LinkConstraint`,
+   `Heuristic` aliases; `_enter_cost` kept. `find_path`/`Route` kept as
+   legacy until Phase 4 (engine still calls `find_path`).
 3. **`src/simulation/planner.py`** (new) — `Planner` (CBS), constraints,
    occupancy index, horizon computation, `TimedRoute` conversion.
 4. **`src/models/drone.py`** (modify) — `schedule` + `schedule_index`
    replace `path`; `turns_in_transit: int`.
 5. **`src/simulation/engine.py`** (rewrite `step`) — cursor replay,
    planner injection, safety net, no-route handling.
-6. **`src/simulation/__init__.py`** (modify) — export `find_path_timed`,
-   `dist_to_goal`, `TimedRoute` instead of `find_path`/`Route`.
+6. **`src/simulation/__init__.py`** (modify) — ✅ partially done:
+   exports `find_path_timed`, `dist_to_goal`, `TimedRoute`,
+   `VertexConstraint`, `LinkConstraint`; `find_path`/`Route` still
+   exported until Phase 4.
 7. **`src/parser/converter.py`** (no change) — `Drone` defaults cover
    the new fields.
-8. **`tests/test_pathfinding.py`** (port) — the 10 properties
-   re-expressed against `find_path_timed` (zone sequence + arrival
-   turns): direct line, both endpoints, avoid restricted when cheaper,
-   use restricted when only route, detour blocked, `None` unreachable,
-   `None` blocked goal, prefer priority on ties, shortest beats longer
-   priority route, start == goal.
-9. **`tests/test_planner.py`** (new) — makespan bounds (matrix below),
-   conflict-free schedules, unreachable handling, determinism.
+8. **`tests/test_pathfinding.py`** (port) — ✅ DONE (Phase 1+2). 20
+   tests green: 7 `dist_to_goal` + 11 `find_path_timed` + 2 constraint
+   cases + horizon cutoff. Covers the 10 properties from the matrix.
+9. **`tests/test_planner.py`** (new) — written (Phase 1), red until
+   Phase 3; makespan bounds (matrix below), conflict-free schedules,
+   unreachable handling, determinism.
 10. **`tests/test_engine.py`** (modify) — 4 conflict assertions +
     new replay/safety-net tests (enumerated below).
 11. **`tests/test_converter.py`** (modify) — `drone.path == []` →
@@ -363,24 +366,28 @@ find_path_timed(graph, start, goal, constraints, start_turn, horizon,
 13. **`GUI_PLAN.md`** (phase 5, two lines) — the historical `find_path`
     mentions (shipped-milestones paragraph ~line 17, milestone 2
     ~line 124) get a one-line forward pointer to `find_path_timed` /
-    `CBS_PLAN.md`. They are true today and only go stale when Phase 2
+    `CBS_PLAN.md`. They are true today and only go stale when Phase 4
     deletes the symbol — so they are NOT touched before then.
 
 ## Phased execution (TDD — red first, per repo workflow)
 
-- **Phase 1 — red tests.** Write `tests/test_planner.py` (matrix below),
-  port `tests/test_pathfinding.py`, update `tests/test_engine.py` +
-  `tests/test_converter.py`. Run `uv run pytest tests` — everything new
-  fails (`find_path_timed` does not exist yet). Pin the exact optimal
-  makespans for the regression maps while writing these.
-- **Phase 2 — low level.** Implement `dist_to_goal` +
-  `find_path_timed` in `pathfinding.py`; delete `find_path`.
-  `test_pathfinding` goes green.
-- **Phase 3 — planner.** Implement `planner.py` (CBS).
+- **Phase 1 — red tests.** ✅ DONE. `tests/test_planner.py` (matrix
+  below), `tests/test_pathfinding.py` ported (20 tests). `test_engine` +
+  `test_converter` updates still pending (Phase 4). Phase 1 verified:
+  new tests failed before implementation landed.
+- **Phase 2 — low level.** ✅ DONE. `dist_to_goal` (reverse Dijkstra)
+  and `find_path_timed` (time-expanded A*) implemented in
+  `pathfinding.py`; all 20 `test_pathfinding` tests green. `find_path`
+  is NOT yet deleted — it stays as legacy until Phase 4 replaces the
+  engine's caller. Low-level signature finalized: `find_path_timed`
+  takes a single `constraints: Constraints` tuple
+  `(set[VertexConstraint], set[LinkConstraint])`. `find_path_timed`
+  returns a `TimedRoute` (`list[(zone, arrival_turn)]`) or `None`.
+- **Phase 3 — planner.** ⏳ NEXT. Implement `planner.py` (CBS).
   `test_planner` goes green.
 - **Phase 4 — engine.** `Drone` model change + `engine.py` cursor
   replay + injection. `test_engine` + `test_converter` go green; full
-  suite green.
+  suite green. Delete legacy `find_path`.
 - **Phase 5 — verify + document.** `make lint` (mypy strict + flake8,
   79 cols, docstrings ≤ 4 lines), `uv run pytest tests`, manual runs
   (`make run MAP=maps/bottleneck.map` — expect 11 turns), update

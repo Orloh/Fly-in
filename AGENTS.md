@@ -43,24 +43,36 @@ make test         # uv run pytest tests || true   ← swallows failures
   `None` for hubs, `max_drones` otherwise.
 - **Absolute imports** everywhere, including tests (`from src.*`).
 
-## Algorithm & objective gap (fix planned: CBS)
+## Algorithm & objective gap (CBS — Phase 2 done, 3-4 pending)
 
 `Summary.md` states the primary goal: *"all drones reach their
 destination in the fewest possible simulation turns"* (makespan). The
-current code does NOT achieve it — `find_path` is per-drone Dijkstra
+current engine does NOT achieve it — `find_path` is per-drone Dijkstra
 and the engine block-and-retries conflicts, so same-goal drones queue
 on one route instead of splitting. **Decision made: implement
 optimal-makespan Conflict-Based Search (CBS). Read `CBS_PLAN.md` before
 touching `src/simulation/`** — it holds the full design, tradeoffs,
 measured baselines, test matrix, and phased TDD plan.
 
+Status: **Phase 1 (red tests) and Phase 2 (low level) are done.**
+`dist_to_goal` (reverse Dijkstra) and `find_path_timed` (time-expanded
+A*) are implemented in `src/simulation/pathfinding.py` and all 20
+`tests/test_pathfinding.py` tests pass. The legacy `find_path` is
+**still present** — the engine still calls it; it is deleted in Phase 4
+once the engine replays a `Schedule`. `Planner` (`src/simulation/planner.py`)
+and `src/models/schedule.py` do not exist yet; `tests/test_planner.py`
+is written but red (import error until Phase 3).
+
 Locked decisions (do not re-litigate):
 - Planner/executor split: `Planner` computes a `Schedule` once in
   `Simulation.__init__`; `step()` replays it as a cursor. Offline only —
   no online re-planning.
-- `find_path` is deleted → `find_path_timed` (time-expanded A*) +
-  `dist_to_goal` (reverse-Dijkstra heuristic) in `pathfinding.py`. The
-  priority-zone tie-break moves into the A* heap ordering.
+- Low-level search = `find_path_timed` (time-expanded A*) +
+  `dist_to_goal` (reverse-Dijkstra heuristic) in `pathfinding.py`. It
+  takes a single `constraints: Constraints` tuple
+  (`tuple[set[VertexConstraint], set[LinkConstraint]]`) and returns
+  `TimedRoute = list[(zone, arrival_turn)]` or `None`. The priority-zone
+  tie-break lives in the A* heap ordering (`-priority_count`).
 - Planned waits are silent — no conflict string when the schedule holds
   a drone back. Conflicts remain only for no-route (`BLOCKED`) and
   safety-net planner violations.
@@ -72,10 +84,8 @@ Locked decisions (do not re-litigate):
   `priority_blocked.map` 8 = 8, `complex_cycle.map` 9 = 9 are
   merge/exit-bound regression maps, NOT gap maps.
 
-Until implementation lands, this section describes planned state, not
-current state. When it lands, rewrite this section as implemented and
-document the new entry points (`planner.py`, `find_path_timed`,
-`src/models/schedule.py`).
+When Phases 3-4 land, rewrite this section as fully implemented and
+document the new entry points (`planner.py`, `src/models/schedule.py`).
 
 ## Constraints
 
