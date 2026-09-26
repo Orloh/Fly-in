@@ -197,8 +197,9 @@ Defined in `input_format.md`. Key rules:
   is silent. If disallowed, add a check (and test) in
   `_convert_connection`.
 
-## Known gaps
+## Docs
 
-- **No `README.md`** at root, though `Summary.md` lists it as a required
-  deliverable (project description, running instructions, resources, AI
-  utilization, algorithm explanation). Needs to be written.
+- **`README.md`** at root covers the required deliverables: project
+  description, running instructions, resources, AI utilization, and the
+  CBS algorithm explanation. `Summary.md` and `input_format.md` describe
+  the objective and map format respectively.

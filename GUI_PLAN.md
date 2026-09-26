@@ -14,9 +14,9 @@ all drawn to a low-res canvas and upscaled, so the whole frame reads as
 one cohesive arcade look in a single rose-pine palette and one pixel font.
 
 Shipped milestones: the **map picker** (keyboard-driven), **pathfinding**
-(`find_path` + `_enter_cost` in `src/simulation/pathfinding.py`, 10 tests),
-the **simulation engine** (`Simulation` in `src/simulation/engine.py`, 10
-tests: turn stepping, capacity/link conflicts, head-on swaps), and the
+(`dist_to_goal` + `find_path_timed` in `src/simulation/pathfinding.py` —
+see `CBS_PLAN.md`), the **simulation engine** (`Simulation` in
+`src/simulation/engine.py`, schedule-replay over a CBS plan), and the
 **GUI controls** wired to it — `SPACE` play/pause + single-step,
 `BACKSPACE` rewind (snapshot history), `+`/`-` auto-play speed.
 
@@ -121,9 +121,9 @@ re-laid-out when the window changes.
    error handling, low-res map rendering, rose-pine palette + pixel
    font. Shipped and headless-tested via `tests/conftest.py` dummy SDL
    drivers. [done]
-2. **Pathfinding** — Dijkstra-based `find_path` with priority-zone
-   tie-breaks, restricted/blocked zone costs, 10 tests passing.
-   [`src/simulation/pathfinding.py`] [done]
+2. **Pathfinding** — CBS low level: `dist_to_goal` (reverse Dijkstra)
+   + `find_path_timed` (time-expanded A* with vertex/link constraints)
+   in `src/simulation/pathfinding.py`. [done]
 3. **Simulation GUI controls** — the `SPACE`/`BACKSPACE` step keys and
    the `+`/`-` speed cycle wired to `Simulation.step()` (engine landed:
    `src/simulation/engine.py`). [done]
