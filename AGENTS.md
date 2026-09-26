@@ -43,30 +43,40 @@ make test         # uv run pytest tests || true   ← swallows failures
   `None` for hubs, `max_drones` otherwise.
 - **Absolute imports** everywhere, including tests (`from src.*`).
 
-## Algorithm & objective gap (CBS — Phase 2 done, 3-4 pending)
+## Algorithm & objective gap (CBS — fully implemented)
 
 `Summary.md` states the primary goal: *"all drones reach their
 destination in the fewest possible simulation turns"* (makespan). The
-current engine does NOT achieve it — `find_path` is per-drone Dijkstra
-and the engine block-and-retries conflicts, so same-goal drones queue
-on one route instead of splitting. **Decision made: implement
-optimal-makespan Conflict-Based Search (CBS). Read `CBS_PLAN.md` before
-touching `src/simulation/`** — it holds the full design, tradeoffs,
-measured baselines, test matrix, and phased TDD plan.
+engine now achieves it via **optimal-makespan Conflict-Based Search
+(CBS)**. Read `CBS_PLAN.md` before touching `src/simulation/` — it
+holds the full design, tradeoffs, measured baselines, and test matrix.
 
-Status: **Phase 1 (red tests) and Phase 2 (low level) are done.**
-`dist_to_goal` (reverse Dijkstra) and `find_path_timed` (time-expanded
-A*) are implemented in `src/simulation/pathfinding.py` and all 20
-`tests/test_pathfinding.py` tests pass. The legacy `find_path` is
-**still present** — the engine still calls it; it is deleted in Phase 4
-once the engine replays a `Schedule`. `Planner` (`src/simulation/planner.py`)
-and `src/models/schedule.py` do not exist yet; `tests/test_planner.py`
-is written but red (import error until Phase 3).
+Status: **all 4 phases done.** The greedy `find_path` engine was
+replaced by a Planner/executor split:
+
+- `src/simulation/planner.py` — `Planner(graph).plan(drones)` runs CBS
+  once: per-goal `dist_to_goal` cache, horizon
+  `1 + n_drones × sum_entry_cost`, occupancy index with post-arrival
+  tails, first-conflict detection, two-offender branching, and
+  **agent-symmetry dedup** keyed by sorted route multiset (kills the
+  exponential blowup on homogeneous fleets). `_assign_routes` maps
+  routes to interchangeable drones deterministically by arrival order.
+- `src/simulation/pathfinding.py` — low level: `dist_to_goal`
+  (reverse Dijkstra) + `find_path_timed` (time-expanded A*). The legacy
+  `find_path`/`Route` were deleted in Phase 4.
+- `src/models/schedule.py` — `Schedule` (per-drone `ScheduledAction`
+  lists, `makespan`, stores the `graph`) with `is_conflict_free()` /
+  `occupies_goal_after_arrival()` verification methods.
+- `src/simulation/engine.py` — `Simulation.__init__(graph, drones,
+  planner=None)` runs the Planner once; `step()` replays `ScheduledAction`s
+  as a cursor in drone-id order. `Drone` carries `schedule` +
+  `schedule_index` (no mutable `path`).
 
 Locked decisions (do not re-litigate):
 - Planner/executor split: `Planner` computes a `Schedule` once in
   `Simulation.__init__`; `step()` replays it as a cursor. Offline only —
-  no online re-planning.
+  no online re-planning. The engine accepts any planner implementing the
+  `PlannerProtocol` (`plan(drones) -> (Schedule, blocked)`).
 - Low-level search = `find_path_timed` (time-expanded A*) +
   `dist_to_goal` (reverse-Dijkstra heuristic) in `pathfinding.py`. It
   takes a single `constraints: Constraints` tuple
@@ -74,18 +84,18 @@ Locked decisions (do not re-litigate):
   `TimedRoute = list[(zone, arrival_turn)]` or `None`. The priority-zone
   tie-break lives in the A* heap ordering (`-priority_count`).
 - Planned waits are silent — no conflict string when the schedule holds
-  a drone back. Conflicts remain only for no-route (`BLOCKED`) and
-  safety-net planner violations.
+  a drone back. Conflicts remain only for no-route (`BLOCKED`, reported
+  on the first step) and safety-net planner violations.
+- Safety net: before a MOVE the engine checks the schedule's own
+  occupancy model; a violation appends a conflict (planner bug, visible
+  via `--debug`) and the drone stays WAITING (index not advanced).
 - Conflict model is capacity-based (N+1th drone at a `(zone, turn)` or
   link interval); link budgets are shared across both directions;
   arrived drones keep occupying finite-capacity goals.
-- Measured baseline: `bottleneck.map` 19 → optimal 11 and
-  `example.map` 5 → 4 are the gap maps. `parallel_paths.map` 9 = 9,
+- Measured result: `bottleneck.map` 19 → 11 and `example.map` 5 → 4
+  are the gap maps (now optimal). `parallel_paths.map` 9 = 9,
   `priority_blocked.map` 8 = 8, `complex_cycle.map` 9 = 9 are
-  merge/exit-bound regression maps, NOT gap maps.
-
-When Phases 3-4 land, rewrite this section as fully implemented and
-document the new entry points (`planner.py`, `src/models/schedule.py`).
+  merge/exit-bound regression maps, unchanged at optimal.
 
 ## Constraints
 

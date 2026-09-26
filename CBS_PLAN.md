@@ -338,30 +338,36 @@ find_path_timed(graph, start, goal, constraints, start_turn, horizon,
 2. **`src/simulation/pathfinding.py`** (rewrite) — ✅ DONE (Phase 2).
    `dist_to_goal` + `find_path_timed` implemented with `State`,
    `Constraints`, `TimedRoute`, `VertexConstraint`, `LinkConstraint`,
-   `Heuristic` aliases; `_enter_cost` kept. `find_path`/`Route` kept as
-   legacy until Phase 4 (engine still calls `find_path`).
-3. **`src/simulation/planner.py`** (new) — `Planner` (CBS), constraints,
-   occupancy index, horizon computation, `TimedRoute` conversion.
-4. **`src/models/drone.py`** (modify) — `schedule` + `schedule_index`
-   replace `path`; `turns_in_transit: int`.
-5. **`src/simulation/engine.py`** (rewrite `step`) — cursor replay,
-   planner injection, safety net, no-route handling.
-6. **`src/simulation/__init__.py`** (modify) — ✅ partially done:
-   exports `find_path_timed`, `dist_to_goal`, `TimedRoute`,
-   `VertexConstraint`, `LinkConstraint`; `find_path`/`Route` still
-   exported until Phase 4.
+   `Heuristic` aliases; `_enter_cost` kept. `find_path`/`Route` were
+   kept as legacy until Phase 4 and are now deleted.
+3. **`src/simulation/planner.py`** (new) — ✅ DONE (Phase 3). `Planner`
+   (CBS), constraints, occupancy index, horizon computation,
+   `TimedRoute` conversion, agent-symmetry dedup, `_assign_routes`.
+4. **`src/models/drone.py`** (modify) — ✅ DONE (Phase 4). `schedule`
+   + `schedule_index` replace `path`; `turns_in_transit: int`;
+   `blocked_reason: str | None` added.
+5. **`src/simulation/engine.py`** (rewrite `step`) — ✅ DONE (Phase 4).
+   `Simulation.__init__(graph, drones, planner=None)` runs the Planner
+   once; `step()` is a cursor replay of `ScheduledAction`s; safety net
+   checks the schedule's occupancy; blocked drones report "no route" on
+   the first step.
+6. **`src/simulation/__init__.py`** (modify) — ✅ DONE. Exports
+   `find_path_timed`, `dist_to_goal`, `TimedRoute`,
+   `VertexConstraint`, `LinkConstraint`, `Planner`, `sum_entry_cost`;
+   `find_path`/`Route` removed (Phase 4).
 7. **`src/parser/converter.py`** (no change) — `Drone` defaults cover
    the new fields.
 8. **`tests/test_pathfinding.py`** (port) — ✅ DONE (Phase 1+2). 20
    tests green: 7 `dist_to_goal` + 11 `find_path_timed` + 2 constraint
    cases + horizon cutoff. Covers the 10 properties from the matrix.
-9. **`tests/test_planner.py`** (new) — written (Phase 1), red until
-   Phase 3; makespan bounds (matrix below), conflict-free schedules,
+9. **`tests/test_planner.py`** (new) — ✅ DONE (Phase 1+3). 15 tests
+   green: makespan bounds (matrix below), conflict-free schedules,
    unreachable handling, determinism.
-10. **`tests/test_engine.py`** (modify) — 4 conflict assertions +
-    new replay/safety-net tests (enumerated below).
-11. **`tests/test_converter.py`** (modify) — `drone.path == []` →
-    `drone.schedule == []` (line 387).
+10. **`tests/test_engine.py`** (modify) — ✅ DONE (Phase 4). 4 conflict
+    assertions flipped to silent planned waits; new schedule-replay and
+    safety-net tests added.
+11. **`tests/test_converter.py`** (modify) — ✅ DONE (Phase 4).
+    `drone.path == []` → `drone.schedule == []`.
 12. **`AGENTS.md`** (phase 5) — algorithm section: planned → implemented.
 13. **`GUI_PLAN.md`** (phase 5, two lines) — the historical `find_path`
     mentions (shipped-milestones paragraph ~line 17, milestone 2
@@ -373,28 +379,39 @@ find_path_timed(graph, start, goal, constraints, start_turn, horizon,
 
 - **Phase 1 — red tests.** ✅ DONE. `tests/test_planner.py` (matrix
   below), `tests/test_pathfinding.py` ported (20 tests). `test_engine` +
-  `test_converter` updates still pending (Phase 4). Phase 1 verified:
-  new tests failed before implementation landed.
+  `test_converter` updates done in Phase 4. Phase 1 verified: new tests
+  failed before implementation landed.
 - **Phase 2 — low level.** ✅ DONE. `dist_to_goal` (reverse Dijkstra)
   and `find_path_timed` (time-expanded A*) implemented in
   `pathfinding.py`; all 20 `test_pathfinding` tests green. `find_path`
-  is NOT yet deleted — it stays as legacy until Phase 4 replaces the
-  engine's caller. Low-level signature finalized: `find_path_timed`
-  takes a single `constraints: Constraints` tuple
+  was kept as legacy until Phase 4 and is now deleted. Low-level
+  signature finalized: `find_path_timed` takes a single
+  `constraints: Constraints` tuple
   `(set[VertexConstraint], set[LinkConstraint])`. `find_path_timed`
   returns a `TimedRoute` (`list[(zone, arrival_turn)]`) or `None`.
-- **Phase 3 — planner.** ⏳ NEXT. Implement `planner.py` (CBS).
-  `test_planner` goes green.
-- **Phase 4 — engine.** `Drone` model change + `engine.py` cursor
-  replay + injection. `test_engine` + `test_converter` go green; full
-  suite green. Delete legacy `find_path`.
-- **Phase 5 — verify + document.** `make lint` (mypy strict + flake8,
-  79 cols, docstrings ≤ 4 lines), `uv run pytest tests`, manual runs
-  (`make run MAP=maps/bottleneck.map` — expect 11 turns), update
-  `AGENTS.md`, and touch up the two now-stale `find_path` mentions in
-  `GUI_PLAN.md` (files list, item 13). `CLI_OUTPUT_PLAN.md`,
-  `Summary.md`, and `input_format.md` need nothing — verified: zero
-  references to any symbol CBS touches.
+- **Phase 3 — planner.** ✅ DONE. `planner.py` implements the CBS high
+  level: per-goal `dist_to_goal` cache, horizon
+  `1 + n_drones × sum_entry_cost`, occupancy index with post-arrival
+  tails, first-conflict detection, two-offender branching, and
+  agent-symmetry dedup keyed by sorted route multiset (kills the
+  exponential blowup on homogeneous fleets). `_assign_routes` maps
+  routes to interchangeable drones deterministically by arrival order.
+  `test_planner` green (15 tests).
+- **Phase 4 — engine.** ✅ DONE. `Drone` model now holds
+  `schedule: list[ScheduledAction]` + `schedule_index`; `turns_in_transit`
+  is `int`. `engine.py` runs the `Planner` once in `__init__` and `step()`
+  replays actions as a cursor (WAIT/MOVE lookups in id order). Planned
+  waits are silent; conflicts are only no-route (BLOCKED drones, first
+  step) and safety-net violations (schedule's own occupancy model, for
+  planner bugs). `find_path`/`Route` deleted from `pathfinding.py` and
+  `src/simulation/__init__.py`. `test_engine` + `test_converter` green.
+- **Phase 5 — verify + document.** ⏳ NEXT. `make lint` (mypy strict +
+  flake8, 79 cols, docstrings ≤ 4 lines), `uv run pytest tests`, manual
+  runs (`make run MAP=maps/bottleneck.map` — expect 11 turns), update
+  `AGENTS.md` (mostly done here), and touch up the two now-stale
+  `find_path` mentions in `GUI_PLAN.md` (files list, item 13).
+  `CLI_OUTPUT_PLAN.md`, `Summary.md`, and `input_format.md` need
+  nothing — verified: zero references to any symbol CBS touches.
 
 ## Test matrix
 
