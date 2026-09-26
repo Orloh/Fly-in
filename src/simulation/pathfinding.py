@@ -292,3 +292,13 @@ def find_path(graph: Graph, start: str, goal: str) -> Route | None:
 def _enter_cost(zone: Zone) -> int | float:
     """Return the turn cost of moving into ``zone``."""
     return _ZONE_COSTS[zone.zone_type]
+
+
+def sum_entry_cost(graph: Graph) -> int:
+    """Sum of entry costs over all non-blocked zones (for the horizon)."""
+    total = 0
+    for zone in graph.zones.values():
+        cost = _enter_cost(zone)
+        if isinstance(cost, int):
+            total += cost
+    return total

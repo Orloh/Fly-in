@@ -72,11 +72,11 @@ class TestPlannerSynthetic:
 
     def test_single_drone_restricted_route(
         self,
-        simple_graph: Graph,
+        restricted_graph: Graph,
         drones_at_start: Callable[..., list[Drone]],
     ) -> None:
         drones = drones_at_start(1, "S", "G")
-        schedule, _ = Planner(simple_graph).plan(drones)
+        schedule, _ = Planner(restricted_graph).plan(drones)
         assert schedule.makespan == 4
 
     def test_split_routes_two_drones(
@@ -141,6 +141,7 @@ class TestPlannerUnreachable:
         _, blocked = Planner(disconnected_graph).plan(drones)
         assert len(blocked) == 1
         assert blocked[0].id == 1
+        assert blocked[0].blocked_reason is not None
         assert "no route" in blocked[0].blocked_reason.lower()
 
 
