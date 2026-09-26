@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from pydantic import BaseModel, Field
 
-from src.models import Graph
+from src.models.graph import Graph
 from src.models.graph_utils import canonical_key
 
 
@@ -31,7 +31,11 @@ class Schedule(BaseModel):
         dict[tuple[str, int], int],
         dict[tuple[tuple[str, str], int], int],
     ]:
-        """zone_time[(z,t)] and link_time[(canon,t)] from the actions."""
+        """zone_time[(z,t)] and link_time[(canon,t)] from the actions.
+
+        Matches the planner's occupancy model: a drone occupies its
+        arrival zone at the arrival turn and its link during transit.
+        """
         zone_time: dict[tuple[str, int], int] = {}
         link_time: dict[tuple[tuple[str, str], int], int] = {}
         for drone_actions in self.actions.values():
@@ -41,8 +45,9 @@ class Schedule(BaseModel):
                         zone_time.get((action.from_zone, action.turn), 0) + 1
                     )
                 else:
-                    zone_time[(action.from_zone, action.turn)] = (
-                        zone_time.get((action.from_zone, action.turn), 0) + 1
+                    arrival = action.turn + action.turns_required
+                    zone_time[(action.to_zone, arrival)] = (
+                        zone_time.get((action.to_zone, arrival), 0) + 1
                     )
                     link = canonical_key(action.from_zone, action.to_zone)
                     for t in range(

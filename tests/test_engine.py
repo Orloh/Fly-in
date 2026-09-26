@@ -13,6 +13,8 @@ from src.models import (
     DroneStatus,
     Graph,
     Movement,
+    Schedule,
+    ScheduledAction,
     Zone,
     ZoneType,
 )
@@ -164,9 +166,7 @@ class TestSimulation:
                 drone_id=1, from_zone="S", to_zone="A", turns_required=1
             )
         ]
-        assert len(first.conflicts) == 1
-        assert "drone 2" in first.conflicts[0]
-        assert "capacity" in first.conflicts[0]
+        assert len(first.conflicts) == 0
         assert sim.state.drones[2].status == DroneStatus.WAITING
         assert sim.state.drones[2].current_zone == "S"
 
@@ -206,9 +206,7 @@ class TestSimulation:
                 drone_id=1, from_zone="S", to_zone="A", turns_required=1
             )
         ]
-        assert len(first.conflicts) == 1
-        assert "drone 2" in first.conflicts[0]
-        assert "link" in first.conflicts[0]
+        assert len(first.conflicts) == 0
         assert sim.state.drones[2].status == DroneStatus.WAITING
 
     def test_restricted_link_is_not_reused_while_held(self) -> None:
@@ -225,12 +223,11 @@ class TestSimulation:
 
         first = sim.step()
         assert sim.state.link_usage[("S", "R")] == 1
-        assert len(first.conflicts) == 1
-        assert "drone 2" in first.conflicts[0]
+        assert len(first.conflicts) == 0
 
         second = sim.step()
         assert sim.state.link_usage[("S", "R")] == 1
-        assert len(second.conflicts) == 1
+        assert len(second.conflicts) == 0
 
     def test_drones_processed_in_id_order(self) -> None:
         graph = _graph(
@@ -271,7 +268,77 @@ class TestSimulation:
         first = sim.step()
 
         assert len(first.movements) == 1
-        assert first.movements[0].drone_id == 1
-        assert len(first.conflicts) == 1
-        assert "drone 2" in first.conflicts[0]
-        assert "link" in first.conflicts[0]
+        assert len(first.conflicts) == 0
+
+        while not sim.finished:
+            sim.step()
+        assert sim.state.turn == 3
+
+    def test_schedule_replays_moves_in_id_order(self) -> None:
+        graph = _graph(
+            [
+                _zone("S", start=True),
+                _zone("A", max_drones=2),
+                _zone("G", end=True),
+            ],
+            [("S", "A"), ("A", "G")],
+            link_capacity=2,
+        )
+        sim = Simulation(graph, [_drone(1, "S", "G"), _drone(2, "S", "G")])
+
+        first = sim.step()
+
+        assert [m.drone_id for m in first.movements] == [1, 2]
+        assert first.movements[0].turns_required == 1
+        assert first.movements[1].turns_required == 1
+        assert sim.state.drones[1].schedule_index == 1
+        assert sim.state.drones[2].schedule_index == 1
+
+    def test_safety_net_blocks_bad_schedule(self) -> None:
+        """An injected over-capacity MOVE surfaces a conflict + wait."""
+        graph = _graph(
+            [
+                _zone("S", start=True),
+                _zone("A", max_drones=1),
+                _zone("G", end=True),
+            ],
+            [("S", "A"), ("A", "G")],
+        )
+
+        class _BadPlanner:
+            """Returns a schedule where both drones move into A at turn 1."""
+
+            def __init__(self, graph: Graph) -> None:
+                self.graph = graph
+
+            def plan(
+                self, drones: list[Drone]
+            ) -> tuple[Schedule, list[Drone]]:
+                actions = {
+                    1: [ScheduledAction(
+                        kind="MOVE", turn=1, from_zone="S",
+                        to_zone="A", turns_required=1)],
+                    2: [ScheduledAction(
+                        kind="MOVE", turn=1, from_zone="S",
+                        to_zone="A", turns_required=1)],
+                }
+                schedule = Schedule(
+                    actions=actions, makespan=2, graph=self.graph
+                )
+                return schedule, []
+
+        sim = Simulation(graph, [_drone(1, "S", "G"), _drone(2, "S", "G")],
+                         planner=_BadPlanner(graph))
+
+        first = sim.step()
+
+        assert first.movements == []
+        assert len(first.conflicts) == 2
+        assert all("zone" in c and "capacity" in c for c in first.conflicts)
+        assert all(
+            d.status == DroneStatus.WAITING
+            for d in sim.state.drones.values()
+        )
+        assert all(
+            d.schedule_index == 0 for d in sim.state.drones.values()
+        )

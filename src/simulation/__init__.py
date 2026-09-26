@@ -10,8 +10,6 @@ from src.simulation.pathfinding import (
     Heuristic,
     dist_to_goal,
     find_path_timed,
-    find_path,
-    Route,
     sum_entry_cost,
 )
 from src.simulation.planner import Planner
@@ -24,8 +22,6 @@ __all__ = [
     "LinkConstraint",
     "dist_to_goal",
     "find_path_timed",
-    "find_path",
-    "Route",
     "Planner",
     "Heuristic",
     "sum_entry_cost",

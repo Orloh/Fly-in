@@ -1,9 +1,8 @@
-"""Weighted shortest-path planning for the Fly-in simulation.
+"""Timed shortest-path planning for the Fly-in simulation.
 
-Legacy ``find_path`` computes the cheapest start-to-goal route under the
-map's zone-type entry costs. The CBS low-level search adds two timed
-functions: ``dist_to_goal`` (reverse Dijkstra heuristic) and
-``find_path_timed`` (time-expanded A* with constraints).
+The CBS low-level search provides two timed functions:
+``dist_to_goal`` (reverse Dijkstra heuristic) and ``find_path_timed``
+(time-expanded A* with vertex/link constraints).
 """
 
 from __future__ import annotations
@@ -226,65 +225,6 @@ def find_path_timed(
                 priority_queue, breadcrumbs, priority_count, best_g,
                 dist, move_state, state, new_priority,
             )
-
-    return None
-
-
-# --- Legacy find_path (used by engine.py until Phase 4) ---
-
-#: A route is an ordered list of zone names, start to goal inclusive.
-Route: TypeAlias = list[str]
-
-
-def find_path(graph: Graph, start: str, goal: str) -> Route | None:
-    """Return the cheapest start-to-goal route, or None if unreachable.
-
-    A zone's entry cost is ``_ZONE_COSTS`` keyed by its type; blocked
-    zones are never entered. Equal-cost routes prefer more priority
-    zones. Returns ``[start]`` when ``start == goal``.
-    """
-    if start == goal:
-        return [start]
-
-    priority_queue: list[tuple[int | float, int, str]] = [(0, 0, start)]
-    breadcrumbs: dict[str, str] = {}
-    zone_reach: dict[str, tuple[int | float, int]] = {start: (0, 0)}
-
-    while priority_queue:
-        cost, priority, zone_name = heapq.heappop(priority_queue)
-
-        if (cost, priority) != zone_reach[zone_name]:
-            continue
-
-        if zone_name == goal:
-            route: Route = []
-            current = goal
-            while current != start:
-                route.append(current)
-                current = breadcrumbs[current]
-            route.append(start)
-            route.reverse()
-            return route
-
-        for adj_name in graph.neighbors(zone_name):
-            adj_zone = graph.zones[adj_name]
-
-            if adj_zone.zone_type == ZoneType.BLOCKED:
-                continue
-
-            path_cost = cost + _enter_cost(adj_zone)
-            if adj_zone.zone_type == ZoneType.PRIORITY:
-                path_priority = priority - 1
-            else:
-                path_priority = priority
-
-            best_known = zone_reach.get(adj_name)
-            if best_known is None or (path_cost, path_priority) < best_known:
-                zone_reach[adj_name] = (path_cost, path_priority)
-                breadcrumbs[adj_name] = zone_name
-                heapq.heappush(
-                    priority_queue, (path_cost, path_priority, adj_name)
-                )
 
     return None
 

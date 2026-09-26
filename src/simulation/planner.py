@@ -282,6 +282,7 @@ class Planner:
         self, routes: dict[int, TimedRoute]
     ) -> Schedule:
         """Convert per-drone TimedRoutes into a dense Schedule."""
+        routes = self._assign_routes(routes)
         actions: dict[int, list[ScheduledAction]] = {}
         for drone_id, route in routes.items():
             actions[drone_id] = _route_to_actions(route)
@@ -290,6 +291,31 @@ class Planner:
             makespan=_makespan(routes),
             graph=self.graph,
         )
+
+    def _assign_routes(
+        self, routes: dict[int, TimedRoute]
+    ) -> dict[int, TimedRoute]:
+        """Deterministically assign routes to interchangeable drones.
+
+        Drones sharing the same (start, goal) are interchangeable, so
+        their routes are sorted by arrival turn and handed to drone ids
+        in ascending order. Keeps the output stable despite the
+        agent-symmetry route dedup in the search.
+        """
+        assigned: dict[int, TimedRoute] = {}
+        trips: dict[tuple[str | None, str], list[int]] = {}
+        for drone_id in sorted(routes):
+            drone = self._drones_by_id[drone_id]
+            key = (drone.current_zone, drone.target_zone)
+            trips.setdefault(key, []).append(drone_id)
+
+        for drone_ids in trips.values():
+            ordered = sorted(
+                drone_ids, key=lambda did: (routes[did][-1][1], routes[did])
+            )
+            for drone_id, route in zip(drone_ids, ordered):
+                assigned[drone_id] = routes[route]
+        return assigned
 
 
 def _route_to_actions(route: TimedRoute) -> list[ScheduledAction]:

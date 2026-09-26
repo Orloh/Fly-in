@@ -384,4 +384,5 @@ class TestDroneFleet:
             assert drone.current_zone == "start"
             assert drone.target_zone == "end"
             assert drone.status == DroneStatus.WAITING
-            assert drone.path == []
+            assert drone.schedule == []
+            assert drone.schedule_index == 0

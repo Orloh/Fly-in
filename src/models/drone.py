@@ -5,6 +5,7 @@ from __future__ import annotations
 from pydantic import BaseModel, Field
 
 from src.models.enums import DroneStatus
+from src.models.schedule import ScheduledAction
 
 
 class Drone(BaseModel):
@@ -14,8 +15,9 @@ class Drone(BaseModel):
     current_zone: str | None = None
     target_zone: str
     status: DroneStatus = DroneStatus.WAITING
-    path: list[str] = Field(default_factory=list)
-    turns_in_transit: int | float = 0
+    schedule: list[ScheduledAction] = Field(default_factory=list)
+    schedule_index: int = 0
+    turns_in_transit: int = 0
     transit_destination: str | None = None
     blocked_reason: str | None = None
 
