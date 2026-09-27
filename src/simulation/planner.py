@@ -16,7 +16,9 @@ from src.models.schedule import Schedule, ScheduledAction
 from src.simulation.pathfinding import (
     Constraints,
     Heuristic,
+    LinkConstraint,
     TimedRoute,
+    VertexConstraint,
     dist_to_goal,
     find_path_timed,
     sum_entry_cost,
@@ -25,8 +27,11 @@ from src.simulation.pathfinding import (
 #: Per-drone constraint sets, keyed by drone id.
 ConstraintsByDrone: TypeAlias = dict[int, Constraints]
 
-#: Max constraint-tree expansions before degrading to the root schedule.
+#: Max constraint-tree expansions before degrading to the greedy plan.
 _CAP = 50_000
+
+#: Above this fleet size CBS is intractable; plan greedily up front.
+_MAX_CBS_DRONES = 8
 
 
 class SearchNode(NamedTuple):
@@ -35,6 +40,7 @@ class SearchNode(NamedTuple):
     routes: dict[int, TimedRoute]
     constraints: ConstraintsByDrone
     makespan: int
+    n_conflicts: int
     sum_arrivals: int
     n_constraints: int
 
@@ -71,6 +77,12 @@ class Planner:
                 root_routes[drone.id] = route
                 root_constraints[drone.id] = (set(), set())
 
+        # Large fleets exceed the CBS design scale: plan greedily up front
+        # (each drone avoids already-committed occupancy) so the run is
+        # valid and fast instead of exhausting the expansion cap.
+        if len(drones) > _MAX_CBS_DRONES:
+            return self._greedy_fallback(drones), blocked
+
         if not root_routes:
             return Schedule(
                 actions={}, makespan=0, graph=self.graph
@@ -80,12 +92,14 @@ class Planner:
             routes=root_routes,
             constraints=root_constraints,
             makespan=_makespan(root_routes),
+            n_conflicts=self._count_conflicts(root_routes),
             sum_arrivals=_sum_arrivals(root_routes),
             n_constraints=0,
         )
 
-        heap: list[tuple[int, int, int, int, SearchNode]] = [
-            (root.makespan, root.sum_arrivals, root.n_constraints, 0, root)
+        heap: list[tuple[int, int, int, int, int, SearchNode]] = [
+            (root.makespan, root.n_conflicts, root.sum_arrivals,
+             root.n_constraints, 0, root)
         ]
         seen: set[tuple[tuple[tuple[str, int], ...], ...]] = {
             _route_signature(root_routes)
@@ -94,10 +108,10 @@ class Planner:
         expanded = 0
 
         while heap:
-            _m, _s, _n, _seq, node = heapq.heappop(heap)
+            _m, _c, _s, _n, _seq, node = heapq.heappop(heap)
             expanded += 1
             if expanded > _CAP:
-                return self._routes_to_schedule(root.routes), blocked
+                return self._greedy_fallback(drones), blocked
 
             conflict = self._first_conflict(node.routes)
             if conflict is None:
@@ -110,12 +124,12 @@ class Planner:
                 seen.add(signature)
                 heapq.heappush(
                     heap,
-                    (child.makespan, child.sum_arrivals,
-                     child.n_constraints, seq, child),
+                    (child.makespan, child.n_conflicts,
+                     child.sum_arrivals, child.n_constraints, seq, child),
                 )
                 seq += 1
 
-        return self._routes_to_schedule(root.routes), blocked
+        return self._greedy_fallback(drones), blocked
 
     def _plan_drone(self, drone: Drone) -> TimedRoute | None:
         """Find the drone's unconstrained route, or None if unreachable."""
@@ -143,6 +157,64 @@ class Planner:
         """Flag the drone as blocked with a reason."""
         drone.status = DroneStatus.BLOCKED
         drone.blocked_reason = "no route"
+
+    def _greedy_fallback(
+        self, drones: list[Drone]
+    ) -> Schedule:
+        """Return a valid (conflict-free) schedule via prioritized planning.
+
+        Plans drones in id order; each drone is routed against the
+        occupancy of already-committed drones via vertex/link constraints.
+        Complete because the start hub is unlimited — a drone can always
+        wait there. Used when the CBS expansion cap is hit (large fleets).
+        """
+        routes: dict[int, TimedRoute] = {}
+        for drone in sorted(drones, key=lambda d: d.id):
+            if drone.current_zone is None:
+                continue
+            goal = drone.target_zone
+            if goal not in self.graph.zones or (
+                drone.current_zone not in self.graph.zones
+            ):
+                continue
+            dist = self._dist_cache.setdefault(
+                goal, dist_to_goal(self.graph, goal)
+            )
+            route = find_path_timed(
+                self.graph,
+                drone.current_zone,
+                goal,
+                self._reservation_constraints(routes),
+                1,
+                self._horizon,
+                dist,
+            )
+            if route is not None:
+                routes[drone.id] = route
+        return self._routes_to_schedule(routes)
+
+    def _reservation_constraints(
+        self, routes: dict[int, TimedRoute]
+    ) -> Constraints:
+        """Constraints forbidding cells already at capacity for new drones."""
+        zone_drones, link_drones = self._build_occupancy(
+            routes, self._horizon
+        )
+        vertex: set[VertexConstraint] = set()
+        link: set[LinkConstraint] = set()
+        for (zone_name, turn), ids in zone_drones.items():
+            zone = self.graph.zones.get(zone_name)
+            if zone is None or zone.capacity is None:
+                continue
+            if len(ids) >= zone.capacity:
+                vertex.add((zone_name, turn))
+        for (link_key, turn), ids in link_drones.items():
+            connection = self.graph.connections.get(link_key)
+            if connection is None:
+                continue
+            if len(ids) >= connection.max_link_capacity:
+                link.add((link_key, turn))
+        return vertex, link
 
     def _build_occupancy(
         self,
@@ -176,6 +248,24 @@ class Planner:
                 zone_drones.setdefault((goal, t), []).append(drone_id)
 
         return zone_drones, link_drones
+
+    def _count_conflicts(self, routes: dict[int, TimedRoute]) -> int:
+        """Number of zone/link cells over capacity across the routes."""
+        zone_drones, link_drones = self._build_occupancy(
+            routes, self._horizon
+        )
+        count = 0
+        for (zone_name, turn), ids in zone_drones.items():
+            zone = self.graph.zones.get(zone_name)
+            if zone is not None and zone.capacity is not None:
+                if len(ids) > zone.capacity:
+                    count += 1
+        for (link, turn), ids in link_drones.items():
+            connection = self.graph.connections.get(link)
+            if connection is not None:
+                if len(ids) > connection.max_link_capacity:
+                    count += 1
+        return count
 
     def _first_conflict(
         self, routes: dict[int, TimedRoute]
@@ -250,6 +340,7 @@ class Planner:
                     routes=new_routes,
                     constraints=new_constraints,
                     makespan=_makespan(new_routes),
+                    n_conflicts=self._count_conflicts(new_routes),
                     sum_arrivals=_sum_arrivals(new_routes),
                     n_constraints=node.n_constraints + 1,
                 )

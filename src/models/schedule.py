@@ -39,13 +39,21 @@ class Schedule(BaseModel):
         zone_time: dict[tuple[str, int], int] = {}
         link_time: dict[tuple[tuple[str, str], int], int] = {}
         for drone_actions in self.actions.values():
+            last_arrival: tuple[str, int] | None = None
             for action in drone_actions:
                 if action.kind == "WAIT":
-                    zone_time[(action.from_zone, action.turn)] = (
-                        zone_time.get((action.from_zone, action.turn), 0) + 1
-                    )
+                    # A wait occupies its zone at the wait turn, unless the
+                    # previous MOVE just arrived there (same event, avoid
+                    # double counting).
+                    if last_arrival != (action.from_zone, action.turn):
+                        zone_time[(action.from_zone, action.turn)] = (
+                            zone_time.get(
+                                (action.from_zone, action.turn), 0
+                            ) + 1
+                        )
                 else:
                     arrival = action.turn + action.turns_required
+                    last_arrival = (action.to_zone, arrival)
                     zone_time[(action.to_zone, arrival)] = (
                         zone_time.get((action.to_zone, arrival), 0) + 1
                     )
