@@ -5,13 +5,17 @@ an end hub across a network of zones and connections, minimizing the
 **makespan** — the turn the last drone arrives. Written in Python 3.10,
 fully type-checked with mypy (strict) and flake8-clean.
 
-Routing uses **Conflict-Based Search (CBS)** for provably optimal-makespan
-plans, replayed deterministically by the engine. Both a color terminal
-output and a retro pixel-art GUI (pygame-ce) are included.
+Routing produces provably optimal-makespan plans, replayed
+deterministically by the engine. Homogeneous fleets (every drone
+start_hub → end_hub) use a **time-expanded max-flow (quickest flow)**
+solver; multi-commodity fleets fall back to **Conflict-Based Search
+(CBS)**. Both a color terminal output and a retro pixel-art GUI
+(pygame-ce) are included.
 
 ## Features
 
-- Optimal fleet routing via CBS (capacity-aware zone and link conflicts).
+- Optimal fleet routing via quickest flow (homogeneous) / CBS
+  (heterogeneous) — capacity-aware zone and link conflicts.
 - Simultaneous movement with strict capacity rules per zone and link.
 - Zone types: `normal` (1), `priority` (1, preferred), `restricted` (2),
   `blocked` (inaccessible).
@@ -74,7 +78,8 @@ src/
   models/            # pydantic: Zone, Connection, Graph, Drone, Schedule, ...
   simulation/
     pathfinding.py   # dist_to_goal (reverse Dijkstra), find_path_timed (A*)
-    planner.py       # Planner: optimal-makespan Conflict-Based Search
+    flow.py          # FlowPlanner: time-expanded max-flow (homogeneous fleets)
+    planner.py       # Planner: dispatches flow / CBS; CBS constraint tree
     engine.py        # Simulation: replays the Schedule turn by turn
   cli.py             # terminal output layer
   palette.py         # shared rose-pine palette (CLI + GUI)
@@ -89,7 +94,20 @@ link's `max_link_capacity` would be exceeded at a given turn (links share
 their budget across both directions; arrived drones keep occupying
 finite-capacity goals).
 
-**Conflict-Based Search (CBS)** is a two-level solver:
+**Two solvers, dispatched by `Planner` on fleet structure:**
+
+**1. Quickest flow — homogeneous fleets** (`FlowPlanner`). Since every
+real map gives all drones the same `(start_hub → end_hub)`, the fleet is
+a single-commodity evacuation. A **time-expanded network** over turns
+`1..T` models zone capacity (zone in/out arcs), link capacity (per-turn
+link chains, shared across both directions), and post-arrival goal
+occupancy. **Binary-searching** the smallest `T` where max-flow equals
+the drone count yields the optimal makespan; unit flows are decomposed
+into timed routes. Polynomial and provably optimal for this case.
+
+**2. Conflict-Based Search (CBS) — heterogeneous fleets** (`Planner`).
+Multi-commodity fleets (different goals, e.g. the head-on swap) are
+NP-hard as flow, so CBS handles them:
 
 1. **Low level — time-expanded A\*** (`find_path_timed`). Searches the
    `(zone, turn)` state space for one drone, guided by a consistent
@@ -104,7 +122,7 @@ finite-capacity goals).
    adding one constraint to one of the two offending drones and
    re-planning only that drone. The first conflict-free node is
    makespan-optimal. A route-multiset dedup key kills the exponential
-   blowup on homogeneous fleets (all drones share the start/end hub).
+   blowup on homogeneous fleets.
 
 The plan is computed **once** at `Simulation.__init__` and `step()`
 replays it as a cursor — planned waits are silent; the only conflicts are

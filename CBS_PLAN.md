@@ -1,13 +1,23 @@
-# CBS_PLAN.md — Optimal-turn fleet routing via Conflict-Based Search
+# CBS_PLAN.md — Optimal-turn fleet routing
 
 ## Summary
 
-Replace greedy per-drone routing with a two-level solver that minimizes
-the **makespan** (the turn the last drone arrives) — the objective stated
-in `Summary.md`. High level: Conflict-Based Search (CBS) over a
-constraint tree. Low level: time-expanded A* per drone, guided by a
-reverse-Dijkstra heuristic. The engine keeps its turn loop and output
-contract; it replays a `Schedule` computed once at `Simulation.__init__`.
+Replace greedy per-drone routing with a solver that minimizes the
+**makespan** (the turn the last drone arrives) — the objective stated in
+`Summary.md`. Two solvers, dispatched by fleet structure:
+
+- **Homogeneous fleets** (every drone shares `(start_hub → end_hub)` —
+  all real/shipped maps, per `converter.py`): **time-expanded max-flow
+  (quickest flow)**. Single-commodity evacuation; polynomial and
+  provably makespan-optimal.
+- **Heterogeneous fleets** (multi-commodity — the head-on engine tests):
+  **Conflict-Based Search (CBS)** over a constraint tree. Low level:
+  time-expanded A* per drone, guided by a reverse-Dijkstra heuristic.
+
+`Planner` is a dispatcher: it picks the flow solver for homogeneous
+fleets and falls back to CBS for anything else. The engine keeps its
+turn loop and output contract; it replays a `Schedule` computed once at
+`Simulation.__init__`.
 
 ## Problem
 
@@ -177,7 +187,7 @@ pydantic, exported). The CBS occupancy index and constraint sets are
 search internals in `planner.py` — plain dicts/tuples, no validation
 overhead in hot loops.
 
-## Alternatives considered (why CBS)
+## Alternatives considered
 
 Optimal general solvers — the real competitors:
 
@@ -188,19 +198,22 @@ Optimal general solvers — the real competitors:
 | M* (subdimensional expansion) | Optimal and efficient when conflicts are rare, but collision-set/wildcard bookkeeping is the most complex of the family. |
 | SAT / ILP / ASP | Requires an external solver — prohibited by the no-external-libs constraint. |
 
-**Time-expanded max-flow (quickest flow)** — the one polynomial
-alternative. Real maps give every drone the same
+**Time-expanded max-flow (quickest flow)** — ✅ ADOPTED as the primary
+solver for homogeneous fleets. Real maps give every drone the same
 `(start_hub → end_hub)` (`converter.py`), so they are a
 single-commodity evacuation problem: time-expanded network with
 zone-capacity arcs, hold arcs for waits, and shared per-turn
 link-occupancy arcs (both directions through the same budget arc);
 binary-search the smallest `T` where max-flow = `nb_drones`;
 decompose unit flows into timed routes. Provably makespan-optimal
-for the homogeneous case, ~150 hand-written Dinic lines. Rejected:
-heterogeneous goals (the engine tests, e.g. head-on) are
-multi-commodity flow — NP-hard in general — so a second general
-solver would still be needed. Two solvers for one job is worse
-than one.
+for the homogeneous case, ~150 hand-written Dinic lines.
+
+It was originally rejected as the *sole* solver because heterogeneous
+goals (the engine tests, e.g. head-on) are multi-commodity flow —
+NP-hard in general — so a second solver would still be needed. That
+argument still holds: the final architecture is **flow for homogeneous,
+CBS for heterogeneous**, dispatched by `Planner`. See the dedicated
+section below.
 
 Bounded-suboptimal / scaling upgrades (not needed at ≤ 8 drones):
 
@@ -247,6 +260,49 @@ one function — the conflict detector; it is complete where PP is
 not (heterogeneous goals); and it preserves the plan-once →
 schedule → cursor architecture. Worst-case exponentiality is
 irrelevant at this scale.
+
+## Quickest-flow primary solver (homogeneous fleets)
+
+Adopted after CBS shipped (Phase 5+). `Planner` dispatches: homogeneous
+fleets → flow; heterogeneous → CBS. Full design in `src/simulation/flow.py`.
+
+### Network model (time-expanded over turns 1..T)
+
+- Zone nodes `(zone, turn)`, each split `in → out` with capacity
+  `cap(zone)` (∞ for hubs) — enforces `max_drones` per turn.
+- `Source → (start, 1)_in`, capacity `nb_drones`.
+- Wait arcs `(z,t)_out → (z,t+1)_in` — the zone in/out split governs.
+- Move arcs through a **link-capacity chain**: for neighbor `w` with
+  `c = enter_cost(w)`, route
+  `(z,t)_out → L[canon(z,w), t] → … → L[canon(z,w), t+c-1] → (w, t+c)_in`,
+  each `L[link, τ]` capped at `max_link_capacity` — enforces the
+  shared per-turn bidirectional link budget (incl. 2-turn restricted
+  holds).
+- **Post-arrival occupancy:** arrived drones ride goal wait-arcs to `T`
+  then exit to sink, so finite-capacity goals are never exceeded across
+  arrival turns (free for the unlimited end_hub).
+- Blocked zones (∞ enter cost) are never move destinations.
+
+### Solving
+
+1. Unreachable drones marked `BLOCKED` via the existing `find_path_timed`
+   root pre-pass.
+2. **Binary search** the smallest `T` where `max_flow == n_drones`
+   (upper bound = greedy makespan / horizon) → optimal makespan.
+3. **Decompose** the max-flow into unit paths in deterministic source-
+   edge order; truncate each at the first `(goal, t)` → `TimedRoute`.
+4. Reuse `_route_to_actions` + `_assign_routes` to build the `Schedule`.
+
+### Tradeoffs vs CBS
+
+- **Flow:** polynomial, optimal for homogeneous fleets, no exponential
+  search — the right choice for every real map.
+- **Flow cannot** handle multi-commodity (different goals) — the head-on
+  engine tests — which is why CBS remains as the fallback. `Planner`
+  checks `_is_homogeneous(drones)` and dispatches.
+- Plain max-flow does not prefer priority zones (soft `input_format.md`
+  tie-break); a min-cost extension could add it later. Makespan is
+  unaffected.
 
 ## CBS design
 
@@ -374,6 +430,15 @@ find_path_timed(graph, start, goal, constraints, start_turn, horizon,
     ~line 124) get a one-line forward pointer to `find_path_timed` /
     `CBS_PLAN.md`. They are true today and only go stale when Phase 4
     deletes the symbol — so they are NOT touched before then.
+14. **`src/simulation/flow.py`** (new, phase 6) — `Dinic` max-flow,
+    time-expanded network builder, `FlowPlanner` (`PlannerProtocol`).
+15. **`src/simulation/planner.py`** (modify, phase 6) — dispatch:
+    `_is_homogeneous` → flow, else CBS/greedy.
+16. **`src/simulation/__init__.py`** (modify, phase 6) — export
+    `FlowPlanner`.
+17. **`tests/test_flow.py`** (new, phase 6) — Dinic unit tests,
+    network-builder tests, homogeneous map makespans, determinism,
+    heterogeneous fallback, blocked handling.
 
 ## Phased execution (TDD — red first, per repo workflow)
 
@@ -405,13 +470,15 @@ find_path_timed(graph, start, goal, constraints, start_turn, horizon,
   step) and safety-net violations (schedule's own occupancy model, for
   planner bugs). `find_path`/`Route` deleted from `pathfinding.py` and
   `src/simulation/__init__.py`. `test_engine` + `test_converter` green.
-- **Phase 5 — verify + document.** ⏳ NEXT. `make lint` (mypy strict +
-  flake8, 79 cols, docstrings ≤ 4 lines), `uv run pytest tests`, manual
-  runs (`make run MAP=maps/bottleneck.map` — expect 11 turns), update
-  `AGENTS.md` (mostly done here), and touch up the two now-stale
-  `find_path` mentions in `GUI_PLAN.md` (files list, item 13).
-  `CLI_OUTPUT_PLAN.md`, `Summary.md`, and `input_format.md` need
-  nothing — verified: zero references to any symbol CBS touches.
+- **Phase 5 — verify + document.** ✅ DONE. `make lint` clean, full
+  suite green, `AGENTS.md` rewritten, `GUI_PLAN.md` stale `find_path`
+  mentions touched up. Valid greedy fallback added for >8 drone fleets
+  (hard/challenger maps), fixing the cap-degradation deadlock.
+- **Phase 6 — quickest-flow primary.** ⏳ NEXT. Implement
+  `src/simulation/flow.py` (`Dinic` + time-expanded network +
+  `FlowPlanner`); make `Planner` dispatch homogeneous → flow,
+  heterogeneous → CBS. Add `tests/test_flow.py`; re-verify the full
+  suite and all map makespans.
 
 ## Test matrix
 

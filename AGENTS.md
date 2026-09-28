@@ -43,27 +43,43 @@ make test         # uv run pytest tests || true   ← swallows failures
   `None` for hubs, `max_drones` otherwise.
 - **Absolute imports** everywhere, including tests (`from src.*`).
 
-## Algorithm & objective gap (CBS — fully implemented)
+## Algorithm & objective gap (flow-primary + CBS fallback)
 
 `Summary.md` states the primary goal: *"all drones reach their
-destination in the fewest possible simulation turns"* (makespan). The
-engine now achieves it via **optimal-makespan Conflict-Based Search
-(CBS)**. Read `CBS_PLAN.md` before touching `src/simulation/` — it
-holds the full design, tradeoffs, measured baselines, and test matrix.
+destination in the fewest possible simulation turns"* (makespan). Read
+`CBS_PLAN.md` before touching `src/simulation/` — it holds the full
+design, tradeoffs, measured baselines, and test matrix.
 
-Status: **all 4 phases done.** The greedy `find_path` engine was
-replaced by a Planner/executor split:
+Two solvers, dispatched by `Planner` on fleet structure:
 
-- `src/simulation/planner.py` — `Planner(graph).plan(drones)` runs CBS
-  once: per-goal `dist_to_goal` cache, horizon
+- **Homogeneous fleets** (every drone shares `start_hub → end_hub` —
+  all real/shipped maps, per `converter.py`): **time-expanded max-flow
+  (quickest flow)** in `src/simulation/flow.py`. Polynomial and provably
+  makespan-optimal.
+- **Heterogeneous fleets** (multi-commodity — the head-on engine
+  tests): **Conflict-Based Search (CBS)** in `src/simulation/planner.py`.
+
+Status: **Phases 1-5 done** (CBS engine fully implemented and verified;
+valid greedy fallback for >8 drone fleets fixes the cap-degradation
+deadlock). **Phase 6 in progress** — `FlowPlanner` as the primary solver
+for homogeneous fleets, CBS retained as the multi-commodity fallback.
+
+Architecture (shared across both solvers):
+- `src/simulation/planner.py` — `Planner(graph).plan(drones)` computes a
+  `Schedule` once. It dispatches: homogeneous → `FlowPlanner`, else CBS.
+  CBS internals: per-goal `dist_to_goal` cache, horizon
   `1 + n_drones × sum_entry_cost`, occupancy index with post-arrival
-  tails, first-conflict detection, two-offender branching, and
-  **agent-symmetry dedup** keyed by sorted route multiset (kills the
-  exponential blowup on homogeneous fleets). `_assign_routes` maps
-  routes to interchangeable drones deterministically by arrival order.
-- `src/simulation/pathfinding.py` — low level: `dist_to_goal`
-  (reverse Dijkstra) + `find_path_timed` (time-expanded A*). The legacy
-  `find_path`/`Route` were deleted in Phase 4.
+  tails, first-conflict detection, two-offender branching,
+  agent-symmetry dedup keyed by sorted route multiset. `_assign_routes`
+  maps routes to interchangeable drones deterministically by arrival
+  order.
+- `src/simulation/flow.py` — `Dinic` max-flow; time-expanded network
+  (zone in/out capacity nodes, link-capacity chains per turn,
+  post-arrival goal occupancy); binary-search smallest `T` where
+  `max_flow == n_drones`; decompose unit flows into `TimedRoute`s.
+- `src/simulation/pathfinding.py` — low level for CBS and the blocked
+  pre-pass: `dist_to_goal` (reverse Dijkstra) + `find_path_timed`
+  (time-expanded A*).
 - `src/models/schedule.py` — `Schedule` (per-drone `ScheduledAction`
   lists, `makespan`, stores the `graph`) with `is_conflict_free()` /
   `occupies_goal_after_arrival()` verification methods.
