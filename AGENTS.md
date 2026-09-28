@@ -54,29 +54,37 @@ Two solvers, dispatched by `Planner` on fleet structure:
 
 - **Homogeneous fleets** (every drone shares `start_hub → end_hub` —
   all real/shipped maps, per `converter.py`): **time-expanded max-flow
-  (quickest flow)** in `src/simulation/flow.py`. Polynomial and provably
-  makespan-optimal.
+  (quickest flow)** in `src/simulation/flow.py`. Polynomial; the flow
+  schedule is validated for cost-consistency and used only when sound.
 - **Heterogeneous fleets** (multi-commodity — the head-on engine
   tests): **Conflict-Based Search (CBS)** in `src/simulation/planner.py`.
 
-Status: **Phases 1-5 done** (CBS engine fully implemented and verified;
-valid greedy fallback for >8 drone fleets fixes the cap-degradation
-deadlock). **Phase 6 in progress** — `FlowPlanner` as the primary solver
-for homogeneous fleets, CBS retained as the multi-commodity fallback.
+Status: **Phases 1-6 done.** CBS engine fully implemented and verified;
+quickest-flow `FlowPlanner` is the primary solver for homogeneous fleets
+with CBS as the multi-commodity fallback. Dispatch is a three-way
+cascade — see below.
 
 Architecture (shared across both solvers):
 - `src/simulation/planner.py` — `Planner(graph).plan(drones)` computes a
-  `Schedule` once. It dispatches: homogeneous → `FlowPlanner`, else CBS.
-  CBS internals: per-goal `dist_to_goal` cache, horizon
-  `1 + n_drones × sum_entry_cost`, occupancy index with post-arrival
-  tails, first-conflict detection, two-offender branching,
-  agent-symmetry dedup keyed by sorted route multiset. `_assign_routes`
-  maps routes to interchangeable drones deterministically by arrival
-  order.
+  `Schedule` once. Dispatch cascade:
+  1. Homogeneous → `FlowPlanner`; schedule validated
+     (`_cost_consistent`: every MOVE's `turns_required` == the
+     destination zone's entry cost) and used only when sound.
+  2. Else CBS. CBS internals: per-goal `dist_to_goal` cache, horizon
+     `1 + n_drones × sum_entry_cost`, occupancy index with post-arrival
+     tails, first-conflict detection, two-offender branching,
+     agent-symmetry dedup keyed by sorted route multiset. `_assign_routes`
+     maps routes to interchangeable drones deterministically by arrival
+     order.
+  3. Greedy (prioritized) fallback for n > 8 (CBS intractable) or when
+     the 50k expansion cap is hit.
 - `src/simulation/flow.py` — `Dinic` max-flow; time-expanded network
   (zone in/out capacity nodes, link-capacity chains per turn,
   post-arrival goal occupancy); binary-search smallest `T` where
   `max_flow == n_drones`; decompose unit flows into `TimedRoute`s.
+  The shared link chain can "splice" a 1-turn transit into a restricted
+  zone, so the schedule is cost-validated before use (falls back to
+  CBS when invalid).
 - `src/simulation/pathfinding.py` — low level for CBS and the blocked
   pre-pass: `dist_to_goal` (reverse Dijkstra) + `find_path_timed`
   (time-expanded A*).
@@ -111,7 +119,14 @@ Locked decisions (do not re-litigate):
 - Measured result: `bottleneck.map` 19 → 11 and `example.map` 5 → 4
   are the gap maps (now optimal). `parallel_paths.map` 9 = 9,
   `priority_blocked.map` 8 = 8, `complex_cycle.map` 9 = 9 are
-  merge/exit-bound regression maps, unchanged at optimal.
+  merge/exit-bound regression maps, unchanged at optimal. Which solver
+  produces each makespan: FLOW on all-normal maps (linear_path,
+  simple_fork, basic_capacity, dead_end_trap, maze_nightmare,
+  capacity_hell, bottleneck_10, example, parallel_paths,
+  priority_blocked, simple_line); CBS on restricted maps ≤ 8 drones
+  (bottleneck, circular_loop, priority_puzzle, complex_cycle, island);
+  GREEDY on flow-invalid maps > 8 drones (ultimate_challenge,
+  impossible_dream) — those two are heuristic, not proven optimal.
 
 ## Constraints
 

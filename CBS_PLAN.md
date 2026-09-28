@@ -291,12 +291,24 @@ fleets → flow; heterogeneous → CBS. Full design in `src/simulation/flow.py`.
    (upper bound = greedy makespan / horizon) → optimal makespan.
 3. **Decompose** the max-flow into unit paths in deterministic source-
    edge order; truncate each at the first `(goal, t)` → `TimedRoute`.
-4. Reuse `_route_to_actions` + `_assign_routes` to build the `Schedule`.
+4. Reuse `_route_to_actions` to build the `Schedule` (routes assigned to
+   interchangeable drones by arrival order).
+5. **Validate** the schedule with `_cost_consistent` — every MOVE's
+   `turns_required` must equal the destination zone's entry cost. If the
+   splice corrupted it, `Planner` falls back to CBS.
 
 ### Tradeoffs vs CBS
 
-- **Flow:** polynomial, optimal for homogeneous fleets, no exponential
-  search — the right choice for every real map.
+- **Flow:** polynomial, optimal for homogeneous fleets when the shared
+  link chain is splice-free (all-normal maps), no exponential search.
+- **Splice caveat:** the shared per-turn link chain lets a drone "splice"
+  into another move's tail on restricted links, producing an invalid
+  1-turn transit into a restricted zone (e.g. bottleneck → 8 instead of
+  11). `Planner` therefore validates the flow schedule for cost-
+  consistency (`_cost_consistent`: every MOVE's `turns_required` equals
+  the destination zone's entry cost) and falls back to CBS when it fails.
+  CBS is optimal, so the makespan is correct either way; flow is the
+  primary solver only on maps where it is sound.
 - **Flow cannot** handle multi-commodity (different goals) — the head-on
   engine tests — which is why CBS remains as the fallback. `Planner`
   checks `_is_homogeneous(drones)` and dispatches.
@@ -430,15 +442,17 @@ find_path_timed(graph, start, goal, constraints, start_turn, horizon,
     ~line 124) get a one-line forward pointer to `find_path_timed` /
     `CBS_PLAN.md`. They are true today and only go stale when Phase 4
     deletes the symbol — so they are NOT touched before then.
-14. **`src/simulation/flow.py`** (new, phase 6) — `Dinic` max-flow,
-    time-expanded network builder, `FlowPlanner` (`PlannerProtocol`).
-15. **`src/simulation/planner.py`** (modify, phase 6) — dispatch:
-    `_is_homogeneous` → flow, else CBS/greedy.
-16. **`src/simulation/__init__.py`** (modify, phase 6) — export
-    `FlowPlanner`.
-17. **`tests/test_flow.py`** (new, phase 6) — Dinic unit tests,
-    network-builder tests, homogeneous map makespans, determinism,
-    heterogeneous fallback, blocked handling.
+14. **`src/simulation/flow.py`** (new, phase 6) — ✅ DONE. `Dinic`
+    max-flow, time-expanded network builder, `FlowPlanner`
+    (`PlannerProtocol`).
+15. **`src/simulation/planner.py`** (modify, phase 6) — ✅ DONE.
+    Dispatch: homogeneous → `FlowPlanner` (schedule cost-validated via
+    `_cost_consistent`), else CBS, else greedy (>8 drones / cap hit).
+16. **`src/simulation/__init__.py`** (modify, phase 6) — ✅ DONE.
+    Exports `FlowPlanner`.
+17. **`tests/test_flow.py`** (new, phase 6) — ✅ DONE. 12 tests: Dinic
+    unit tests, decomposition, homogeneous map makespans, determinism,
+    cost-consistency, heterogeneous fallback.
 
 ## Phased execution (TDD — red first, per repo workflow)
 
@@ -474,11 +488,16 @@ find_path_timed(graph, start, goal, constraints, start_turn, horizon,
   suite green, `AGENTS.md` rewritten, `GUI_PLAN.md` stale `find_path`
   mentions touched up. Valid greedy fallback added for >8 drone fleets
   (hard/challenger maps), fixing the cap-degradation deadlock.
-- **Phase 6 — quickest-flow primary.** ⏳ NEXT. Implement
-  `src/simulation/flow.py` (`Dinic` + time-expanded network +
-  `FlowPlanner`); make `Planner` dispatch homogeneous → flow,
-  heterogeneous → CBS. Add `tests/test_flow.py`; re-verify the full
-  suite and all map makespans.
+- **Phase 6 — quickest-flow primary.** ✅ DONE. `src/simulation/flow.py`
+  implements `Dinic` + the time-expanded network + `FlowPlanner`; `Planner`
+  dispatches homogeneous → flow, heterogeneous → CBS. The shared link
+  chain can splice a 1-turn transit into a restricted zone, so the flow
+  schedule is cost-validated (`_cost_consistent`) and used only when
+  sound, otherwise CBS runs (CBS is optimal, so the makespan is correct
+  either way). `tests/test_flow.py` added (12 tests); full suite green
+  (242 tests), `make lint` clean, all map makespans verified. See the
+  "Quickest-flow primary solver" section above for the splice caveat and
+  the three-way dispatch.
 
 ## Test matrix
 

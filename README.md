@@ -105,6 +105,10 @@ occupancy. **Binary-searching** the smallest `T` where max-flow equals
 the drone count yields the optimal makespan; unit flows are decomposed
 into timed routes. Polynomial and provably optimal for this case.
 
+The shared link chain can "splice" a 1-turn transit into a restricted
+zone, so the flow schedule is **validated for cost-consistency** and
+used only when sound; otherwise the planner falls back to CBS (optimal).
+
 **2. Conflict-Based Search (CBS) — heterogeneous fleets** (`Planner`).
 Multi-commodity fleets (different goals, e.g. the head-on swap) are
 NP-hard as flow, so CBS handles them:
@@ -131,14 +135,18 @@ no-route drones (blocked) and safety-net planner bugs (visible with
 
 ### Measured results
 
-| Map | Before (greedy) | After (CBS) |
-|-----|-----------------|-------------|
+| Map | Before (greedy) | After (flow/CBS) |
+|-----|-----------------|------------------|
 | `maps/personal/bottleneck.txt` | 19 | **11** |
 | `maps/personal/example.txt` | 5 | **4** |
 | `maps/personal/parallel_paths.txt` | 9 | 9 (optimal) |
 | `maps/personal/priority_blocked.txt` | 8 | 8 (optimal) |
 | `maps/personal/complex_cycle.txt` | 9 | 9 (optimal) |
 | `maps/personal/simple_line.txt` | 7 | 7 (optimal) |
+
+Makespans are produced by quickest flow on all-normal maps, CBS on
+restricted maps ≤ 8 drones, and the greedy fallback on flow-invalid
+maps > 8 drones (ultimate_challenge, impossible_dream — heuristic).
 
 ## Resources
 
