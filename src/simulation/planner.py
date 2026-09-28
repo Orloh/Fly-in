@@ -58,9 +58,42 @@ class Planner:
     def plan(self, drones: list[Drone]) -> tuple[Schedule, list[Drone]]:
         """Compute an optimal Schedule; return (schedule, blocked drones).
 
-        Drones with no spatial route are marked BLOCKED with a
-        ``blocked_reason`` and excluded from the search.
+        Homogeneous fleets (all drones share start/end) are routed by the
+        quickest-flow ``FlowPlanner``; its schedule is validated for
+        cost-consistency and used only if sound, otherwise CBS runs. Any
+        other fleet runs CBS. Drones with no spatial route are marked
+        BLOCKED with a ``blocked_reason`` and excluded from the search.
         """
+        if self._is_homogeneous(drones):
+            schedule, blocked = self._plan_flow(drones)
+            if schedule is not None:
+                return schedule, blocked
+        return self._plan_cbs(drones)
+
+    def _is_homogeneous(self, drones: list[Drone]) -> bool:
+        """Whether every drone shares the same start and target zones."""
+        if not drones:
+            return False
+        start = drones[0].current_zone
+        goal = drones[0].target_zone
+        return all(
+            d.current_zone == start and d.target_zone == goal
+            for d in drones
+        )
+
+    def _plan_flow(
+        self, drones: list[Drone]
+    ) -> tuple[Schedule | None, list[Drone]]:
+        """Run the flow planner; return its schedule if cost-consistent."""
+        from src.simulation.flow import FlowPlanner
+
+        schedule, blocked = FlowPlanner(self.graph).plan(drones)
+        if schedule.actions and not _cost_consistent(schedule, self.graph):
+            return None, blocked
+        return schedule, blocked
+
+    def _plan_cbs(self, drones: list[Drone]) -> tuple[Schedule, list[Drone]]:
+        """Run Conflict-Based Search (with greedy fallbacks)."""
         self._drones_by_id = {d.id: d for d in drones}
         self._horizon = 1 + len(drones) * sum_entry_cost(self.graph)
 
@@ -445,6 +478,29 @@ def _makespan(routes: dict[int, TimedRoute]) -> int:
     if not routes:
         return 0
     return max(route[-1][1] for route in routes.values())
+
+
+def _cost_consistent(schedule: Schedule, graph: Graph) -> bool:
+    """Whether every MOVE's transit length matches the destination cost.
+
+    The shared flow link chain can "splice" a drone past a restricted
+    zone in 1 turn; such a schedule is physically invalid and must not
+    be returned. Validates each MOVE's ``turns_required`` against the
+    destination zone's entry cost.
+    """
+    from src.simulation.pathfinding import _enter_cost
+
+    for drone_actions in schedule.actions.values():
+        for action in drone_actions:
+            if action.kind != "MOVE":
+                continue
+            dest = graph.zones.get(action.to_zone)
+            if dest is None:
+                return False
+            cost = _enter_cost(dest)
+            if not isinstance(cost, int) or action.turns_required != cost:
+                return False
+    return True
 
 
 def _sum_arrivals(routes: dict[int, TimedRoute]) -> int:
