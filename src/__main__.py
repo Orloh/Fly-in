@@ -22,6 +22,11 @@ def main() -> None:
     parser.add_argument(
         "--no-color", action="store_true", help="disable ANSI color output"
     )
+    parser.add_argument(
+        "--makespan",
+        action="store_true",
+        help="print the final makespan (makespan: N)",
+    )
     args = parser.parse_args()
 
     if args.gui:
@@ -32,7 +37,12 @@ def main() -> None:
 
     from src.cli import run as run_cli
 
-    run_cli(args.map, debug=args.debug, color=False if args.no_color else None)
+    run_cli(
+        args.map,
+        debug=args.debug,
+        color=False if args.no_color else None,
+        show_makespan=args.makespan,
+    )
 
 
 if __name__ == "__main__":

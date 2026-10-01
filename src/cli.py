@@ -131,6 +131,11 @@ def format_turn(
     return " ".join(parts)
 
 
+def format_makespan(makespan: int) -> str:
+    """Format the final makespan summary line."""
+    return f"makespan: {makespan}"
+
+
 def simulate(
     graph: Graph, drones: list[Drone], color: bool = False
 ) -> Iterator[str]:
@@ -148,7 +153,10 @@ def simulate(
 
 
 def _simulate_raw(
-    graph: Graph, drones: list[Drone], color: bool = False
+    graph: Graph,
+    drones: list[Drone],
+    color: bool = False,
+    show_makespan: bool = False,
 ) -> Iterator[tuple[str, list[str]]]:
     """Internal: step simulation, yielding (line, conflicts) per turn."""
     sim = Simulation(graph, drones)
@@ -178,6 +186,9 @@ def _simulate_raw(
 
         yield format_turn(result, color, zone_roles), result.conflicts
 
+    if show_makespan:
+        yield format_makespan(sim.schedule.makespan), []
+
 
 def _detect_color() -> bool:
     """Auto-detect whether stdout supports color."""
@@ -185,12 +196,16 @@ def _detect_color() -> bool:
 
 
 def build_output(
-    map_path: str, debug: bool = False, color: bool | None = None
+    map_path: str,
+    debug: bool = False,
+    color: bool | None = None,
+    show_makespan: bool = False,
 ) -> tuple[list[str], list[str], int]:
     """Build the complete CLI output without side effects.
 
     Returns a tuple of (stdout_lines, stderr_lines, exit_code).
     exit_code is 0 for success, 1 for parse/IO errors.
+    ``show_makespan`` appends a final ``makespan: N`` line.
     """
     use_color = _detect_color() if color is None else color
     stdout_lines: list[str] = []
@@ -210,7 +225,9 @@ def build_output(
     stdout_lines.extend(format_map(parsed, use_color))
 
     # Simulation turns
-    for line, conflicts in _simulate_raw(graph, fleet, use_color):
+    for line, conflicts in _simulate_raw(
+        graph, fleet, use_color, show_makespan=show_makespan
+    ):
         stdout_lines.append(line)
         if debug:
             stderr_lines.extend(conflicts)
@@ -218,14 +235,20 @@ def build_output(
     return stdout_lines, stderr_lines, 0
 
 
-def run(map_path: str, debug: bool = False, color: bool | None = None) -> None:
+def run(
+    map_path: str,
+    debug: bool = False,
+    color: bool | None = None,
+    show_makespan: bool = False,
+) -> None:
     """Parse map, run simulation, print turns.
 
     - ``debug``: print engine conflicts to stderr.
     - ``color``: force enable/disable ANSI color; None = auto-detect.
+    - ``show_makespan``: print a final ``makespan: N`` line.
     """
     stdout_lines, stderr_lines, exit_code = build_output(
-        map_path, debug, color
+        map_path, debug, color, show_makespan
     )
     for line in stdout_lines:
         print(line)

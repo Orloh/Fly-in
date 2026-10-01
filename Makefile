@@ -3,7 +3,7 @@ PYTHON := uv run python
 MAP ?= maps/easy/01_linear_path.txt
 MAP_TIERS := easy medium hard challenger
 
-.PHONY: install run gui debug clean lint test run-all
+.PHONY: install run makespan run-all gui debug clean lint test
 
 install:
 	uv sync --group dev
@@ -11,11 +11,14 @@ install:
 run:
 	$(PYTHON) -m src $(MAP)
 
+makespan:
+	$(PYTHON) -m src --makespan $(MAP)
+
 run-all:
 	@for dir in $(MAP_TIERS); do \
 		for map in maps/$$dir/*.txt; do \
 			echo "=== $$map ==="; \
-			$(PYTHON) -m src $$map; \
+			$(PYTHON) -m src --makespan $$map; \
 		done; \
 	done
 

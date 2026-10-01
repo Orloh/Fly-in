@@ -23,8 +23,10 @@ from src.cli import (
     paint,
     format_map,
     format_turn,
+    format_makespan,
     simulate,
     run,
+    build_output,
 )
 from src.palette import (
     PALETTE,
@@ -347,6 +349,35 @@ class TestSimulate:
         # A should be rose, G should be pine
         assert any("\033[38;2;235;111;146m" in line for line in lines if "A" in line)
         assert any("\033[38;2;49;116;143m" in line for line in lines if "G" in line)
+
+
+class TestMakespan:
+    def test_format_makespan(self) -> None:
+        assert format_makespan(11) == "makespan: 11"
+
+    def test_build_output_makespan_line(self) -> None:
+        import pathlib
+        import tempfile
+
+        with tempfile.TemporaryDirectory() as tmp:
+            path = pathlib.Path(tmp) / "map.txt"
+            path.write_text(
+                "nb_drones: 1\n"
+                "start_hub: S 0 0\n"
+                "hub: A 1 0\n"
+                "end_hub: G 2 0\n"
+                "connection: S-A\n"
+                "connection: A-G\n"
+            )
+            stdout, stderr, code = build_output(
+                str(path), show_makespan=True
+            )
+            assert code == 0
+            assert stdout[-1] == "makespan: 3"
+            assert not stderr
+            stdout2, _, code2 = build_output(str(path))
+            assert code2 == 0
+            assert stdout2[-1] != "makespan: 3"
 
 
 class TestPaint:
