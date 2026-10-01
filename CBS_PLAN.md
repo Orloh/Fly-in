@@ -301,14 +301,26 @@ fleets → flow; heterogeneous → CBS. Full design in `src/simulation/flow.py`.
 
 - **Flow:** polynomial, optimal for homogeneous fleets when the shared
   link chain is splice-free (all-normal maps), no exponential search.
-- **Splice caveat:** the shared per-turn link chain lets a drone "splice"
-  into another move's tail on restricted links, producing an invalid
-  1-turn transit into a restricted zone (e.g. bottleneck → 8 instead of
-  11). `Planner` therefore validates the flow schedule for cost-
-  consistency (`_cost_consistent`: every MOVE's `turns_required` equals
-  the destination zone's entry cost) and falls back to CBS when it fails.
-  CBS is optimal, so the makespan is correct either way; flow is the
-  primary solver only on maps where it is sound.
+- **Splice caveat (structural, not a bug).** The shared per-turn link
+  chain lets a drone "splice" into another move's tail on restricted
+  links, producing an invalid 1-turn transit into a restricted zone
+  (e.g. bottleneck → 8 instead of 11). `Planner` therefore validates the
+  flow schedule for cost-consistency (`_cost_consistent`: every MOVE's
+  `turns_required` equals the destination zone's entry cost) and falls
+  back to CBS when it fails. CBS is optimal, so the makespan is correct
+  either way; flow is the primary solver only on maps where it is sound.
+
+  Why the splice is not fixed in the network: the engine's link capacity
+  is occupancy-based (a drone holds a restricted link for 2 turns, so at
+  most `max_link_capacity` drones are in transit at a turn). Enforcing
+  that per-turn sum requires a shared capacity node, but a shared node
+  merges anonymous flow units and loses each unit's transit position, so
+  its fan-out re-enables the early exit. Position-tagged nodes prevent
+  the splice but cannot share a per-turn capacity sum; the direct-arc
+  (rate) model allows two drones on a cap-1 two-turn link. Measured:
+  shared chain, per-position, position+shared-sum, and direct-arc all
+  give bottleneck = 8; CBS gives the correct 11. This is a known
+  limitation of anonymous single-commodity flow, not a missing fix.
 - **Flow cannot** handle multi-commodity (different goals) — the head-on
   engine tests — which is why CBS remains as the fallback. `Planner`
   checks `_is_homogeneous(drones)` and dispatches.

@@ -12,6 +12,18 @@ zones (cost 2) are modeled by chaining two link nodes per turn; the
 network allows a drone to "splice" into another move's tail there, so
 the resulting schedule is validated for cost-consistency by the caller,
 which falls back to CBS when the flow schedule is invalid.
+
+Why the splice is not fixed in the network: the engine's link capacity
+is occupancy-based — a drone holds a restricted link for 2 turns, so at
+most ``max_link_capacity`` drones may be in transit on it at a turn.
+That constraint is a per-turn sum over transit positions. Enforcing it
+requires a shared capacity node, but a shared node merges anonymous
+flow units and loses each unit's transit position, so its fan-out always
+re-enables the early exit. Position-tagged nodes prevent the splice but
+cannot share a per-turn capacity sum; the direct-arc (rate) model is
+also wrong because it allows two drones on a cap-1 two-turn link. All
+four constructions give bottleneck = 8; CBS gives the correct 11. The
+CBS fallback is therefore the intended design, not a gap.
 """
 
 from __future__ import annotations
@@ -288,7 +300,9 @@ class FlowPlanner:
 
         The schedule is validated for cost-consistency; if the network
         allowed a splice (restricted-zone fast transit) the schedule is
-        returned anyway and the caller falls back to CBS.
+        returned anyway and the caller falls back to CBS. That fallback
+        is by design: occupancy-based link capacity with transit > 1 is
+        not expressible in anonymous max-flow (see module docstring).
         """
         if not drones:
             return Schedule(

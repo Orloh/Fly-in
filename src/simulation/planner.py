@@ -487,6 +487,12 @@ def _cost_consistent(schedule: Schedule, graph: Graph) -> bool:
     zone in 1 turn; such a schedule is physically invalid and must not
     be returned. Validates each MOVE's ``turns_required`` against the
     destination zone's entry cost.
+
+    This is the designed gate that keeps flow sound: flow is trusted
+    only on splice-free (all-normal) maps, and restricted maps defer to
+    CBS. The splice cannot be removed from the network itself because
+    occupancy-based link capacity with transit > 1 is inexpressible in
+    anonymous single-commodity flow (see ``flow.py`` module docstring).
     """
     from src.simulation.pathfinding import _enter_cost
 

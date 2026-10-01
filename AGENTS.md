@@ -84,7 +84,10 @@ Architecture (shared across both solvers):
   `max_flow == n_drones`; decompose unit flows into `TimedRoute`s.
   The shared link chain can "splice" a 1-turn transit into a restricted
   zone, so the schedule is cost-validated before use (falls back to
-  CBS when invalid).
+  CBS when invalid). The splice is structural, not a bug: occupancy-
+  based link capacity with transit > 1 is inexpressible in anonymous
+  single-commodity flow (see `flow.py` docstring), so the CBS fallback
+  is the intended design.
 - `src/simulation/pathfinding.py` — low level for CBS and the blocked
   pre-pass: `dist_to_goal` (reverse Dijkstra) + `find_path_timed`
   (time-expanded A*).
