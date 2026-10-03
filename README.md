@@ -1,3 +1,5 @@
+*This project has been created as part of the 42 curriculum by orhernan.*
+
 # Fly-in — Drone Fleet Routing Simulation
 
 A turn-based simulation that routes a fleet of drones from a start hub to
@@ -48,6 +50,50 @@ Maps ship in tiers under `maps/` (`easy/`, `medium/`, `hard/`,
 `challenger/`) plus regression maps in `maps/personal/`. The map format
 is documented in `input_format.md`.
 
+## Example
+
+Input (`maps/easy/01_linear_path.txt`):
+
+```
+nb_drones: 2
+start_hub: start 0 0 [color=green]
+hub: waypoint1 1 0 [color=blue]
+hub: waypoint2 2 0 [color=blue]
+end_hub: goal 3 0 [color=red]
+connection: start-waypoint1
+connection: waypoint1-waypoint2
+connection: waypoint2-goal
+```
+
+Expected output (`make run MAP=maps/easy/01_linear_path.txt`):
+
+```
+nb_drones: 2
+start_hub: start 0 0 [color=green]
+end_hub: goal 3 0 [color=red]
+hub: waypoint1 1 0 [color=blue]
+hub: waypoint2 2 0 [color=blue]
+connection: start-waypoint1
+connection: waypoint1-waypoint2
+connection: waypoint2-goal
+
+D1-waypoint1
+D1-waypoint2 D2-waypoint1
+D1-goal D2-waypoint2
+D2-goal
+makespan: 5
+```
+
+Restricted zones take 2 turns. A drone mid-transit is reported as
+`D<id>-<from>-<to>` (the connection name) until it lands, so a single
+drone through a restricted tunnel yields:
+
+```
+D1-tunnel
+D1-start-tunnel
+D1-goal
+```
+
 ### GUI controls
 
 | Key | Action |
@@ -57,6 +103,28 @@ is documented in `input_format.md`.
 | `+` / `-` | cycle speed (0.5×, 1×, 2×, 4×) |
 | `M` | map picker (↑/↓ move, ENTER load, ESC/M close) |
 | `ESC` | quit |
+
+## Visual representation
+
+Two complementary views of the same simulation:
+
+- **CLI (rose-pine truecolor).** Zone names are painted according to
+  their `color=` metadata (red→rose, blue→iris, green→pine, cyan→foam,
+  gold→gold), drone ids are gold, and map-header `connection:` lines
+  pine. Colors make bottleneck zones and congestion visible at a glance
+  and are auto-disabled off a TTY or under `NO_COLOR`.
+- **GUI (pygame-ce).** A low-res pixel-art canvas (640×360, upscaled)
+  in the Press Start 2P font. Zones are drawn as nodes, connections as
+  edges, and each drone as a moving sprite; `D{id}-{zone}` hop lines
+  appear in a per-turn log. Play/pause, rewind, and speed controls let
+  you scrub through a run, so conflicts, waits, and capacity deadlocks
+  can be replayed and analyzed frame by frame. The rewind restores
+  exact turn snapshots, and a map picker (`M`) switches files without
+  restarting.
+
+Together they make the schedule legible: you can watch the fleet feed
+through a bottleneck, pause at a wait, and rewind to understand *why*
+a drone held — which the raw turn log alone does not convey.
 
 ## Development
 
@@ -160,7 +228,19 @@ maps > 8 drones (ultimate_challenge, impossible_dream — heuristic).
 ## AI utilization
 
 This project was developed iteratively with an AI coding assistant
-(opencode). The assistant contributed the implementation, tests, and
-refactors described above, following the design documents in the
-repository (`CBS_PLAN.md`, `GUI_PLAN.md`). Human review covered the
-algorithm choices, test expectations, and final polish.
+(opencode). Concretely, AI was used for:
+
+- Implementing the two-stage map parser (`src/parser/`) and its
+  line-numbered error handling.
+- Building the routing solvers — the time-expanded quickest-flow planner
+  (`src/simulation/flow.py`) and the Conflict-Based Search planner
+  (`src/simulation/planner.py`) — following the design in `CBS_PLAN.md`.
+- Designing the turn-based engine (`src/simulation/engine.py`) and its
+  conflict-free schedule replay model.
+- The pygame-ce GUI (`src/gui/`) and the shared rose-pine palette
+  (`src/palette.py`), per `GUI_PLAN.md`.
+- Writing the test suite and the tiered benchmark maps.
+
+Human review covered the algorithm choices, the solver dispatch cascade
+(flow → CBS → greedy), test expectations, and final polish; every
+AI-generated component was read, validated, and tested before adoption.
