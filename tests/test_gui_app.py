@@ -2,7 +2,8 @@
 
 Runs against SDL dummy drivers (see conftest.py) so no window or audio
 device is needed. Exercises construction, rendering, key bindings, the
-map menu, and resizing without pumping the real frame loop.
+two-level folder/map picker, and resizing without pumping the real frame
+loop.
 """
 
 from __future__ import annotations
@@ -11,9 +12,10 @@ from pathlib import Path
 
 import pygame
 import pygame.event as pygame_event
+import pytest
 
 from src.gui.app import HUD_HEIGHT, LEGEND_PADDING, MAP_HEIGHT, MapViewer, WINDOW
-from src.gui.constants import SPEEDS
+from src.gui.app import run
 from src.models.enums import DroneStatus
 
 
@@ -26,6 +28,29 @@ VALID_MAP = (
     "connection: roof1-target\n"
 )
 
+#: Single drone through a restricted zone: turn messages vary (a turn
+#: mid-transit reports "no moves"), so rewinds can be distinguished.
+RESTRICTED_MAP = (
+    "nb_drones: 1\n"
+    "start_hub: base 0 0\n"
+    "end_hub: target 400 300\n"
+    "hub: slow 200 100 [zone=restricted]\n"
+    "connection: base-slow\n"
+    "connection: slow-target\n"
+)
+
+#: Mirrors maps/easy/01_linear_path.txt: 2 drones, three normal hops.
+LINE_MAP = (
+    "nb_drones: 2\n"
+    "start_hub: start 0 0\n"
+    "hub: waypoint1 1 0\n"
+    "hub: waypoint2 2 0\n"
+    "end_hub: goal 3 0\n"
+    "connection: start-waypoint1\n"
+    "connection: waypoint1-waypoint2\n"
+    "connection: waypoint2-goal\n"
+)
+
 
 def _write_map(path: Path, content: str = VALID_MAP) -> None:
     """Write a map file at the given path."""
@@ -33,10 +58,15 @@ def _write_map(path: Path, content: str = VALID_MAP) -> None:
     path.write_text(content, encoding="utf-8")
 
 
-def _make_maps(tmp_path: Path, names: list[str]) -> None:
-    """Create one valid map file per name in ``tmp_path/maps/``."""
+def _make_maps_in(tmp_path: Path, folder: str, names: list[str]) -> None:
+    """Create one valid map file per name under ``folder``."""
     for name in names:
-        _write_map(tmp_path / "maps" / name)
+        _write_map(tmp_path / folder / name)
+
+
+def _make_maps(tmp_path: Path, names: list[str]) -> None:
+    """Create one valid map file per name in ``tmp_path/maps/easy/``."""
+    _make_maps_in(tmp_path, "maps/easy", names)
 
 
 def _make_personal_maps(tmp_path: Path, names: list[str]) -> None:
@@ -55,35 +85,38 @@ class TestMapViewer:
 
     def test_renders_frame_at_window_size(self, tmp_path: Path) -> None:
         _make_maps(tmp_path, ["a.txt"])
-        viewer = MapViewer(tmp_path, starting_map="maps/a.txt")
+        viewer = MapViewer(tmp_path, starting_map="maps/easy/a.txt")
 
         assert viewer._render().get_size() == WINDOW
 
     def test_loads_starting_map_state(self, tmp_path: Path) -> None:
         _make_maps(tmp_path, ["a.txt"])
-        viewer = MapViewer(tmp_path, starting_map="maps/a.txt")
+        viewer = MapViewer(tmp_path, starting_map="maps/easy/a.txt")
 
-        assert viewer.current_map == "maps/a.txt"
+        assert viewer.current_map == "maps/easy/a.txt"
         assert viewer.error is None
         assert viewer.graph is not None
         assert set(viewer.graph.zones) == {"base", "target", "roof1"}
 
     def test_m_key_toggles_map_menu(self, tmp_path: Path) -> None:
         _make_maps(tmp_path, ["a.txt", "b.txt"])
-        viewer = MapViewer(tmp_path, starting_map="maps/a.txt")
+        viewer = MapViewer(tmp_path, starting_map="maps/easy/a.txt")
 
         viewer._handle_event(_key(pygame.K_m))
         assert viewer.menu.visible is True
-        assert viewer.menu.options == ["maps/a.txt", "maps/b.txt"]
+        assert viewer.menu.options == ["maps/easy"]
         assert viewer.menu.selected == 0
 
         viewer._handle_event(_key(pygame.K_m))
         assert viewer.menu.visible is False
 
-    def test_arrow_keys_move_menu_selection(self, tmp_path: Path) -> None:
-        _make_maps(tmp_path, ["a.txt", "b.txt", "c.txt"])
-        viewer = MapViewer(tmp_path, starting_map="maps/a.txt")
+    def test_arrow_keys_move_folder_selection(self, tmp_path: Path) -> None:
+        _make_maps_in(tmp_path, "maps/easy", ["a.txt"])
+        _make_maps_in(tmp_path, "maps/hard", ["b.txt"])
+        viewer = MapViewer(tmp_path, starting_map="maps/easy/a.txt")
         viewer._handle_event(_key(pygame.K_m))
+
+        assert viewer.menu.options == ["maps/easy", "maps/hard"]
 
         viewer._handle_event(_key(pygame.K_DOWN))
         assert viewer.menu.selected == 1
@@ -91,57 +124,99 @@ class TestMapViewer:
         viewer._handle_event(_key(pygame.K_UP))
         assert viewer.menu.selected == 0
 
-    def test_enter_loads_selected_map(self, tmp_path: Path) -> None:
+    def test_enter_folder_descends_to_maps(self, tmp_path: Path) -> None:
         _make_maps(tmp_path, ["a.txt", "b.txt"])
-        viewer = MapViewer(tmp_path, starting_map="maps/a.txt")
+        viewer = MapViewer(tmp_path, starting_map="maps/easy/a.txt")
 
         viewer._handle_event(_key(pygame.K_m))
+        viewer._handle_event(_key(pygame.K_RETURN))
+
+        assert viewer.menu.visible is True
+        assert viewer.menu.at_root() is False
+        assert viewer.menu.options == ["maps/easy/a.txt", "maps/easy/b.txt"]
+        assert viewer.current_map == "maps/easy/a.txt"
+
+    def test_enter_loads_selected_map(self, tmp_path: Path) -> None:
+        _make_maps(tmp_path, ["a.txt", "b.txt"])
+        viewer = MapViewer(tmp_path, starting_map="maps/easy/a.txt")
+
+        viewer._handle_event(_key(pygame.K_m))
+        viewer._handle_event(_key(pygame.K_RETURN))
         viewer._handle_event(_key(pygame.K_DOWN))
         viewer._handle_event(_key(pygame.K_RETURN))
 
-        assert viewer.current_map == "maps/b.txt"
+        assert viewer.current_map == "maps/easy/b.txt"
         assert viewer.menu.visible is False
         assert viewer.error is None
 
     def test_enter_on_current_map_is_noop(self, tmp_path: Path) -> None:
         _make_maps(tmp_path, ["a.txt"])
-        viewer = MapViewer(tmp_path, starting_map="maps/a.txt")
+        viewer = MapViewer(tmp_path, starting_map="maps/easy/a.txt")
 
         viewer._handle_event(_key(pygame.K_m))
         viewer._handle_event(_key(pygame.K_RETURN))
+        viewer._handle_event(_key(pygame.K_RETURN))
 
-        assert viewer.current_map == "maps/a.txt"
+        assert viewer.current_map == "maps/easy/a.txt"
         assert viewer.menu.visible is False
+
+    def test_menu_opens_highlighting_current_folder(
+        self, tmp_path: Path
+    ) -> None:
+        _make_maps(tmp_path, ["a.txt"])
+        _make_maps_in(tmp_path, "maps/hard", ["b.txt"])
+        viewer = MapViewer(tmp_path, starting_map="maps/hard/b.txt")
+
+        viewer._handle_event(_key(pygame.K_m))
+
+        assert viewer.menu.options == ["maps/easy", "maps/hard"]
+        assert viewer.menu.selected == 1
 
     def test_menu_selection_keeps_current_on_parse_failure(
         self, tmp_path: Path
     ) -> None:
         _make_maps(tmp_path, ["a.txt"])
-        _write_map(tmp_path / "maps" / "bad.txt", "not a map\n")
-        viewer = MapViewer(tmp_path, starting_map="maps/a.txt")
+        _write_map(tmp_path / "maps" / "easy" / "bad.txt", "not a map\n")
+        viewer = MapViewer(tmp_path, starting_map="maps/easy/a.txt")
 
         viewer._handle_event(_key(pygame.K_m))
+        viewer._handle_event(_key(pygame.K_RETURN))
         viewer._handle_event(_key(pygame.K_DOWN))
         viewer._handle_event(_key(pygame.K_RETURN))
 
-        assert viewer.current_map == "maps/a.txt"
+        assert viewer.current_map == "maps/easy/a.txt"
         assert viewer.error is not None
         assert "line 1" in viewer.error
 
-    def test_escape_closes_menu_without_loading(self, tmp_path: Path) -> None:
+    def test_escape_at_map_level_returns_to_folders(
+        self, tmp_path: Path
+    ) -> None:
         _make_maps(tmp_path, ["a.txt", "b.txt"])
-        viewer = MapViewer(tmp_path, starting_map="maps/a.txt")
+        viewer = MapViewer(tmp_path, starting_map="maps/easy/a.txt")
 
         viewer._handle_event(_key(pygame.K_m))
+        viewer._handle_event(_key(pygame.K_RETURN))
         viewer._handle_event(_key(pygame.K_DOWN))
         viewer._handle_event(_key(pygame.K_ESCAPE))
 
+        assert viewer.menu.visible is True
+        assert viewer.menu.at_root() is True
+        assert viewer.menu.options == ["maps/easy"]
+        assert viewer.current_map == "maps/easy/a.txt"
+
+    def test_escape_at_root_closes_menu(self, tmp_path: Path) -> None:
+        _make_maps(tmp_path, ["a.txt"])
+        viewer = MapViewer(tmp_path, starting_map="maps/easy/a.txt")
+
+        viewer._handle_event(_key(pygame.K_m))
+        viewer._handle_event(_key(pygame.K_ESCAPE))
+
         assert viewer.menu.visible is False
-        assert viewer.current_map == "maps/a.txt"
+        assert viewer.current_map == "maps/easy/a.txt"
 
     def test_escape_quits_when_menu_closed(self, tmp_path: Path) -> None:
         _make_maps(tmp_path, ["a.txt"])
-        viewer = MapViewer(tmp_path, starting_map="maps/a.txt")
+        viewer = MapViewer(tmp_path, starting_map="maps/easy/a.txt")
 
         viewer._handle_event(_key(pygame.K_ESCAPE))
 
@@ -154,60 +229,108 @@ class TestMapViewer:
 
         assert viewer.menu.visible is False
 
-    def test_speed_keys_cycle_with_wrap(self, tmp_path: Path) -> None:
+    def test_right_advances_simulation(self, tmp_path: Path) -> None:
         _make_maps(tmp_path, ["a.txt"])
-        viewer = MapViewer(tmp_path, starting_map="maps/a.txt")
-
-        assert SPEEDS[viewer.controller.speed_index] == 1.0
-
-        viewer._handle_event(_key(pygame.K_PLUS))
-        assert SPEEDS[viewer.controller.speed_index] == 2.0
-        viewer._handle_event(_key(pygame.K_PLUS))
-        assert SPEEDS[viewer.controller.speed_index] == 4.0
-        viewer._handle_event(_key(pygame.K_PLUS))
-        assert SPEEDS[viewer.controller.speed_index] == 0.5
-        viewer._handle_event(_key(pygame.K_MINUS))
-        assert SPEEDS[viewer.controller.speed_index] == 4.0
-
-    def test_equals_key_acts_as_plus(self, tmp_path: Path) -> None:
-        _make_maps(tmp_path, ["a.txt"])
-        viewer = MapViewer(tmp_path, starting_map="maps/a.txt")
-
-        viewer._handle_event(_key(pygame.K_EQUALS))
-
-        assert SPEEDS[viewer.controller.speed_index] == 2.0
-
-    def test_space_advances_simulation(self, tmp_path: Path) -> None:
-        _make_maps(tmp_path, ["a.txt"])
-        viewer = MapViewer(tmp_path, starting_map="maps/a.txt")
+        viewer = MapViewer(tmp_path, starting_map="maps/easy/a.txt")
         assert viewer.fleet is not None
+        assert viewer.controller.sim is not None
 
         assert all(d.status == DroneStatus.WAITING for d in viewer.fleet)
+        turn = viewer.controller.sim.state.turn
 
-        viewer._handle_event(_key(pygame.K_SPACE))
+        viewer._handle_event(_key(pygame.K_RIGHT))
 
-        assert viewer.current_map == "maps/a.txt"
+        assert viewer.current_map == "maps/easy/a.txt"
         assert viewer.running is True
+        assert viewer.controller.sim.state.turn == turn + 1
         assert any(
             d.status == DroneStatus.IN_TRANSIT for d in viewer.fleet
         )
 
-    def test_backspace_rewinds_simulation(self, tmp_path: Path) -> None:
+    def test_left_rewinds_simulation(self, tmp_path: Path) -> None:
         _make_maps(tmp_path, ["a.txt"])
-        viewer = MapViewer(tmp_path, starting_map="maps/a.txt")
+        viewer = MapViewer(tmp_path, starting_map="maps/easy/a.txt")
         assert viewer.fleet is not None
 
-        viewer._handle_event(_key(pygame.K_SPACE))
+        viewer._handle_event(_key(pygame.K_RIGHT))
         assert any(
             d.status == DroneStatus.IN_TRANSIT for d in viewer.fleet
         )
 
-        viewer._handle_event(_key(pygame.K_BACKSPACE))
+        viewer._handle_event(_key(pygame.K_LEFT))
         assert all(d.status == DroneStatus.WAITING for d in viewer.fleet)
 
-    def test_space_on_finished_is_noop(self, tmp_path: Path) -> None:
+    def test_left_at_start_is_noop(self, tmp_path: Path) -> None:
         _make_maps(tmp_path, ["a.txt"])
-        viewer = MapViewer(tmp_path, starting_map="maps/a.txt")
+        viewer = MapViewer(tmp_path, starting_map="maps/easy/a.txt")
+        assert viewer.fleet is not None
+
+        viewer._handle_event(_key(pygame.K_LEFT))
+
+        assert all(d.status == DroneStatus.WAITING for d in viewer.fleet)
+
+    def test_left_restores_turn_message(self, tmp_path: Path) -> None:
+        """Rewinding restores the message shown for the restored turn."""
+        _write_map(tmp_path / "maps" / "easy" / "a.txt", RESTRICTED_MAP)
+        viewer = MapViewer(tmp_path, starting_map="maps/easy/a.txt")
+
+        viewer._handle_event(_key(pygame.K_RIGHT))  # turn 1: "1 move"
+        viewer._handle_event(_key(pygame.K_RIGHT))  # turn 2: "no moves"
+        viewer._handle_event(_key(pygame.K_RIGHT))  # turn 3: "1 move"
+        viewer._handle_event(_key(pygame.K_LEFT))  # back to turn 2
+
+        assert viewer.controller.sim is not None
+        assert viewer.controller.sim.state.turn == 2
+        assert viewer.controller.status == "no moves"
+
+        viewer._handle_event(_key(pygame.K_LEFT))  # back to turn 1
+        assert viewer.controller.sim.state.turn == 1
+        assert viewer.controller.status == "1 move"
+
+    def test_rewind_to_start_clears_message(self, tmp_path: Path) -> None:
+        """Rewinding to the initial turn clears the status message."""
+        _write_map(tmp_path / "maps" / "easy" / "a.txt", RESTRICTED_MAP)
+        viewer = MapViewer(tmp_path, starting_map="maps/easy/a.txt")
+
+        viewer._handle_event(_key(pygame.K_RIGHT))
+        viewer._handle_event(_key(pygame.K_RIGHT))
+        viewer._handle_event(_key(pygame.K_LEFT))
+        viewer._handle_event(_key(pygame.K_LEFT))
+
+        assert viewer.controller.sim is not None
+        assert viewer.controller.sim.state.turn == 0
+        assert viewer.controller.status is None
+
+    def test_rewind_then_rereun_no_extra_turn(self, tmp_path: Path) -> None:
+        """Rewinding and re-simulating ends at the original makespan."""
+        _write_map(tmp_path / "maps" / "easy" / "a.txt", LINE_MAP)
+        viewer = MapViewer(tmp_path, starting_map="maps/easy/a.txt")
+
+        def _run_to_end() -> int:
+            for _ in range(30):
+                if (
+                    viewer.controller.sim is not None
+                    and viewer.controller.sim.finished
+                ):
+                    break
+                viewer._handle_event(_key(pygame.K_RIGHT))
+            assert viewer.controller.sim is not None
+            assert viewer.controller.sim.finished
+            return viewer.controller.sim.state.turn
+
+        first = _run_to_end()
+
+        viewer._handle_event(_key(pygame.K_LEFT))
+        viewer._handle_event(_key(pygame.K_LEFT))
+        assert viewer.controller.sim is not None
+        assert viewer.controller.sim.state.turn == first - 2
+
+        second = _run_to_end()
+        assert second == first
+
+    def test_right_on_finished_is_noop(self, tmp_path: Path) -> None:
+        _make_maps(tmp_path, ["a.txt"])
+        viewer = MapViewer(tmp_path, starting_map="maps/easy/a.txt")
         assert viewer.controller.sim is not None
         assert viewer.fleet is not None
 
@@ -218,66 +341,46 @@ class TestMapViewer:
         assert viewer.controller.sim.finished
 
         turn = viewer.controller.sim.state.turn
-        viewer._handle_event(_key(pygame.K_SPACE))
+        viewer._handle_event(_key(pygame.K_RIGHT))
         assert viewer.controller.sim.state.turn == turn
 
-    def test_speed_keys_change_speed_not_autoplay(self, tmp_path: Path) -> None:
+    def test_legend_shows_step_and_maps(self, tmp_path: Path) -> None:
         _make_maps(tmp_path, ["a.txt"])
-        viewer = MapViewer(tmp_path, starting_map="maps/a.txt")
-        assert viewer.fleet is not None
-        assert viewer.controller.playing is False
+        viewer = MapViewer(tmp_path, starting_map="maps/easy/a.txt")
 
-        viewer._handle_event(_key(pygame.K_PLUS))
-        assert viewer.controller.playing is False
-        assert SPEEDS[viewer.controller.speed_index] == 2.0
+        assert ("<-/->", "STEP -/+") in viewer._legend_rows()
+        assert ("M", "MAPS") in viewer._legend_rows()
 
-    def test_space_toggles_pause(self, tmp_path: Path) -> None:
+    def test_readout_ready_at_start_then_turn(self, tmp_path: Path) -> None:
         _make_maps(tmp_path, ["a.txt"])
-        viewer = MapViewer(tmp_path, starting_map="maps/a.txt")
-        assert viewer.fleet is not None
-
-        viewer.controller.playing = True
-        assert viewer.controller.playing is True
-
-        viewer._handle_event(_key(pygame.K_SPACE))
-        assert viewer.controller.playing is False
-
-    def test_auto_step_advances_while_playing(self, tmp_path: Path) -> None:
-        _make_maps(tmp_path, ["a.txt"])
-        viewer = MapViewer(tmp_path, starting_map="maps/a.txt")
+        viewer = MapViewer(tmp_path, starting_map="maps/easy/a.txt")
         assert viewer.controller.sim is not None
-        viewer.controller.playing = True
-        viewer.controller.speed_index = 0  # 0.25x -> 4s interval
 
-        before = viewer.controller.sim.state.turn
-        viewer.controller.auto_step(4500, viewer.fleet)
-        assert viewer.controller.sim.state.turn == before + 1
+        assert viewer._turn_readout() == "READY"
 
-        turn = viewer.controller.sim.state.turn
-        viewer.controller.auto_step(500, viewer.fleet)
-        assert viewer.controller.sim.state.turn == turn
+        viewer._handle_event(_key(pygame.K_RIGHT))
+        assert viewer._turn_readout() == "TURN 1"
+
+        viewer._handle_event(_key(pygame.K_LEFT))
+        assert viewer._turn_readout() == "READY"
+
+    def test_readout_ready_without_simulation(self, tmp_path: Path) -> None:
+        viewer = MapViewer(tmp_path)
+
+        assert viewer._turn_readout() == "READY"
 
     def test_positions_stay_within_map_band(self, tmp_path: Path) -> None:
         _make_maps(tmp_path, ["a.txt"])
-        viewer = MapViewer(tmp_path, starting_map="maps/a.txt")
+        viewer = MapViewer(tmp_path, starting_map="maps/easy/a.txt")
 
         assert viewer.positions is not None
         for _name, (px, py) in viewer.positions.items():
             assert px >= 0
             assert py <= MAP_HEIGHT
 
-    def test_legend_shows_live_speed(self, tmp_path: Path) -> None:
-        _make_maps(tmp_path, ["a.txt"])
-        viewer = MapViewer(tmp_path, starting_map="maps/a.txt")
-
-        assert ("+/-", "SPEED 1x") in viewer._legend_rows()
-
-        viewer.controller.speed_up()
-        assert ("+/-", "SPEED 2x") in viewer._legend_rows()
-
     def test_hud_has_three_stacked_rows(self, tmp_path: Path) -> None:
         _make_maps(tmp_path, ["a.txt"])
-        viewer = MapViewer(tmp_path, starting_map="maps/a.txt")
+        viewer = MapViewer(tmp_path, starting_map="maps/easy/a.txt")
         y0, y1, y2 = viewer._hud_row_ys()
         assert y0 < y1 < y2
         assert y0 >= MAP_HEIGHT
@@ -286,13 +389,13 @@ class TestMapViewer:
 
     def test_hud_height_fits_three_lines(self, tmp_path: Path) -> None:
         _make_maps(tmp_path, ["a.txt"])
-        viewer = MapViewer(tmp_path, starting_map="maps/a.txt")
+        viewer = MapViewer(tmp_path, starting_map="maps/easy/a.txt")
         line_h = viewer.legend_font.get_height()
         assert 2 * LEGEND_PADDING + 3 * line_h + 2 * 4 + 4 <= HUD_HEIGHT
 
     def test_quit_event_stops_loop(self, tmp_path: Path) -> None:
         _make_maps(tmp_path, ["a.txt"])
-        viewer = MapViewer(tmp_path, starting_map="maps/a.txt")
+        viewer = MapViewer(tmp_path, starting_map="maps/easy/a.txt")
 
         viewer._handle_event(pygame_event.Event(pygame.QUIT))
 
@@ -302,10 +405,11 @@ class TestMapViewer:
         self, tmp_path: Path
     ) -> None:
         _make_maps(tmp_path, ["a.txt"])
-        _write_map(tmp_path / "maps" / "bad.txt", "not a map\n")
-        viewer = MapViewer(tmp_path, starting_map="maps/a.txt")
+        _write_map(tmp_path / "maps" / "easy" / "bad.txt", "not a map\n")
+        viewer = MapViewer(tmp_path, starting_map="maps/easy/a.txt")
 
         viewer._handle_event(_key(pygame.K_m))
+        viewer._handle_event(_key(pygame.K_RETURN))
         viewer._handle_event(_key(pygame.K_DOWN))
         viewer._handle_event(_key(pygame.K_RETURN))
 
@@ -313,10 +417,11 @@ class TestMapViewer:
 
     def test_toast_inactive_after_window_elapses(self, tmp_path: Path) -> None:
         _make_maps(tmp_path, ["a.txt"])
-        _write_map(tmp_path / "maps" / "bad.txt", "not a map\n")
-        viewer = MapViewer(tmp_path, starting_map="maps/a.txt")
+        _write_map(tmp_path / "maps" / "easy" / "bad.txt", "not a map\n")
+        viewer = MapViewer(tmp_path, starting_map="maps/easy/a.txt")
 
         viewer._handle_event(_key(pygame.K_m))
+        viewer._handle_event(_key(pygame.K_RETURN))
         viewer._handle_event(_key(pygame.K_DOWN))
         viewer._handle_event(_key(pygame.K_RETURN))
         viewer.error_visible_until = pygame.time.get_ticks() - 1
@@ -325,16 +430,18 @@ class TestMapViewer:
 
     def test_successful_reload_clears_toast(self, tmp_path: Path) -> None:
         _make_maps(tmp_path, ["a.txt", "b.txt"])
-        _write_map(tmp_path / "maps" / "bad.txt", "not a map\n")
-        viewer = MapViewer(tmp_path, starting_map="maps/a.txt")
+        _write_map(tmp_path / "maps" / "easy" / "bad.txt", "not a map\n")
+        viewer = MapViewer(tmp_path, starting_map="maps/easy/a.txt")
 
         viewer._handle_event(_key(pygame.K_m))
+        viewer._handle_event(_key(pygame.K_RETURN))
         viewer._handle_event(_key(pygame.K_DOWN))
         viewer._handle_event(_key(pygame.K_DOWN))
         viewer._handle_event(_key(pygame.K_RETURN))
         assert viewer._toast_active() is True
 
         viewer._handle_event(_key(pygame.K_m))
+        viewer._handle_event(_key(pygame.K_RETURN))
         viewer._handle_event(_key(pygame.K_DOWN))
         viewer._handle_event(_key(pygame.K_RETURN))
 
@@ -352,10 +459,11 @@ class TestMapViewer:
         self, tmp_path: Path
     ) -> None:
         _make_maps(tmp_path, ["a.txt"])
-        _write_map(tmp_path / "maps" / "bad.txt", "not a map\n")
-        viewer = MapViewer(tmp_path, starting_map="maps/a.txt")
+        _write_map(tmp_path / "maps" / "easy" / "bad.txt", "not a map\n")
+        viewer = MapViewer(tmp_path, starting_map="maps/easy/a.txt")
 
         viewer._handle_event(_key(pygame.K_m))
+        viewer._handle_event(_key(pygame.K_RETURN))
         viewer._handle_event(_key(pygame.K_DOWN))
         viewer._handle_event(_key(pygame.K_RETURN))
 
@@ -365,14 +473,14 @@ class TestMapViewer:
         self, tmp_path: Path
     ) -> None:
         _make_maps(tmp_path, ["a.txt"])
-        viewer = MapViewer(tmp_path, starting_map="maps/a.txt")
+        viewer = MapViewer(tmp_path, starting_map="maps/easy/a.txt")
         viewer._handle_event(_key(pygame.K_m))
 
         assert viewer._render().get_size() == WINDOW
 
     def test_video_resize_scales_window(self, tmp_path: Path) -> None:
         _make_maps(tmp_path, ["a.txt"])
-        viewer = MapViewer(tmp_path, starting_map="maps/a.txt")
+        viewer = MapViewer(tmp_path, starting_map="maps/easy/a.txt")
 
         viewer._handle_event(
             pygame_event.Event(pygame.VIDEORESIZE, size=(1600, 900))
@@ -383,7 +491,7 @@ class TestMapViewer:
 
     def test_window_size_changed_resizes_screen(self, tmp_path: Path) -> None:
         _make_maps(tmp_path, ["a.txt"])
-        viewer = MapViewer(tmp_path, starting_map="maps/a.txt")
+        viewer = MapViewer(tmp_path, starting_map="maps/easy/a.txt")
 
         viewer._handle_event(
             pygame_event.Event(pygame.WINDOWSIZECHANGED, x=800, y=500)
@@ -393,7 +501,7 @@ class TestMapViewer:
 
     def test_resize_to_same_size_is_noop(self, tmp_path: Path) -> None:
         _make_maps(tmp_path, ["a.txt"])
-        viewer = MapViewer(tmp_path, starting_map="maps/a.txt")
+        viewer = MapViewer(tmp_path, starting_map="maps/easy/a.txt")
         current = viewer.screen
 
         viewer._handle_event(
@@ -405,11 +513,71 @@ class TestMapViewer:
         assert viewer.screen is current
 
     def test_map_menu_includes_personal_maps(self, tmp_path: Path) -> None:
-        """Map picker shows both maps/ and personal/ maps."""
+        """Map picker shows difficulty folders and personal/."""
         _make_maps(tmp_path, ["a.txt"])
         _make_personal_maps(tmp_path, ["custom.txt"])
-        viewer = MapViewer(tmp_path, starting_map="maps/a.txt")
+        viewer = MapViewer(tmp_path, starting_map="maps/easy/a.txt")
 
         viewer._handle_event(_key(pygame.K_m))
 
-        assert viewer.menu.options == ["maps/a.txt", "personal/custom.txt"]
+        assert viewer.menu.options == ["maps/easy", "personal"]
+
+    def test_personal_maps_load_through_picker(self, tmp_path: Path) -> None:
+        """Selecting personal/ and a map there loads it."""
+        _make_maps(tmp_path, ["a.txt"])
+        _make_personal_maps(tmp_path, ["custom.txt"])
+        viewer = MapViewer(tmp_path, starting_map="maps/easy/a.txt")
+
+        viewer._handle_event(_key(pygame.K_m))
+        viewer._handle_event(_key(pygame.K_DOWN))
+        viewer._handle_event(_key(pygame.K_RETURN))
+        viewer._handle_event(_key(pygame.K_RETURN))
+
+        assert viewer.current_map == "personal/custom.txt"
+        assert viewer.menu.visible is False
+
+
+class TestRun:
+    """Integration tests for the entry-point root resolution."""
+
+    def _capture_root(
+        self,
+        monkeypatch: pytest.MonkeyPatch,
+        started: dict[str, object],
+    ) -> None:
+        """Stub MapViewer.run to record the viewer's root and map."""
+
+        def _fake_run(self: MapViewer) -> None:
+            started["root"] = self.maps_root
+            started["map"] = self.current_map
+
+        monkeypatch.setattr(MapViewer, "run", _fake_run)
+
+    def test_run_resolves_root_with_nested_personal(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """run() finds the directory holding maps/, not maps/ itself."""
+        _make_maps(tmp_path, ["a.txt"])
+        map_path = tmp_path / "maps" / "easy" / "a.txt"
+
+        started: dict[str, object] = {}
+        self._capture_root(monkeypatch, started)
+        run(str(map_path))
+
+        assert started["root"] == tmp_path.resolve()
+        assert started["map"] == "maps/easy/a.txt"
+
+    def test_run_resolves_root_for_personal_in_maps(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """run() resolves the root for maps/personal/ map files too."""
+        _make_maps(tmp_path, ["a.txt"])
+        _write_map(tmp_path / "maps" / "personal" / "c.txt")
+        map_path = tmp_path / "maps" / "personal" / "c.txt"
+
+        started: dict[str, object] = {}
+        self._capture_root(monkeypatch, started)
+        run(str(map_path))
+
+        assert started["root"] == tmp_path.resolve()
+        assert started["map"] == "maps/personal/c.txt"

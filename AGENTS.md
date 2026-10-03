@@ -98,9 +98,12 @@ Architecture (shared across both solvers):
   lists, `makespan`, stores the `graph`) with `is_conflict_free()` /
   `occupies_goal_after_arrival()` verification methods.
 - `src/simulation/engine.py` — `Simulation.__init__(graph, drones,
-  planner=None)` runs the Planner once; `step()` replays `ScheduledAction`s
-  as a cursor in drone-id order. `Drone` carries `schedule` +
-  `schedule_index` (no mutable `path`).
+  planner=None, replan=True)` runs the Planner once; `step()` replays
+  `ScheduledAction`s as a cursor in drone-id order. `replan=False`
+  replays the drones' stored schedules instead of re-planning (the GUI
+  rewind path — a fresh plan would anchor at turn 1 and shift a resumed
+  run's timing). `Drone` carries `schedule` + `schedule_index` (no
+  mutable `path`).
 
 Locked decisions (do not re-litigate):
 - Planner/executor split: `Planner` computes a `Schedule` once in
@@ -221,21 +224,27 @@ Defined in `input_format.md`. Key rules:
   outline in `GUI_PLAN.md`.
 - **Palette:** rose-pine (constants in `src/gui/constants.py` and
   `src/palette.py`).
-- **Controls:** `SPACE` play/pause, `BACKSPACE` rewind, `+`/`-` speed
-  (wraps), `M` map picker (↑/↓ move, ENTER load, ESC/M close), `ESC`
-  quit. Displayed `SPEEDS` = 0.5/1/2/4×; actual `SPEED_RATES` are half,
-  for watchability.
+- **Controls:** `←`/`→` step back/forward one turn (no auto-play), `M`
+  map picker (two-level: folder list first, then maps — ↑/↓ move,
+  ENTER open/load, ESC back/close), `ESC` quit. HUD reads `READY` at
+  turn 0, `TURN N` after.
 - **Layering:** `src/gui/` is decoupled from the engine — pure helpers
-  (`transform.layout`, `maps.list_maps`, `menu.MapMenu`,
-  `controller.SimController`) plus the pygame/app drawing code
-  (`app.py`). `MapViewer` delegates sim control to `self.controller`.
-- **Shared constants:** `src/gui/constants.py` holds `SPEEDS`,
-  `SPEED_RATES`, `TOAST_DURATION_MS` to avoid circular imports between
-  `app.py` and `controller.py`.
+  (`transform.layout`, `maps.list_map_folders`/`list_maps_in_folder`/
+  `resolve_maps_root`, `menu.MapMenu`, `controller.SimController`) plus
+  the pygame/app drawing code (`app.py`). `MapViewer` delegates sim
+  control to `self.controller`.
+- **Rewind:** `SimController.step_back` restores the exact turn snapshot
+  (deep-copied fleet + message) and rebuilds the sim with
+  `replan=False`, so a resumed run replays the original plan turn for
+  turn instead of re-planning (deterministic makespan).
+- **Shared constants:** `src/gui/constants.py` holds `TOAST_DURATION_MS`
+  to avoid circular imports between `app.py` and `controller.py`.
 - **Headless GUI tests:** `tests/conftest.py` sets
   `SDL_VIDEODRIVER`/`SDL_AUDIODRIVER = dummy` before pygame init.
   pytest must run from project root (the font path is CWD-relative).
-- Keep the map folder named `maps/` (scanned by the picker).
+- Keep the map folder named `maps/` (scanned by the picker); its
+  subdirectories (easy/medium/hard/…) plus `personal/` become the
+  picker's folder list.
 
 ## Deferred decisions
 

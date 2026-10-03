@@ -23,8 +23,8 @@ solver; multi-commodity fleets fall back to **Conflict-Based Search
   `blocked` (inaccessible).
 - Full map parser with line-numbered error messages.
 - CLI: rose-pine truecolor terminal output (`D1-zoneA D2-zoneB` per turn).
-- GUI: keyboard-driven pixel-art viewer with play/pause, rewind, speed,
-  and a map picker (Press Start 2P font, headless-testable).
+- GUI: keyboard-driven pixel-art viewer with `←`/`→` turn stepping and
+  a map picker (Press Start 2P font, headless-testable).
 - Deterministic replays — the GUI rewind restores exact turn snapshots.
 
 ## Requirements
@@ -133,9 +133,8 @@ D1-goal
 
 | Key | Action |
 |-----|--------|
-| `SPACE` | play/pause (single-step while paused) |
-| `BACKSPACE` | rewind one turn |
-| `+` / `-` | cycle speed (0.5×, 1×, 2×, 4×) |
+| `→` | step forward one turn |
+| `←` | step back one turn |
 | `M` | map picker (↑/↓ move, ENTER load, ESC/M close) |
 | `ESC` | quit |
 
@@ -151,11 +150,10 @@ Two complementary views of the same simulation:
 - **GUI (pygame-ce).** A low-res pixel-art canvas (640×360, upscaled)
   in the Press Start 2P font. Zones are drawn as nodes, connections as
   edges, and each drone as a moving sprite; `D{id}-{zone}` hop lines
-  appear in a per-turn log. Play/pause, rewind, and speed controls let
-  you scrub through a run, so conflicts, waits, and capacity deadlocks
-  can be replayed and analyzed frame by frame. The rewind restores
-  exact turn snapshots, and a map picker (`M`) switches files without
-  restarting.
+  appear in a per-turn log. The `←`/`→` step controls let you scrub
+  through a run, so conflicts, waits, and capacity deadlocks can be
+  replayed and analyzed frame by frame. The rewind restores exact turn
+  snapshots, and a map picker (`M`) switches files without restarting.
 
 Together they make the schedule legible: you can watch the fleet feed
 through a bottleneck, pause at a wait, and rewind to understand *why*

@@ -17,8 +17,8 @@ Shipped milestones: the **map picker** (keyboard-driven), **pathfinding**
 (`dist_to_goal` + `find_path_timed` in `src/simulation/pathfinding.py` —
 see `CBS_PLAN.md`), the **simulation engine** (`Simulation` in
 `src/simulation/engine.py`, schedule-replay over a CBS plan), and the
-**GUI controls** wired to it — `SPACE` play/pause + single-step,
-`BACKSPACE` rewind (snapshot history), `+`/`-` auto-play speed.
+**GUI controls** wired to it — `←`/`→` step back/forward (snapshot
+history), driving `Simulation.step()` turn by turn.
 
 ## Libraries and technologies
 
@@ -27,7 +27,7 @@ see `CBS_PLAN.md`), the **simulation engine** (`Simulation` in
 | Rendering | `pygame-ce` (drop-in for `pygame`) | Frame-based animation, simple draw primitives |
 | Fonts | Bundled TTF | **Press Start 2P** (SIL OFL-1.1), vendored under `assets/fonts/` with the license |
 | Palette | Rose-pine as code constants in `app.py` | bg/gold/rose/foam/pine/text — no theme file needed |
-| Layout math | Pure helpers in `src/gui/` (`transform.layout`, `maps.list_maps`, `menu.MapMenu`) | Testable without pygame |
+| Layout math | Pure helpers in `src/gui/` (`transform.layout`, `maps.list_map_folders`, `menu.MapMenu`) | Testable without pygame |
 
 `pygame-gui` was evaluated for widgets and dropped: all controls are
 keyboard-driven, so hand-drawn overlays on the pixel canvas match the
@@ -57,26 +57,34 @@ retro aesthetic better than any widget set.
 
 | Key | Scope | Behaviour |
 |---|---|---|
-| `SPACE` | global | Play/pause; single-steps while paused (drives `Simulation.step()`) |
-| `BACKSPACE` | global | Rewind one turn (snapshot history) |
-| `+` / `-` | global | Cycle auto-play speed through `0.5×, 1×, 2×, 4×` (wraps; shown live in the HUD bar) |
-| `M` | global | Toggle the map picker (options refreshed on open) |
-| `↑` / `↓` | picker | Move the highlighted map |
-| `ENTER` | picker | Load the highlighted map, closing the picker |
-| `ESC` | picker / global | Close the picker; quit when the picker is closed |
+| `→` | global | Step forward one turn (drives `Simulation.step()`) |
+| `←` | global | Step back one turn (snapshot history) |
+| `M` | global | Toggle the map picker (folder list refreshed on open) |
+| `↑` / `↓` | picker | Move the highlighted folder/map |
+| `ENTER` | picker | Open the highlighted folder; load the highlighted map |
+| `ESC` | picker / global | Back up to the folder list; close the picker at the top; quit when the picker is closed |
 
 The bottom **HUD bar** (`_draw_hud`) shows three stacked rows:
 line 1 `Message: {turn message}` (label muted, text foam=info / rose=error),
-line 2 `Turn N  SPEED x`, line 3 the key bindings. The **map picker**
-(`_draw_menu`) is a centered overlay on the `MapMenu` state machine;
-parse/IO failures surface in the HUD bar (persistent when `maps/` is empty).
+line 2 `Turn N` (or `READY` before the first step), line 3 the key
+bindings. The **map picker**
+(`_draw_menu`) is a centered overlay on the `MapMenu` state machine with
+two-level navigation: the root lists map folders (`maps/easy`,
+`maps/medium`, `maps/hard`, `maps/challenger`, `personal`); `ENTER`
+descends into a folder (`MapMenu.descend`), `ESC` ascends back to the
+folder list (`MapMenu.ascend`), and `ENTER` on a map loads it;
+parse/IO failures surface in the HUD bar (persistent when `maps/` is
+empty). The `←` rewind restores the exact turn snapshot — deep-copied
+fleet *and* the message shown for that turn — then rebuilds the sim
+with `replan=False` so a resumed run replays the original plan turn for
+turn (deterministic makespan, no extra turns on re-simulation).
 
 ## Layout / architecture
 
 ```
 src/gui/
   app.py        # MapViewer class: window, key routing, drawing, loop
-  maps.py       # pure: list_maps() + load_map() (parse/convert/layout)
+  maps.py       # pure: list_map_folders + list_maps_in_folder + resolve_maps_root + load_map
   menu.py       # pure: MapMenu state machine (options, selection, open)
   transform.py  # pure: world coords -> low-res canvas pixels (layout)
 assets/
@@ -92,7 +100,7 @@ Frame loop (`MapViewer.run`, per tick):
 1. Pull pygame events; `QUIT` and `ESC` (picker closed) stop the loop.
    `KEYDOWN` events route through `_handle_key`: the picker owns
    `↑`/`↓`/`ENTER`/`ESC`/`M` while open; otherwise the sim keys
-   (`SPACE`, `BACKSPACE`, `+`/`-`, `M`) apply.
+   (`←`, `→`, `M`) apply.
  2. Draw the map onto the top band of the 640 × 360 canvas (rose-pine
     palette, pixel font), then the bottom HUD bar (controls, readouts,
     message), and the picker overlay.
@@ -117,14 +125,15 @@ re-laid-out when the window changes.
 
 ## Milestones
 
-1. **Map selector** — `MapViewer` + `MapMenu`, `list_maps` + `load_map`,
+1. **Map selector** — `MapViewer` + `MapMenu` (two-level folder/map
+   browser), `list_map_folders` + `list_maps_in_folder` + `load_map`,
    error handling, low-res map rendering, rose-pine palette + pixel
    font. Shipped and headless-tested via `tests/conftest.py` dummy SDL
    drivers. [done]
 2. **Pathfinding** — CBS low level: `dist_to_goal` (reverse Dijkstra)
    + `find_path_timed` (time-expanded A* with vertex/link constraints)
    in `src/simulation/pathfinding.py`. [done]
-3. **Simulation GUI controls** — the `SPACE`/`BACKSPACE` step keys and
-   the `+`/`-` speed cycle wired to `Simulation.step()` (engine landed:
+3. **Simulation GUI controls** — the `←`/`→` step keys wired to
+   `Simulation.step()` / snapshot rewind (engine landed:
    `src/simulation/engine.py`). [done]
 4. **Polish** — drone animation states, per-zone accents/status dots.

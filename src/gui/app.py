@@ -3,9 +3,9 @@
 Hosts a ``MapViewer`` window that renders the current map as chunky
 retro pixel-art on a low-res canvas. Controls are keyboard-driven: a
 bottom-left legend shows the bindings, ``M`` opens the map picker, and
-``SPACE``/``BACKSPACE``/``+``/``-`` drive the simulation through the
-engine (play/pause, rewind, auto-play speed). Built on the parser, the
-converter, the pure GUI helpers, and ``src.simulation``.
+``←``/``→`` step the simulation forward and back one turn at a time
+through the engine. Built on the parser, the converter, the pure GUI
+helpers, and ``src.simulation``.
 """
 
 from __future__ import annotations
@@ -15,9 +15,15 @@ from pathlib import Path
 
 import pygame
 
-from src.gui.constants import SPEEDS, TOAST_DURATION_MS
+from src.gui.constants import TOAST_DURATION_MS
 from src.gui.controller import SimController
-from src.gui.maps import DEFAULT_CANVAS, list_maps, load_map
+from src.gui.maps import (
+    DEFAULT_CANVAS,
+    list_map_folders,
+    list_maps_in_folder,
+    load_map,
+    resolve_maps_root,
+)
 from src.gui.menu import MapMenu
 from src.models.drone import Drone
 from src.models.enums import ZoneType
@@ -173,7 +179,7 @@ class MapViewer:
         self.error: str | None = None
         self.error_visible_until: int | None = None
         self.running = True
-        self.menu = MapMenu(list_maps(self.maps_root))
+        self.menu = MapMenu(list_map_folders(self.maps_root))
         self.controller = SimController()
 
         self.screen = self._init_window()
@@ -183,7 +189,7 @@ class MapViewer:
         self.legend_font = pygame.font.Font(str(_FONT_PATH), 7)
         if not self.menu.options:
             self.error = (
-                f"No .txt files found in {self.maps_root}/maps/ "
+                f"No map folders found in {self.maps_root}/maps/ "
                 f"or {self.maps_root}/personal/"
             )
             self.error_visible_until = None
@@ -248,22 +254,28 @@ class MapViewer:
         """Act on a simulation or overlay key."""
         if key == pygame.K_ESCAPE:
             self.running = False
-        elif key == pygame.K_SPACE:
-            self.controller.toggle_play(self.fleet)
-        elif key == pygame.K_BACKSPACE:
+        elif key == pygame.K_RIGHT:
+            result = self.controller.step_forward(self.fleet)
+            if result is not None:
+                self.controller.flash_turn(result)
+            elif (
+                self.controller.sim is not None
+                and self.controller.sim.finished
+            ):
+                self.controller.flash("Simulation complete", error=False)
+        elif key == pygame.K_LEFT:
             fleet = self.controller.step_back(self.graph)
             if fleet is not None:
                 self.fleet = fleet
-        elif key in (pygame.K_PLUS, pygame.K_EQUALS):
-            self.controller.speed_up()
-        elif key == pygame.K_MINUS:
-            self.controller.speed_down()
         elif key == pygame.K_m:
             self._toggle_map_menu()
 
     def _handle_menu_key(self, key: int) -> None:
         """Navigate and confirm selections in the open map menu."""
-        if key in (pygame.K_ESCAPE, pygame.K_m):
+        if key == pygame.K_ESCAPE:
+            if not self.menu.ascend():
+                self.menu.close()
+        elif key == pygame.K_m:
             self.menu.close()
         elif key in (pygame.K_UP, pygame.K_DOWN):
             self.menu.move(1 if key == pygame.K_DOWN else -1)
@@ -271,21 +283,34 @@ class MapViewer:
             self._select_menu_map()
 
     def _toggle_map_menu(self) -> None:
-        """Open the map picker with fresh options, or close it."""
-        self.menu.options = list_maps(self.maps_root)
+        """Open the folder picker fresh, or close it."""
+        folders = list_map_folders(self.maps_root)
         if self.menu.visible:
             self.menu.close()
             return
-        if not self.menu.options:
+        if not folders:
             return
-        if self.current_map in self.menu.options:
-            self.menu.selected = self.menu.options.index(self.current_map)
+        self.menu = MapMenu(folders)
+        folder = self._current_folder()
+        if folder in self.menu.options:
+            self.menu.selected = self.menu.options.index(folder)
         self.menu.open()
 
+    def _current_folder(self) -> str | None:
+        """Return the relative folder of the current map, or None."""
+        if self.current_map is None:
+            return None
+        return str(Path(self.current_map).parent)
+
     def _select_menu_map(self) -> None:
-        """Load the highlighted map and close the menu."""
+        """Descend into a folder, or load the highlighted map."""
         name = self.menu.current()
         if name is None:
+            return
+        if self.menu.at_root():
+            maps = list_maps_in_folder(self.maps_root, name)
+            if maps:
+                self.menu.descend(maps)
             return
         self.menu.close()
         if name == self.current_map:
@@ -334,14 +359,10 @@ class MapViewer:
 
     def _legend_rows(self) -> list[tuple[str, str]]:
         """Return the key legend as (key, action) rows."""
-        speed = SPEEDS[self.controller.speed_index]
-        rows = [
-            ("SPACE", "PLAY/PAUSE"),
-            ("BKSP", "STEP -1"),
-            ("+/-", f"SPEED {speed:g}x"),
+        return [
+            ("<-/->", "STEP -/+"),
             ("M", "MAPS"),
         ]
-        return rows
 
     def _hud_row_ys(self) -> tuple[int, int, int]:
         """Return the top-y of the three stacked HUD rows."""
@@ -353,6 +374,17 @@ class MapViewer:
             base + line_height + gap,
             base + 2 * (line_height + gap),
         )
+
+    def _turn_readout(self) -> str:
+        """Return the HUD readout for the current turn.
+
+        The initial turn (0, before any step) reads "READY"; later turns
+        read ``TURN {n}``.
+        """
+        if self.controller.sim is None:
+            return "READY"
+        turn = self.controller.sim.state.turn
+        return "READY" if turn == 0 else f"TURN {turn}"
 
     def _draw_hud(self, surface: pygame.Surface) -> None:
         """Draw the bottom HUD bar: three stacked rows."""
@@ -375,13 +407,7 @@ class MapViewer:
                 text, (LEGEND_PADDING + label.get_width() + 4, y_msg)
             )
 
-        turn = (
-            self.controller.sim.state.turn
-            if self.controller.sim is not None
-            else 0
-        )
-        speed = SPEEDS[self.controller.speed_index]
-        readout = f"TURN {turn}   SPEED {speed:g}x"
+        readout = self._turn_readout()
         surface.blit(
             self.legend_font.render(readout, True, _GOLD),
             (LEGEND_PADDING, y_stat),
@@ -401,8 +427,16 @@ class MapViewer:
             return
         options = self.menu.options
         line_height = self.font.get_height()
-        title = "SELECT MAP"
+        if self.menu.at_root():
+            title = "SELECT FOLDER"
+        else:
+            folder = self._current_folder()
+            title = "SELECT MAP"
+            if folder is not None:
+                title = f"SELECT MAP — {Path(folder).name}"
         hint = "UP/DOWN  ENTER  ESC"
+        if not self.menu.at_root():
+            hint = "UP/DOWN  ENTER  ESC BACK"
         widths = [self.font.size(text)[0] for text in options]
         widths += [self.font.size(title)[0], self.font.size(hint)[0]]
         box_w = max(widths) + 2 * MENU_PADDING
@@ -419,7 +453,9 @@ class MapViewer:
         for index, option in enumerate(options):
             marker = ">" if index == self.menu.selected else " "
             color = _ROSE if index == self.menu.selected else _TEXT
-            label = self.font.render(f"{marker} {option}", True, color)
+            label = self.font.render(
+                f"{marker} {Path(option).name}", True, color
+            )
             surface.blit(label, (left + MENU_PADDING, y))
             y += line_height
         hint_label = self.font.render(hint, True, _MUTED)
@@ -452,12 +488,11 @@ class MapViewer:
     def run(self) -> None:
         """Run the frame loop until the window is closed."""
         while self.running:
-            dt = self.clock.tick(30)
+            self.clock.tick(30)
             self._prune_error()
             self._prune_status()
             for event in pygame.event.get():
                 self._handle_event(event)
-            self.controller.auto_step(dt, self.fleet)
             self._render()
             pygame.display.flip()
         pygame.quit()
@@ -466,22 +501,16 @@ class MapViewer:
 def run(map_path: str) -> None:
     """Open a viewer for the map's directory and run until closed.
 
-    ``map_path`` is the relative path from the maps root (e.g.,
-    "maps/easy/01_linear_path.txt" or "personal/example.txt").
-    The maps root is the directory containing both "maps/" and "personal/"
-    subdirectories (e.g., for "maps/easy/a.txt", root is "maps").
+    ``map_path`` is the path to a map file. The maps root is resolved to
+    the directory directly containing the ``maps/`` catalogue (e.g., for
+    "maps/easy/a.txt", root is the directory above "maps/"), so the
+    picker can list every difficulty folder plus "personal".
 
     Args:
-        map_path: Relative path from the maps root to the map file.
+        map_path: Path to the map file, absolute or relative.
     """
     path = Path(map_path).resolve()
-    maps_root = None
-    for parent in path.parents:
-        if (parent / "maps").is_dir() and (parent / "personal").is_dir():
-            maps_root = parent
-            break
-    if maps_root is None:
-        maps_root = Path("maps").resolve()
+    maps_root = resolve_maps_root(map_path)
     try:
         starting_map: str = str(path.relative_to(maps_root))
     except ValueError:
