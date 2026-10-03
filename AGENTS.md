@@ -147,8 +147,10 @@ Locked decisions (do not re-litigate):
 
 - **Before committing:** show the commit message and wait for explicit
   approval before running `git commit`.
-- **Docstrings:** every class, method, and function must have one. 4
-  lines max — state what, not how.
+- **Docstrings:** every class, method, and function must have one.
+  Public API uses Google style — purpose summary plus `Args:`/`Returns:`
+  sections (subject III.1, PEP 257). Private (`_`-prefixed) helpers
+  stay concise: state what, not how.
 - **Test-driven:** write tests in `tests/` before implementing; run
   `uv run pytest tests` (not `make test`).
 - **After any code change:** run `make lint` and fix all issues before

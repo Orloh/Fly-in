@@ -14,6 +14,12 @@ def parse_map(path: str) -> ParsedMap:
     """Parse a map file into a ParsedMap.
 
     Any malformed content raises ParseError(line_number, <message>).
+
+    Args:
+        path: Path to the map file.
+
+    Returns:
+        The parsed map structure.
     """
     with open(path, "r", encoding="utf-8") as file:
         content_lines: list[tuple[int, str]] = []

@@ -15,9 +15,20 @@ class ParseError(Exception):
     """
 
     def __init__(self, line_number: int, message: str) -> None:
+        """Record the offending line number and diagnostic message.
+
+        Args:
+            line_number: The map file line where the error occurred.
+            message: A human-readable description of the failure.
+        """
         super().__init__(message)
         self.line_number = line_number
         self.message = message
 
     def __str__(self) -> str:
+        """Return the formatted ``line N: message`` diagnostic.
+
+        Returns:
+            The formatted error line.
+        """
         return f"line {self.line_number}: {self.message}"

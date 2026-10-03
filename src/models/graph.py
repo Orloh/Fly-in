@@ -25,7 +25,11 @@ class Graph(BaseModel):
 
     @cached_property
     def adjacency(self) -> dict[str, list[str]]:
-        """Map each zone name to its list of reachable neighbor names."""
+        """Map each zone name to its list of reachable neighbor names.
+
+        Returns:
+            Zone name to list of neighbor names.
+        """
         adj: dict[str, list[str]] = {name: [] for name in self.zones}
         for zone_a, zone_b in self.connections:
             adj[zone_a].append(zone_b)
@@ -33,11 +37,26 @@ class Graph(BaseModel):
         return adj
 
     def neighbors(self, zone_name: str) -> list[str]:
-        """Names of all zones directly connected to ``zone_name``."""
+        """Names of all zones directly connected to ``zone_name``.
+
+        Args:
+            zone_name: The zone whose neighbors to look up.
+
+        Returns:
+            The connected zone names, or an empty list.
+        """
         return self.adjacency.get(zone_name, [])
 
     def connection_between(
         self, zone_a: str, zone_b: str
     ) -> Connection | None:
-        """The connection linking two zones, if any."""
+        """The connection linking two zones, if any.
+
+        Args:
+            zone_a: The first endpoint zone name.
+            zone_b: The second endpoint zone name.
+
+        Returns:
+            The connection between the zones, or None if absent.
+        """
         return self.connections.get(canonical_key(zone_a, zone_b))

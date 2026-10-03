@@ -11,5 +11,12 @@ def canonical_key(a: str, b: str) -> tuple[str, str]:
     """Return the canonical (sorted) key for an undirected edge.
 
     Ensures ``(a, b)`` and ``(b, a)`` produce the same key.
+
+    Args:
+        a: The first endpoint name.
+        b: The second endpoint name.
+
+    Returns:
+        The sorted ``(a, b)`` key.
     """
     return (a, b) if a <= b else (b, a)

@@ -24,6 +24,7 @@ class SimController:
     """Manages simulation state and turn progression for the GUI."""
 
     def __init__(self) -> None:
+        """Initialize an idle controller with no attached simulation."""
         self.sim: Simulation | None = None
         self.history: list[tuple[list[Drone], int]] = []
         self.playing = False
@@ -33,7 +34,11 @@ class SimController:
         self.status_visible_until: int | None = None
 
     def set_simulation(self, sim: Simulation) -> None:
-        """Attach a new simulation, resetting history and playback state."""
+        """Attach a new simulation, resetting history and playback state.
+
+        Args:
+            sim: The simulation to attach.
+        """
         self.sim = sim
         self.history = []
         self.playing = False
@@ -52,7 +57,14 @@ class SimController:
         self, fleet: list[Drone] | None
     ) -> TurnResult | None:
         """Advance one turn; return TurnResult or None if no simulation
-        or finished."""
+        or finished.
+
+        Args:
+            fleet: The current drone fleet, if any.
+
+        Returns:
+            The turn result, or None when unavailable or finished.
+        """
         if self.sim is None or fleet is None or self.sim.finished:
             return None
         snapshot = [d.model_copy(deep=True) for d in fleet]
@@ -63,7 +75,14 @@ class SimController:
         self, graph: "Graph" | None
     ) -> list[Drone] | None:
         """Rewind one turn; return restored fleet or None if no
-        history/graph."""
+        history/graph.
+
+        Args:
+            graph: The graph to rebuild the simulation with.
+
+        Returns:
+            The restored fleet, or None when unavailable.
+        """
         if self.sim is None or graph is None or not self.history:
             return None
         fleet_snap, turn = self.history.pop()
@@ -75,7 +94,11 @@ class SimController:
 
     def toggle_play(self, fleet: list[Drone] | None) -> None:
         """Toggle auto-play: pause if playing, start playing (one-turn
-        kickstart) if paused."""
+        kickstart) if paused.
+
+        Args:
+            fleet: The current drone fleet, if any.
+        """
         if self.sim is None or fleet is None:
             self.flash("Load a map first", error=False)
             return
@@ -106,7 +129,12 @@ class SimController:
         self.flash(f"Speed {SPEEDS[self.speed_index]:g}x", error=False)
 
     def auto_step(self, dt_ms: int, fleet: list[Drone] | None) -> None:
-        """Advance simulation if playing and interval elapsed."""
+        """Advance simulation if playing and interval elapsed.
+
+        Args:
+            dt_ms: Milliseconds since the last frame.
+            fleet: The current drone fleet, if any.
+        """
         if not self.playing or self.sim is None or self.sim.finished:
             return
         if fleet is None:
@@ -123,12 +151,21 @@ class SimController:
                 self.flash("Simulation complete", error=False)
 
     def flash(self, message: str, error: bool) -> None:
-        """Show a transient status/error message."""
+        """Show a transient status/error message.
+
+        Args:
+            message: The message to display.
+            error: Whether to style it as an error.
+        """
         self.status = message
         self.status_visible_until = pygame.time.get_ticks() + TOAST_DURATION_MS
 
     def flash_turn(self, result: TurnResult) -> None:
-        """Flash a summary of the turn's movements/conflicts."""
+        """Flash a summary of the turn's movements/conflicts.
+
+        Args:
+            result: The turn result to summarize.
+        """
         parts: list[str] = []
         if result.movements:
             parts.append(f"{len(result.movements)} move")

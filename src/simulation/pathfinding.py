@@ -106,6 +106,13 @@ def dist_to_goal(graph: Graph, goal: str) -> Heuristic:
 
     Edge weight u->v = enter_cost(v). Returns dict[zone, min_turns_to_goal].
     Goal zone has distance 0. Blocked zones = inf.
+
+    Args:
+        graph: The routing graph.
+        goal: The destination zone name.
+
+    Returns:
+        Zone name to minimum travel time to the goal.
     """
     heuristic_table: Heuristic = {
         zone_name: float("inf") for zone_name in graph.zones
@@ -153,6 +160,18 @@ def find_path_timed(
     Vertex/link constraints prune states and transit moves. Heuristic
     f = turn + dist[zone]; priority zones break f-ties. Returns None if
     no route exists within ``horizon``.
+
+    Args:
+        graph: The routing graph.
+        start: The starting zone name.
+        goal: The destination zone name.
+        constraints: The vertex and link constraints to honor.
+        start_turn: The turn the drone starts moving.
+        horizon: The latest turn a route may arrive.
+        dist: The heuristic table from ``dist_to_goal``.
+
+    Returns:
+        The timed route, or None when no route exists.
     """
     if graph.zones[goal].zone_type == ZoneType.BLOCKED:
         return None
@@ -235,7 +254,14 @@ def _enter_cost(zone: Zone) -> int | float:
 
 
 def sum_entry_cost(graph: Graph) -> int:
-    """Sum of entry costs over all non-blocked zones (for the horizon)."""
+    """Sum of entry costs over all non-blocked zones (for the horizon).
+
+    Args:
+        graph: The routing graph.
+
+    Returns:
+        The summed entry cost across non-blocked zones.
+    """
     total = 0
     for zone in graph.zones.values():
         cost = _enter_cost(zone)

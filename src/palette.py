@@ -61,6 +61,12 @@ def color_role(color_name: str) -> str | None:
     """Map a color name to a rose-pine role, or None for 'none'/unknown.
 
     Lowercases the input for case-insensitive matching.
+
+    Args:
+        color_name: The color name from map metadata.
+
+    Returns:
+        The matching rose-pine role, or None for unknown/'none'.
     """
     if not color_name:
         return None

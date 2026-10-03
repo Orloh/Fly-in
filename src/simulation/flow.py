@@ -50,12 +50,22 @@ class Dinic:
     """Hand-written Dinic max-flow (no external graph libraries)."""
 
     def __init__(self, n: int) -> None:
-        """Allocate the residual adjacency list for ``n`` nodes."""
+        """Allocate the residual adjacency list for ``n`` nodes.
+
+        Args:
+            n: The number of nodes in the flow network.
+        """
         self.graph: list[list[list[int]]] = [[] for _ in range(n)]
         self.forward: list[tuple[int, int, int, int]] = []
 
     def add_edge(self, u: int, v: int, cap: int) -> None:
-        """Add a directed edge ``u -> v`` with capacity ``cap``."""
+        """Add a directed edge ``u -> v`` with capacity ``cap``.
+
+        Args:
+            u: The source node index.
+            v: The target node index.
+            cap: The edge capacity.
+        """
         self.graph[u].append([v, len(self.graph[v]), cap])
         self.graph[v].append([u, len(self.graph[u]) - 1, 0])
         self.forward.append((u, v, cap, len(self.graph[u]) - 1))
@@ -101,7 +111,15 @@ class Dinic:
         return 0
 
     def max_flow(self, s: int, t: int) -> int:
-        """Return the maximum flow from ``s`` to ``t``."""
+        """Return the maximum flow from ``s`` to ``t``.
+
+        Args:
+            s: The source node index.
+            t: The sink node index.
+
+        Returns:
+            The maximum flow value.
+        """
         level: list[int] = [0] * len(self.graph)
         flow = 0
         while self._bfs(s, t, level):
@@ -119,6 +137,14 @@ class Dinic:
         Computes flow on each forward edge as ``cap - residual``, then
         recursively finds s-t paths following remaining flow with
         backtracking. The ``max_flow`` residual is left intact.
+
+        Args:
+            s: The source node index.
+            t: The sink node index.
+            count: The number of unit-flow paths to trace.
+
+        Returns:
+            The traced node paths from ``s`` to ``t``.
         """
         flow_edge: list[list[list[int]]] = [[] for _ in self.graph]
         for (u, v, cap, fwd_idx) in self.forward:
@@ -292,7 +318,11 @@ class FlowPlanner:
     """Optimal-makespan planner via quickest flow (homogeneous fleets)."""
 
     def __init__(self, graph: Graph) -> None:
-        """Store the graph for network construction."""
+        """Store the graph for network construction.
+
+        Args:
+            graph: The routing graph.
+        """
         self.graph = graph
 
     def plan(self, drones: list[Drone]) -> tuple[Schedule, list[Drone]]:
@@ -303,6 +333,12 @@ class FlowPlanner:
         returned anyway and the caller falls back to CBS. That fallback
         is by design: occupancy-based link capacity with transit > 1 is
         not expressible in anonymous max-flow (see module docstring).
+
+        Args:
+            drones: The homogeneous fleet to route.
+
+        Returns:
+            The computed schedule and the blocked drones.
         """
         if not drones:
             return Schedule(

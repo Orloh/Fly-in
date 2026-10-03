@@ -34,6 +34,14 @@ def paint(text: str, role: str, color: bool = False) -> str:
     """Wrap ``text`` in ANSI truecolor for ``role`` if ``color`` is True.
 
     No-op when ``color`` is False or role unknown.
+
+    Args:
+        text: The text to wrap.
+        role: The rose-pine role name to paint with.
+        color: Whether to enable ANSI color output.
+
+    Returns:
+        ``text`` wrapped in ANSI truecolor, or ``text`` unchanged.
     """
     if not color:
         return text
@@ -73,6 +81,13 @@ def format_map(parsed: ParsedMap, color: bool = False) -> list[str]:
     Returns lines including a trailing blank separator line.
     Zone names are painted with their ``color=`` metadata mapped to
     rose-pine roles; uncolored zones keep the line's default role.
+
+    Args:
+        parsed: The parsed map to echo.
+        color: Whether to enable ANSI color output.
+
+    Returns:
+        The map header lines, including a trailing blank separator.
     """
     lines: list[str] = []
 
@@ -122,6 +137,16 @@ def format_turn(
     restricted zone. Returns empty string when nothing to report.
     ``zone_roles`` maps zone names to rose-pine roles; default for
     unlisted zones is ``foam``.
+
+    Args:
+        result: The turn's movements and conflicts.
+        color: Whether to enable ANSI color output.
+        zone_roles: Zone name to rose-pine role mapping; unlisted
+            zones default to ``foam``.
+        in_flight: In-flight drone id to connection name pairs.
+
+    Returns:
+        The turn line, or an empty string when nothing to report.
     """
     if not result.movements and not in_flight:
         return ""
@@ -152,7 +177,14 @@ def _paint_connection(
 
 
 def format_makespan(makespan: int) -> str:
-    """Format the final makespan summary line."""
+    """Format the final makespan summary line.
+
+    Args:
+        makespan: The makespan turn count.
+
+    Returns:
+        The ``makespan: N`` summary line.
+    """
     return f"makespan: {makespan}"
 
 
@@ -162,6 +194,12 @@ def format_metrics(schedule: Schedule) -> list[str]:
     Returns the average moves per turn, the average turns per drone, and
     the total weighted path cost across all drones. Empty for an empty
     fleet.
+
+    Args:
+        schedule: The schedule to summarize.
+
+    Returns:
+        The metrics lines, or an empty list for an empty fleet.
     """
     actions = schedule.actions
     if not actions:
@@ -201,6 +239,14 @@ def simulate(
       yielded).
     - Deadlock guard: breaks when a turn has no movements AND no drone
       is ``IN_TRANSIT``.
+
+    Args:
+        graph: The routing graph.
+        drones: The fleet to simulate.
+        color: Whether to enable ANSI color output.
+
+    Yields:
+        One formatted line per simulation turn.
     """
     for line, _ in _simulate_raw(graph, drones, color):
         yield line
@@ -306,6 +352,16 @@ def build_output(
     exit_code is 0 for success, 1 for parse/IO errors.
     ``show_makespan`` appends a final ``makespan: N`` line;
     ``show_metrics`` appends secondary scoring metrics.
+
+    Args:
+        map_path: Path to the map file.
+        debug: Whether to collect engine conflicts for stderr.
+        color: Force enable/disable ANSI color; None = auto-detect.
+        show_makespan: Whether to append a final ``makespan: N`` line.
+        show_metrics: Whether to append secondary scoring metrics.
+
+    Returns:
+        A ``(stdout_lines, stderr_lines, exit_code)`` tuple.
     """
     use_color = _detect_color() if color is None else color
     stdout_lines: list[str] = []
@@ -352,6 +408,13 @@ def run(
     - ``color``: force enable/disable ANSI color; None = auto-detect.
     - ``show_makespan``: print a final ``makespan: N`` line.
     - ``show_metrics``: print secondary scoring metrics.
+
+    Args:
+        map_path: Path to the map file.
+        debug: Whether to print engine conflicts to stderr.
+        color: Force enable/disable ANSI color; None = auto-detect.
+        show_makespan: Whether to print a final ``makespan: N`` line.
+        show_metrics: Whether to print secondary scoring metrics.
     """
     stdout_lines, stderr_lines, exit_code = build_output(
         map_path, debug, color, show_makespan, show_metrics

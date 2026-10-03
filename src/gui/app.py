@@ -156,6 +156,13 @@ class MapViewer:
         starting_map: str | None = None,
         canvas: tuple[int, int] = DEFAULT_CANVAS,
     ) -> None:
+        """Open a resizable window and prepare the viewer state.
+
+        Args:
+            maps_root: Directory containing ``maps/`` and ``personal/``.
+            starting_map: Optional relative map path to load first.
+            canvas: The virtual low-res canvas size.
+        """
         self.maps_root = Path(maps_root)
         self.canvas = canvas
         self.map_canvas = (canvas[0], MAP_HEIGHT)
@@ -463,6 +470,9 @@ def run(map_path: str) -> None:
     "maps/easy/01_linear_path.txt" or "personal/example.txt").
     The maps root is the directory containing both "maps/" and "personal/"
     subdirectories (e.g., for "maps/easy/a.txt", root is "maps").
+
+    Args:
+        map_path: Relative path from the maps root to the map file.
     """
     path = Path(map_path).resolve()
     maps_root = None

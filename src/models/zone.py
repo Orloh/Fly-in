@@ -35,7 +35,11 @@ class Zone(BaseModel):
 
     @property
     def capacity(self) -> int | None:
-        """Occupancy limit, or None for hubs (unlimited)."""
+        """Occupancy limit, or None for hubs (unlimited).
+
+        Returns:
+            The drone capacity, or None for start/end hubs.
+        """
         if self.is_start_hub or self.is_end_hub:
             return None
         return self.max_drones

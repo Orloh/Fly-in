@@ -49,7 +49,11 @@ class Planner:
     """Optimal-makespan fleet planner via Conflict-Based Search."""
 
     def __init__(self, graph: Graph) -> None:
-        """Store the graph and prepare a heuristic cache."""
+        """Store the graph and prepare a heuristic cache.
+
+        Args:
+            graph: The routing graph.
+        """
         self.graph = graph
         self._dist_cache: dict[str, Heuristic] = {}
         self._horizon = 1
@@ -63,6 +67,12 @@ class Planner:
         cost-consistency and used only if sound, otherwise CBS runs. Any
         other fleet runs CBS. Drones with no spatial route are marked
         BLOCKED with a ``blocked_reason`` and excluded from the search.
+
+        Args:
+            drones: The fleet to route.
+
+        Returns:
+            The computed schedule and the blocked drones.
         """
         if self._is_homogeneous(drones):
             schedule, blocked = self._plan_flow(drones)

@@ -17,12 +17,20 @@ def layout(
     height: int,
     padding: int = 40,
 ) -> dict[str, tuple[int, int]]:
-    """
-    Map zone coordinates onto pixel positions fitted to the window.
+    """Map zone coordinates onto pixel positions fitted to the window.
 
     Uses a uniform scale so the map's aspect ratio is preserved. World
     +y maps upward on screen. Empty, single-point, and degenerate
     inputs are handled gracefully.
+
+    Args:
+        points: Zone name to world coordinate mapping.
+        width: The target canvas width in pixels.
+        height: The target canvas height in pixels.
+        padding: The margin to leave around the rendered map.
+
+    Returns:
+        Zone name to pixel position mapping.
     """
     if not points:
         return {}

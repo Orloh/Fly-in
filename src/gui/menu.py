@@ -14,7 +14,12 @@ class MapMenu:
     def __init__(
         self, options: list[str], selected: int = 0
     ) -> None:
-        """Start closed, highlighting ``options[selected]``."""
+        """Start closed, highlighting ``options[selected]``.
+
+        Args:
+            options: The selectable map names.
+            selected: The index to highlight initially.
+        """
         self.options = options
         self.selected = selected
         self.visible = False
@@ -32,14 +37,22 @@ class MapMenu:
         self.visible = False
 
     def move(self, delta: int) -> None:
-        """Move the highlight by ``delta``, clamped to the list bounds."""
+        """Move the highlight by ``delta``, clamped to the list bounds.
+
+        Args:
+            delta: The signed number of rows to move.
+        """
         if not self.options:
             return
         target = self.selected + delta
         self.selected = min(max(target, 0), len(self.options) - 1)
 
     def current(self) -> str | None:
-        """Return the highlighted option, or None when empty."""
+        """Return the highlighted option, or None when empty.
+
+        Returns:
+            The highlighted map name, or None when no options exist.
+        """
         if not self.options:
             return None
         return self.options[self.selected]

@@ -23,7 +23,11 @@ class Drone(BaseModel):
 
     @property
     def arrived(self) -> bool:
-        """Whether the drone has reached its target zone."""
+        """Whether the drone has reached its target zone.
+
+        Returns:
+            True when the drone's status is ``ARRIVED``.
+        """
         return self.status == DroneStatus.ARRIVED
 
 

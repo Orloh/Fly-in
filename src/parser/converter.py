@@ -21,7 +21,14 @@ from src.parser.errors import ParseError
 
 
 def build_graph(parsed: ParsedMap) -> tuple[Graph, list[Drone]]:
-    """Convert a parsed map into a Graph and a fleet of drones."""
+    """Convert a parsed map into a Graph and a fleet of drones.
+
+    Args:
+        parsed: The parsed map to convert and validate.
+
+    Returns:
+        The validated ``Graph`` and the drone fleet.
+    """
     start_zone = _convert_zone(parsed.start_hub, is_start=True, is_end=False)
     end_zone = _convert_zone(parsed.end_hub, is_start=False, is_end=True)
 

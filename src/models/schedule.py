@@ -65,7 +65,11 @@ class Schedule(BaseModel):
         return zone_time, link_time
 
     def is_conflict_free(self) -> bool:
-        """Whether no zone/link exceeds capacity at any turn."""
+        """Whether no zone/link exceeds capacity at any turn.
+
+        Returns:
+            True when every zone and link stays within capacity.
+        """
         zone_time, link_time = self._occupancy()
         for (zone_name, turn), count in zone_time.items():
             zone = self.graph.zones.get(zone_name)
@@ -87,6 +91,9 @@ class Schedule(BaseModel):
         A drone whose goal is a finite-capacity zone is parked there for
         all turns >= arrival, so it must not be exceeded by arrivals at
         later turns.
+
+        Returns:
+            True when no finite-capacity goal is exceeded.
         """
         zone_time, _ = self._occupancy()
         for (zone_name, turn), count in zone_time.items():

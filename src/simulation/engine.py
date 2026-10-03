@@ -45,7 +45,13 @@ class Simulation:
         drones: list[Drone],
         planner: PlannerProtocol | None = None,
     ) -> None:
-        """Plan an optimal Schedule and prepare the replay state."""
+        """Plan an optimal Schedule and prepare the replay state.
+
+        Args:
+            graph: The routing graph.
+            drones: The fleet to simulate.
+            planner: The planner to use; defaults to ``Planner``.
+        """
         self.graph = graph
         planner = planner or Planner(graph)
         schedule, blocked = planner.plan(drones)
@@ -61,7 +67,11 @@ class Simulation:
 
     @property
     def finished(self) -> bool:
-        """Whether every drone has arrived at its target zone."""
+        """Whether every drone has arrived at its target zone.
+
+        Returns:
+            True when all drones have arrived, or the fleet is empty.
+        """
         if not self.state.drones:
             return True
         return all(
@@ -70,7 +80,11 @@ class Simulation:
         )
 
     def step(self) -> TurnResult:
-        """Advance one turn and return its movements and conflicts."""
+        """Advance one turn and return its movements and conflicts.
+
+        Returns:
+            The movements and conflicts reported on this turn.
+        """
         self.state.turn += 1
         movements: list[Movement] = []
         conflicts: list[Conflict] = []

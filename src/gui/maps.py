@@ -27,13 +27,18 @@ MAP_SUBDIRS = ("maps", "personal")
 
 
 def list_maps(maps_root: str | Path) -> list[str]:
-    """
-    Return the sorted relative paths of every ``*.txt`` file under
-    ``maps_root/maps/`` and ``maps_root/personal/``.
+    """Return the sorted relative paths of every ``*.txt`` map file.
 
-    Missing or empty directories yield an empty list; files in
-    subdirectories are included with their relative path from
-    ``maps_root`` (e.g. ``"maps/easy/01_linear_path.txt"``).
+    Searches ``maps_root/maps/`` and ``maps_root/personal/``. Missing or
+    empty directories yield an empty list; files in subdirectories are
+    included with their relative path from ``maps_root`` (e.g.
+    ``"maps/easy/01_linear_path.txt"``).
+
+    Args:
+        maps_root: Root directory containing ``maps/`` and ``personal/``.
+
+    Returns:
+        The sorted relative paths of all found map files.
     """
     root = Path(maps_root)
     results: list[str] = []
@@ -57,12 +62,20 @@ def load_map(
     rel_path: str | Path,
     canvas: tuple[int, int] = DEFAULT_CANVAS,
 ) -> tuple[LoadedMap | None, str | None]:
-    """
-    Load and lay out a map by relative path from maps_root.
+    """Load and lay out a map by relative path from maps_root.
 
     Parses the file, converts it to a graph + fleet, and maps world
     coordinates onto the canvas. Any parse or IO failure yields
     ``(None, message)`` instead of raising.
+
+    Args:
+        maps_root: Root directory containing ``maps/`` and ``personal/``.
+        rel_path: The map file's relative path from ``maps_root``.
+        canvas: The virtual canvas size to lay the map onto.
+
+    Returns:
+        A ``(loaded_map, error_message)`` tuple; on failure the loaded
+        map is None and the message describes the problem.
     """
     root = Path(maps_root)
     path = root / rel_path
