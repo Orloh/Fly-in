@@ -174,12 +174,15 @@ Defined in `input_format.md`. Key rules:
 - **Exports:** `format_map`, `format_turn`, `simulate`, `run`, plus
   `PALETTE`/`paint` for ANSI truecolor.
 - **Format:** per-turn line `D{id}-{to_zone} ...` (drone-id order); map
-  header echoed first (normalized from `ParsedMap`); blank line for
-  turns with no movements (in-transit only).
+  header echoed first (normalized from `ParsedMap`). Drones still
+  transiting toward a restricted zone are listed as `D{id}-{from}-{to}`
+  (the connection name). Blank line only for turns with no movements
+  and no in-flight drones.
 - **Zone-name coloring:** a zone's `color=` metadata maps to a rose-pine
   role (red→rose, blue→iris, green→pine, cyan→foam, gold→gold, plus
-  synonyms). The zone NAME token is painted in the map header and in
-  `D{id}-{to_zone}` lines.
+  synonyms). The zone NAME token is painted in the map header, in
+  `D{id}-{to_zone}` lines, and per endpoint in `D{id}-{from}-{to}`
+  in-flight connection lines.
 - **Termination:** deadlock guard — break when a turn yields no
   movements AND no drone is `IN_TRANSIT`. Final arrival turn with no
   movements is not printed.
