@@ -103,6 +103,11 @@ def _key(key: int) -> pygame_event.Event:
     return pygame_event.Event(pygame.KEYDOWN, key=key, mod=0)
 
 
+def _key_mod(key: int, mod: int) -> pygame_event.Event:
+    """Build a KEYDOWN event with a modifier mask."""
+    return pygame_event.Event(pygame.KEYDOWN, key=key, mod=mod)
+
+
 class TestMapViewer:
     """Smoke tests for the pygame map viewer window state."""
 
@@ -245,6 +250,62 @@ class TestMapViewer:
 
         assert viewer.running is False
 
+    def test_ctrl_c_quits_when_menu_closed(self, tmp_path: Path) -> None:
+        _make_maps(tmp_path, ["a.txt"])
+        viewer = MapViewer(tmp_path, starting_map="maps/easy/a.txt")
+
+        viewer._handle_event(
+            _key_mod(pygame.K_c, pygame.KMOD_CTRL)
+        )
+
+        assert viewer.running is False
+
+    def test_ctrl_c_closes_open_menu_first(self, tmp_path: Path) -> None:
+        _make_maps(tmp_path, ["a.txt", "b.txt"])
+        viewer = MapViewer(tmp_path, starting_map="maps/easy/a.txt")
+
+        viewer._handle_event(_key(pygame.K_m))
+        assert viewer.menu.visible is True
+        viewer._handle_event(
+            _key_mod(pygame.K_c, pygame.KMOD_CTRL)
+        )
+
+        assert viewer.menu.visible is False
+        assert viewer.running is True
+
+    def test_plain_c_key_is_noop(self, tmp_path: Path) -> None:
+        _make_maps(tmp_path, ["a.txt"])
+        viewer = MapViewer(tmp_path, starting_map="maps/easy/a.txt")
+
+        viewer._handle_event(_key(pygame.K_c))
+
+        assert viewer.running is True
+
+    def test_interrupt_quits_pygame_cleanly(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """A terminal SIGINT exits with code 130 after pygame.quit()."""
+        _make_maps(tmp_path, ["a.txt"])
+        viewer = MapViewer(tmp_path, starting_map="maps/easy/a.txt")
+
+        def _interrupt() -> None:
+            raise KeyboardInterrupt
+
+        monkeypatch.setattr(viewer, "_render", _interrupt)
+        quit_called = False
+
+        def _fake_quit() -> None:
+            nonlocal quit_called
+            quit_called = True
+
+        monkeypatch.setattr(pygame, "quit", _fake_quit)
+
+        with pytest.raises(SystemExit) as exc:
+            viewer.run()
+
+        assert exc.value.code == 130
+        assert quit_called is True
+
     def test_m_on_empty_dir_opens_no_menu(self, tmp_path: Path) -> None:
         viewer = MapViewer(tmp_path)
 
@@ -371,6 +432,31 @@ class TestMapViewer:
         )
         assert {_in_transit_fraction(d) for d in transit} == {0.5}
 
+    def test_just_launched_drones_use_node_ring(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """In-transit drones still at their launch node (fraction 0) do
+        not get a perpendicular stack."""
+        _write_map(tmp_path / "maps" / "easy" / "a.txt", MULTI_LANE_MAP)
+        viewer = MapViewer(tmp_path, starting_map="maps/easy/a.txt")
+        assert viewer.fleet is not None
+
+        for _ in range(2):
+            viewer._handle_event(_key(pygame.K_RIGHT))
+        assert all(_in_transit_fraction(d) == 0.0 for d in viewer.fleet)
+
+        called = False
+
+        def _boom(*args: object, **kwargs: object) -> tuple[int, int]:
+            nonlocal called
+            called = True
+            return (0, 0)
+
+        monkeypatch.setattr("src.gui.app._perpendicular_offset", _boom)
+        viewer._render()
+
+        assert called is False
+
     def test_right_on_finished_is_noop(self, tmp_path: Path) -> None:
         _make_maps(tmp_path, ["a.txt"])
         viewer = MapViewer(tmp_path, starting_map="maps/easy/a.txt")
@@ -393,6 +479,26 @@ class TestMapViewer:
 
         assert ("<-/->", "STEP -/+") in viewer._legend_rows()
         assert ("M", "MAPS") in viewer._legend_rows()
+        assert ("T", "LABELS") in viewer._legend_rows()
+
+    def test_t_key_toggles_labels(self, tmp_path: Path) -> None:
+        _make_maps(tmp_path, ["a.txt"])
+        viewer = MapViewer(tmp_path, starting_map="maps/easy/a.txt")
+        assert viewer.show_labels is True
+
+        viewer._handle_event(_key(pygame.K_t))
+        assert viewer.show_labels is False
+        viewer._render()
+
+        viewer._handle_event(_key(pygame.K_t))
+        assert viewer.show_labels is True
+        viewer._render()
+
+    def test_label_font_is_smaller_than_ui_font(self, tmp_path: Path) -> None:
+        _make_maps(tmp_path, ["a.txt"])
+        viewer = MapViewer(tmp_path, starting_map="maps/easy/a.txt")
+
+        assert viewer.label_font.get_height() < viewer.font.get_height()
 
     def test_readout_ready_at_start_then_turn(self, tmp_path: Path) -> None:
         _make_maps(tmp_path, ["a.txt"])

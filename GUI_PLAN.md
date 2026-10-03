@@ -59,10 +59,12 @@ retro aesthetic better than any widget set.
 |---|---|---|
 | `→` | global | Step forward one turn (drives `Simulation.step()`) |
 | `←` | global | Step back one turn (snapshot history) |
+| `T` | global | Toggle zone-name labels on/off |
 | `M` | global | Toggle the map picker (folder list refreshed on open) |
 | `↑` / `↓` | picker | Move the highlighted folder/map |
 | `ENTER` | picker | Open the highlighted folder; load the highlighted map |
 | `ESC` | picker / global | Back up to the folder list; close the picker at the top; quit when the picker is closed |
+| `Ctrl+C` | global | Quit like `ESC` (terminal `SIGINT` exits 130 after a clean `pygame.quit()`) |
 
 The bottom **HUD bar** (`_draw_hud`) shows three stacked rows:
 line 1 `Message: {turn message}` (label muted, text foam=info / rose=error),

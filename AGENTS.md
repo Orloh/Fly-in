@@ -226,8 +226,9 @@ Defined in `input_format.md`. Key rules:
   `src/palette.py`).
 - **Controls:** `←`/`→` step back/forward one turn (no auto-play), `M`
   map picker (two-level: folder list first, then maps — ↑/↓ move,
-  ENTER open/load, ESC back/close), `ESC` quit. HUD reads `READY` at
-  turn 0, `TURN N` after.
+  ENTER open/load, ESC back/close), `T` toggle zone-name labels,
+  `ESC`/`Ctrl+C` quit (terminal `SIGINT` exits 130 after `pygame.quit()`).
+  HUD reads `READY` at turn 0, `TURN N` after.
 - **Layering:** `src/gui/` is decoupled from the engine — pure helpers
   (`transform.layout`, `maps.list_map_folders`/`list_maps_in_folder`/
   `resolve_maps_root`, `menu.MapMenu`, `controller.SimController`) plus

@@ -198,9 +198,10 @@ def _draw_drones(
 ) -> None:
     """Draw each drone as a small ringed circle at its position.
 
-    In-transit drones are drawn along their link, interpolated by hop
-    progress and stacked perpendicular to it per link; other drones sit
-    near their current zone in a golden-angle ring.
+    In-transit drones strictly between two nodes are drawn along their
+    link, interpolated by hop progress and stacked perpendicular to it
+    per link; drones at a node (parked, arrived, or just launched) sit
+    in a golden-angle ring around it.
     """
     link_ranks: dict[tuple[str, str], int] = {}
     for index, drone in enumerate(drones):
@@ -211,7 +212,12 @@ def _draw_drones(
         px, py = positions[drone.current_zone]
         dest = drone.transit_destination
         fraction = _in_transit_fraction(drone)
-        if dest is not None and fraction is not None and dest in positions:
+        if (
+            dest is not None
+            and fraction is not None
+            and fraction > 0
+            and dest in positions
+        ):
             dest_x, dest_y = positions[dest]
             px = round(px + (dest_x - px) * fraction)
             py = round(py + (dest_y - py) * fraction)
@@ -265,6 +271,8 @@ class MapViewer:
         self.map_surface = pygame.Surface(canvas)
         self.font = pygame.font.Font(str(_FONT_PATH), 8)
         self.legend_font = pygame.font.Font(str(_FONT_PATH), 7)
+        self.label_font = pygame.font.Font(str(_FONT_PATH), 6)
+        self.show_labels = True
         if not self.menu.options:
             self.error = (
                 f"No map folders found in {self.maps_root}/maps/ "
@@ -310,7 +318,10 @@ class MapViewer:
         if event.type == pygame.QUIT:
             self.running = False
         elif event.type == pygame.KEYDOWN:
-            self._handle_key(event.key)
+            if event.key == pygame.K_c and event.mod & pygame.KMOD_CTRL:
+                self._handle_key(pygame.K_ESCAPE)
+            else:
+                self._handle_key(event.key)
         elif event.type == pygame.VIDEORESIZE:
             self._on_resized(event.size)
         elif event.type in (
@@ -347,6 +358,8 @@ class MapViewer:
                 self.fleet = fleet
         elif key == pygame.K_m:
             self._toggle_map_menu()
+        elif key == pygame.K_t:
+            self.show_labels = not self.show_labels
 
     def _handle_menu_key(self, key: int) -> None:
         """Navigate and confirm selections in the open map menu."""
@@ -430,7 +443,8 @@ class MapViewer:
         assert self.graph is not None
         assert self.positions is not None
         _draw_connections(surface, self.positions, self.graph)
-        _draw_labels(surface, self.font, self.positions)
+        if self.show_labels:
+            _draw_labels(surface, self.label_font, self.positions)
         _draw_zones(surface, self.positions, self.graph)
         if self.fleet is not None:
             _draw_drones(surface, self.positions, self.fleet)
@@ -440,6 +454,7 @@ class MapViewer:
         return [
             ("<-/->", "STEP -/+"),
             ("M", "MAPS"),
+            ("T", "LABELS"),
         ]
 
     def _hud_row_ys(self) -> tuple[int, int, int]:
@@ -564,16 +579,26 @@ class MapViewer:
         self.controller.prune_status()
 
     def run(self) -> None:
-        """Run the frame loop until the window is closed."""
-        while self.running:
-            self.clock.tick(30)
-            self._prune_error()
-            self._prune_status()
-            for event in pygame.event.get():
-                self._handle_event(event)
-            self._render()
-            pygame.display.flip()
-        pygame.quit()
+        """Run the frame loop until the window is closed or interrupted.
+
+        ``Ctrl+C`` in the focused window quits like ``ESC`` (via
+        ``_handle_event``); a terminal-sent ``SIGINT`` raises
+        ``KeyboardInterrupt``, which exits with code 130 after a clean
+        ``pygame.quit()``.
+        """
+        try:
+            while self.running:
+                self.clock.tick(30)
+                self._prune_error()
+                self._prune_status()
+                for event in pygame.event.get():
+                    self._handle_event(event)
+                self._render()
+                pygame.display.flip()
+        except KeyboardInterrupt:
+            raise SystemExit(130) from None
+        finally:
+            pygame.quit()
 
 
 def run(map_path: str) -> None:

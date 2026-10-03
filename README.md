@@ -135,8 +135,9 @@ D1-goal
 |-----|--------|
 | `→` | step forward one turn |
 | `←` | step back one turn |
+| `T` | toggle zone-name labels |
 | `M` | map picker (↑/↓ move, ENTER load, ESC/M close) |
-| `ESC` | quit |
+| `ESC` / `Ctrl+C` | quit |
 
 ## Visual representation
 
