@@ -294,6 +294,42 @@ class TestSimulation:
         assert sim.state.drones[1].schedule_index == 1
         assert sim.state.drones[2].schedule_index == 1
 
+    def test_replay_without_replan_keeps_original_makespan(self) -> None:
+        """Rebuilding mid-run with replan=False replays the original plan.
+
+        Re-planning would anchor a fresh schedule at turn 1 and shift a
+        resumed run's timing (extra turns); replaying the stored drone
+        schedules must finish at the original makespan.
+        """
+        graph = _graph(
+            [
+                _zone("S", start=True),
+                _zone("W1"),
+                _zone("W2"),
+                _zone("G", end=True),
+            ],
+            [("S", "W1"), ("W1", "W2"), ("W2", "G")],
+        )
+        fleet = [_drone(1, "S", "G"), _drone(2, "S", "G")]
+
+        sim = Simulation(graph, fleet)
+        while not sim.finished:
+            sim.step()
+        original = sim.state.turn
+        assert original > 0
+
+        mid = Simulation(graph, [_drone(1, "S", "G"), _drone(2, "S", "G")])
+        for _ in range(2):
+            mid.step()
+        snapshot = [d.model_copy(deep=True) for d in mid.state.drones.values()]
+        replay = Simulation(graph, snapshot, replan=False)
+        replay.state.turn = mid.state.turn
+
+        while not replay.finished:
+            replay.step()
+
+        assert replay.state.turn == original
+
     def test_safety_net_blocks_bad_schedule(self) -> None:
         """An injected over-capacity MOVE surfaces a conflict + wait."""
         graph = _graph(

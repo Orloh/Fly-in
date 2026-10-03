@@ -44,23 +44,39 @@ class Simulation:
         graph: Graph,
         drones: list[Drone],
         planner: PlannerProtocol | None = None,
+        *,
+        replan: bool = True,
     ) -> None:
         """Plan an optimal Schedule and prepare the replay state.
+
+        With ``replan=False`` the drones' existing ``schedule`` lists are
+        replayed instead of re-planning (the GUI rewind path); this keeps
+        a mid-run replay deterministic — re-planning would anchor a fresh
+        schedule at turn 1, shifting a resumed run's timing.
 
         Args:
             graph: The routing graph.
             drones: The fleet to simulate.
             planner: The planner to use; defaults to ``Planner``.
+            replan: Whether to compute a schedule (True) or replay the
+                drones' stored schedules (False).
         """
         self.graph = graph
-        planner = planner or Planner(graph)
-        schedule, blocked = planner.plan(drones)
-        for drone in drones:
-            drone.schedule = schedule.actions.get(drone.id, [])
-            drone.schedule_index = 0
-        self.schedule = schedule
+        if replan:
+            planner = planner or Planner(graph)
+            schedule, blocked = planner.plan(drones)
+            for drone in drones:
+                drone.schedule = schedule.actions.get(drone.id, [])
+                drone.schedule_index = 0
+            self.schedule = schedule
+        else:
+            self.schedule = Schedule(
+                actions={d.id: list(d.schedule) for d in drones},
+                makespan=_schedule_makespan(drones),
+                graph=graph,
+            )
         self._schedule_zone_time, self._schedule_link_time = (
-            schedule._occupancy()
+            self.schedule._occupancy()
         )
         self.state = SimulationState(drones={d.id: d for d in drones})
         self._blocked_reported: set[int] = set()
@@ -226,3 +242,19 @@ class Simulation:
             self.state.completed_drones.add(drone.id)
         else:
             drone.status = DroneStatus.WAITING
+
+
+def _schedule_makespan(drones: list[Drone]) -> int:
+    """The latest arrival turn across the drones' stored schedules.
+
+    Returns:
+        The maximum ``turn + turns_required`` over every MOVE action,
+        or 0 when no drone has any move scheduled.
+    """
+    makespan = 0
+    for drone in drones:
+        for action in drone.schedule:
+            if action.kind != "MOVE":
+                continue
+            makespan = max(makespan, action.turn + action.turns_required)
+    return makespan
