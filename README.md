@@ -76,8 +76,9 @@ D1-goal D2-waypoint2
 D2-goal
 ```
 
-With `--map --makespan` the same run prepends the header and appends
-the makespan:
+With `--map --stats` the same run prepends the header and appends a
+stats block (blank line, `==Stats==` header, secondary metrics, and the
+makespan):
 
 ```
 nb_drones: 2
@@ -93,6 +94,11 @@ D1-waypoint1
 D1-waypoint2 D2-waypoint1
 D1-goal D2-waypoint2
 D2-goal
+
+==Stats==
+moves_per_turn: 1.20
+avg_turns_per_drone: 4.50
+total_path_cost: 6
 makespan: 5
 ```
 

@@ -23,14 +23,9 @@ def main() -> None:
         "--no-color", action="store_true", help="disable ANSI color output"
     )
     parser.add_argument(
-        "--makespan",
+        "--stats",
         action="store_true",
-        help="print the final makespan (makespan: N)",
-    )
-    parser.add_argument(
-        "--metrics",
-        action="store_true",
-        help="print secondary scoring metrics (moves/turn, avg turns, cost)",
+        help="append a stats block (==Stats== header, metrics, makespan)",
     )
     parser.add_argument(
         "--map",
@@ -52,8 +47,7 @@ def main() -> None:
         args.map,
         debug=args.debug,
         color=False if args.no_color else None,
-        show_makespan=args.makespan,
-        show_metrics=args.metrics,
+        show_stats=args.stats,
         show_map=args.show_map,
     )
 

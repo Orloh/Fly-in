@@ -188,6 +188,27 @@ def format_makespan(makespan: int) -> str:
     return f"makespan: {makespan}"
 
 
+def format_stats(schedule: Schedule) -> list[str]:
+    """Format the stats block: blank line, ``==Stats==`` header, then
+    the secondary metrics and the makespan.
+
+    Args:
+        schedule: The schedule to summarize.
+
+    Returns:
+        The stats lines, or an empty list for an empty fleet.
+    """
+    metrics = format_metrics(schedule)
+    if not metrics:
+        return []
+    return [
+        "",
+        "==Stats==",
+        *metrics,
+        format_makespan(schedule.makespan),
+    ]
+
+
 def format_metrics(schedule: Schedule) -> list[str]:
     """Format secondary scoring metrics (subject VII.6).
 
@@ -284,8 +305,7 @@ def _simulate_raw(
     graph: Graph,
     drones: list[Drone],
     color: bool = False,
-    show_makespan: bool = False,
-    show_metrics: bool = False,
+    show_stats: bool = False,
 ) -> Iterator[tuple[str, list[str]]]:
     """Internal: step simulation, yielding (line, conflicts) per turn."""
     sim = Simulation(graph, drones)
@@ -327,11 +347,9 @@ def _simulate_raw(
             result.conflicts
         )
 
-    if show_metrics:
-        for line in format_metrics(sim.schedule):
+    if show_stats:
+        for line in format_stats(sim.schedule):
             yield line, []
-    if show_makespan:
-        yield format_makespan(sim.schedule.makespan), []
 
 
 def _detect_color() -> bool:
@@ -343,24 +361,21 @@ def build_output(
     map_path: str,
     debug: bool = False,
     color: bool | None = None,
-    show_makespan: bool = False,
-    show_metrics: bool = False,
+    show_stats: bool = False,
     show_map: bool = False,
 ) -> tuple[list[str], list[str], int]:
     """Build the complete CLI output without side effects.
 
     Returns a tuple of (stdout_lines, stderr_lines, exit_code).
     exit_code is 0 for success, 1 for parse/IO errors.
-    ``show_makespan`` appends a final ``makespan: N`` line;
-    ``show_metrics`` appends secondary scoring metrics; ``show_map``
-    echoes the normalized map header before the turns.
+    ``show_stats`` appends a stats block (``==Stats==`` header, metrics,
+    makespan); ``show_map`` echoes the normalized map header first.
 
     Args:
         map_path: Path to the map file.
         debug: Whether to collect engine conflicts for stderr.
         color: Force enable/disable ANSI color; None = auto-detect.
-        show_makespan: Whether to append a final ``makespan: N`` line.
-        show_metrics: Whether to append secondary scoring metrics.
+        show_stats: Whether to append the stats block.
         show_map: Whether to echo the normalized map header first.
 
     Returns:
@@ -389,8 +404,7 @@ def build_output(
         graph,
         fleet,
         use_color,
-        show_makespan=show_makespan,
-        show_metrics=show_metrics,
+        show_stats=show_stats,
     ):
         stdout_lines.append(line)
         if debug:
@@ -403,28 +417,26 @@ def run(
     map_path: str,
     debug: bool = False,
     color: bool | None = None,
-    show_makespan: bool = False,
-    show_metrics: bool = False,
+    show_stats: bool = False,
     show_map: bool = False,
 ) -> None:
     """Parse map, run simulation, print turns.
 
     - ``debug``: print engine conflicts to stderr.
     - ``color``: force enable/disable ANSI color; None = auto-detect.
-    - ``show_makespan``: print a final ``makespan: N`` line.
-    - ``show_metrics``: print secondary scoring metrics.
+    - ``show_stats``: append the stats block (``==Stats==`` header,
+      metrics, makespan).
     - ``show_map``: echo the normalized map header before the turns.
 
     Args:
         map_path: Path to the map file.
         debug: Whether to print engine conflicts to stderr.
         color: Force enable/disable ANSI color; None = auto-detect.
-        show_makespan: Whether to print a final ``makespan: N`` line.
-        show_metrics: Whether to print secondary scoring metrics.
+        show_stats: Whether to append the stats block.
         show_map: Whether to echo the normalized map header first.
     """
     stdout_lines, stderr_lines, exit_code = build_output(
-        map_path, debug, color, show_makespan, show_metrics, show_map
+        map_path, debug, color, show_stats, show_map
     )
     for line in stdout_lines:
         print(line)
