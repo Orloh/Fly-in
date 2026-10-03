@@ -60,7 +60,7 @@ python -m src <map> [--gui] [--debug] [--no-color] [--stats] [--map]
 | `--gui` | render the map in a pygame window instead of the text CLI |
 | `--debug` | print engine conflicts to stderr |
 | `--no-color` | disable ANSI truecolor (default: auto, off on non-TTY / `NO_COLOR`) |
-| `--stats` | append a stats block after the turns: blank line, `==Stats==`, secondary metrics and the makespan |
+| `--stats` | append a stats block after the turns: blank line, `== Stats ==`, secondary metrics and the makespan |
 | `--map` | echo the normalized map header before the turns (hidden by default) |
 
 Maps ship in tiers under `maps/` (`easy/`, `medium/`, `hard/`,
@@ -94,7 +94,7 @@ D2-goal
 ```
 
 With `--map --stats` the same run prepends the header and appends a
-stats block (blank line, `==Stats==` header, secondary metrics, and the
+stats block (blank line, `== Stats ==` header, secondary metrics, and the
 makespan):
 
 ```
@@ -112,7 +112,7 @@ D1-waypoint2 D2-waypoint1
 D1-goal D2-waypoint2
 D2-goal
 
-==Stats==
+== Stats ==
 moves_per_turn: 1.20
 avg_turns_per_drone: 4.50
 total_path_cost: 6

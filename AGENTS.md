@@ -180,7 +180,7 @@ Defined in `input_format.md`. Key rules:
   `format_stats`, `simulate`, `run`, plus `PALETTE`/`paint` for ANSI
   truecolor.
 - **Stats flag:** `--stats` appends a block after the turns: a blank
-  line, `==Stats==`, the VII.6 secondary metrics (`moves_per_turn`,
+  line, `== Stats ==`, the VII.6 secondary metrics (`moves_per_turn`,
   `avg_turns_per_drone`, `total_path_cost`), and `makespan: N`.
 - **Format:** per-turn line `D{id}-{to_zone} ...` (drone-id order) only
   (subject VII.5); the map header is echoed first only with `--map`

@@ -25,7 +25,7 @@ def main() -> None:
     parser.add_argument(
         "--stats",
         action="store_true",
-        help="append a stats block (==Stats== header, metrics, makespan)",
+        help="append a stats block (== Stats == header, metrics, makespan)",
     )
     parser.add_argument(
         "--map",

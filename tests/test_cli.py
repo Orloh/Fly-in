@@ -525,7 +525,7 @@ class TestStats:
         )
         assert format_stats(schedule) == [
             "",
-            "==Stats==",
+            "== Stats ==",
             "moves_per_turn: 1.00",
             "avg_turns_per_drone: 3.50",
             "total_path_cost: 4",
@@ -562,7 +562,7 @@ class TestStats:
                 "D1-A",
                 "D1-G",
                 "",
-                "==Stats==",
+                "== Stats ==",
                 "moves_per_turn: 0.67",
                 "avg_turns_per_drone: 3.00",
                 "total_path_cost: 2",

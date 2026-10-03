@@ -189,7 +189,7 @@ def format_makespan(makespan: int) -> str:
 
 
 def format_stats(schedule: Schedule) -> list[str]:
-    """Format the stats block: blank line, ``==Stats==`` header, then
+    """Format the stats block: blank line, ``== Stats ==`` header, then
     the secondary metrics and the makespan.
 
     Args:
@@ -203,7 +203,7 @@ def format_stats(schedule: Schedule) -> list[str]:
         return []
     return [
         "",
-        "==Stats==",
+        "== Stats ==",
         *metrics,
         format_makespan(schedule.makespan),
     ]
@@ -368,7 +368,7 @@ def build_output(
 
     Returns a tuple of (stdout_lines, stderr_lines, exit_code).
     exit_code is 0 for success, 1 for parse/IO errors.
-    ``show_stats`` appends a stats block (``==Stats==`` header, metrics,
+    ``show_stats`` appends a stats block (``== Stats ==`` header, metrics,
     makespan); ``show_map`` echoes the normalized map header first.
 
     Args:
@@ -424,7 +424,7 @@ def run(
 
     - ``debug``: print engine conflicts to stderr.
     - ``color``: force enable/disable ANSI color; None = auto-detect.
-    - ``show_stats``: append the stats block (``==Stats==`` header,
+    - ``show_stats``: append the stats block (``== Stats ==`` header,
       metrics, makespan).
     - ``show_map``: echo the normalized map header before the turns.
 
