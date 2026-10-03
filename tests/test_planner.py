@@ -57,6 +57,18 @@ class TestPlannerMakespan:
         assert not blocked
         assert schedule.makespan == 7
 
+    def test_two_branches_map(self) -> None:
+        # Two branches: 3 normal nodes vs 1 restricted node, 10 drones.
+        # Capacity-bound: the normal branch pipelines ~1/turn while the
+        # restricted branch holds its link for 2 turns.
+        graph, drones = build_graph(
+            parse_map("maps/personal/two_branches.txt")
+        )
+        schedule, blocked = Planner(graph).plan(drones)
+        assert not blocked
+        assert schedule.makespan == 10
+        assert schedule.is_conflict_free()
+
 
 class TestPlannerSynthetic:
     """Synthetic unit tests for core CBS behaviors."""
