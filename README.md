@@ -44,7 +44,24 @@ make install
 make run MAP=maps/easy/01_linear_path.txt     # CLI simulation
 make gui MAP=maps/easy/01_linear_path.txt     # pixel-art GUI
 make debug MAP=maps/personal/bottleneck.txt   # pdb debugger + conflict tracing
+make stats MAP=maps/easy/01_linear_path.txt   # CLI + stats block
+make run-all                                  # all tier maps with --stats
 ```
+
+### Command line
+
+```
+python -m src <map> [--gui] [--debug] [--no-color] [--stats] [--map]
+```
+
+| Arg | Meaning |
+|-----|---------|
+| `map` (positional) | path to the map file |
+| `--gui` | render the map in a pygame window instead of the text CLI |
+| `--debug` | print engine conflicts to stderr |
+| `--no-color` | disable ANSI truecolor (default: auto, off on non-TTY / `NO_COLOR`) |
+| `--stats` | append a stats block after the turns: blank line, `==Stats==`, secondary metrics and the makespan |
+| `--map` | echo the normalized map header before the turns (hidden by default) |
 
 Maps ship in tiers under `maps/` (`easy/`, `medium/`, `hard/`,
 `challenger/`) plus regression maps in `maps/personal/`. The map format
