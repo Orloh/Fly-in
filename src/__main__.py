@@ -27,6 +27,11 @@ def main() -> None:
         action="store_true",
         help="print the final makespan (makespan: N)",
     )
+    parser.add_argument(
+        "--metrics",
+        action="store_true",
+        help="print secondary scoring metrics (moves/turn, avg turns, cost)",
+    )
     args = parser.parse_args()
 
     if args.gui:
@@ -42,6 +47,7 @@ def main() -> None:
         debug=args.debug,
         color=False if args.no_color else None,
         show_makespan=args.makespan,
+        show_metrics=args.metrics,
     )
 
 

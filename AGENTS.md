@@ -173,8 +173,11 @@ Defined in `input_format.md`. Key rules:
 
 - **Module:** `src/cli.py` — pure, testable layer mirroring
   `src/gui/app.py`.
-- **Exports:** `format_map`, `format_turn`, `simulate`, `run`, plus
-  `PALETTE`/`paint` for ANSI truecolor.
+- **Exports:** `format_map`, `format_turn`, `format_metrics`,
+  `simulate`, `run`, plus `PALETTE`/`paint` for ANSI truecolor.
+- **Summary flags:** `--makespan` appends `makespan: N`;
+  `--metrics` appends the VII.6 secondary metrics (`moves_per_turn`,
+  `avg_turns_per_drone`, `total_path_cost`).
 - **Format:** per-turn line `D{id}-{to_zone} ...` (drone-id order); map
   header echoed first (normalized from `ParsedMap`). Drones still
   transiting toward a restricted zone are listed as `D{id}-{from}-{to}`

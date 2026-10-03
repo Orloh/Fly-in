@@ -17,6 +17,7 @@ from src.models import (
     Graph,
     ParsedMap,
     ParsedZone,
+    Schedule,
     TurnResult,
 )
 from src.parser import build_graph, ParseError, parse_map
@@ -155,6 +156,40 @@ def format_makespan(makespan: int) -> str:
     return f"makespan: {makespan}"
 
 
+def format_metrics(schedule: Schedule) -> list[str]:
+    """Format secondary scoring metrics (subject VII.6).
+
+    Returns the average moves per turn, the average turns per drone, and
+    the total weighted path cost across all drones. Empty for an empty
+    fleet.
+    """
+    actions = schedule.actions
+    if not actions:
+        return []
+    n_drones = len(actions)
+    moves = 0
+    path_cost = 0
+    arrivals: list[int] = []
+    for drone_actions in actions.values():
+        arrival = 0
+        for action in drone_actions:
+            if action.kind == "MOVE":
+                moves += 1
+                path_cost += action.turns_required
+                arrival = action.turn + action.turns_required
+            else:
+                arrival = max(arrival, action.turn)
+        arrivals.append(arrival)
+    makespan = schedule.makespan
+    moves_per_turn = (moves / makespan) if makespan else 0.0
+    avg_turns = sum(arrivals) / n_drones
+    return [
+        f"moves_per_turn: {moves_per_turn:.2f}",
+        f"avg_turns_per_drone: {avg_turns:.2f}",
+        f"total_path_cost: {path_cost}",
+    ]
+
+
 def simulate(
     graph: Graph, drones: list[Drone], color: bool = False
 ) -> Iterator[str]:
@@ -204,6 +239,7 @@ def _simulate_raw(
     drones: list[Drone],
     color: bool = False,
     show_makespan: bool = False,
+    show_metrics: bool = False,
 ) -> Iterator[tuple[str, list[str]]]:
     """Internal: step simulation, yielding (line, conflicts) per turn."""
     sim = Simulation(graph, drones)
@@ -245,6 +281,9 @@ def _simulate_raw(
             result.conflicts
         )
 
+    if show_metrics:
+        for line in format_metrics(sim.schedule):
+            yield line, []
     if show_makespan:
         yield format_makespan(sim.schedule.makespan), []
 
@@ -259,12 +298,14 @@ def build_output(
     debug: bool = False,
     color: bool | None = None,
     show_makespan: bool = False,
+    show_metrics: bool = False,
 ) -> tuple[list[str], list[str], int]:
     """Build the complete CLI output without side effects.
 
     Returns a tuple of (stdout_lines, stderr_lines, exit_code).
     exit_code is 0 for success, 1 for parse/IO errors.
-    ``show_makespan`` appends a final ``makespan: N`` line.
+    ``show_makespan`` appends a final ``makespan: N`` line;
+    ``show_metrics`` appends secondary scoring metrics.
     """
     use_color = _detect_color() if color is None else color
     stdout_lines: list[str] = []
@@ -285,7 +326,11 @@ def build_output(
 
     # Simulation turns
     for line, conflicts in _simulate_raw(
-        graph, fleet, use_color, show_makespan=show_makespan
+        graph,
+        fleet,
+        use_color,
+        show_makespan=show_makespan,
+        show_metrics=show_metrics,
     ):
         stdout_lines.append(line)
         if debug:
@@ -299,15 +344,17 @@ def run(
     debug: bool = False,
     color: bool | None = None,
     show_makespan: bool = False,
+    show_metrics: bool = False,
 ) -> None:
     """Parse map, run simulation, print turns.
 
     - ``debug``: print engine conflicts to stderr.
     - ``color``: force enable/disable ANSI color; None = auto-detect.
     - ``show_makespan``: print a final ``makespan: N`` line.
+    - ``show_metrics``: print secondary scoring metrics.
     """
     stdout_lines, stderr_lines, exit_code = build_output(
-        map_path, debug, color, show_makespan
+        map_path, debug, color, show_makespan, show_metrics
     )
     for line in stdout_lines:
         print(line)

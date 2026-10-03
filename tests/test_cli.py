@@ -14,6 +14,8 @@ from src.models import (
     ParsedConnection,
     ParsedMap,
     ParsedZone,
+    Schedule,
+    ScheduledAction,
     TurnResult,
     Zone,
     ZoneType,
@@ -24,6 +26,7 @@ from src.cli import (
     format_map,
     format_turn,
     format_makespan,
+    format_metrics,
     simulate,
     run,
     build_output,
@@ -418,6 +421,76 @@ class TestMakespan:
             stdout2, _, code2 = build_output(str(path))
             assert code2 == 0
             assert stdout2[-1] != "makespan: 3"
+
+
+class TestMetrics:
+    def test_format_metrics(self) -> None:
+        graph = _graph(
+            [_zone("S", start=True), _zone("A"), _zone("G", end=True)],
+            [("S", "A"), ("A", "G")],
+        )
+        schedule = Schedule(
+            graph=graph,
+            makespan=4,
+            actions={
+                1: [
+                    ScheduledAction(
+                        kind="MOVE", turn=1, from_zone="S",
+                        to_zone="A", turns_required=1,
+                    ),
+                    ScheduledAction(
+                        kind="MOVE", turn=2, from_zone="A",
+                        to_zone="G", turns_required=1,
+                    ),
+                ],
+                2: [
+                    ScheduledAction(
+                        kind="MOVE", turn=1, from_zone="S",
+                        to_zone="A", turns_required=1,
+                    ),
+                    ScheduledAction(
+                        kind="MOVE", turn=3, from_zone="A",
+                        to_zone="G", turns_required=1,
+                    ),
+                ],
+            },
+        )
+        assert format_metrics(schedule) == [
+            "moves_per_turn: 1.00",
+            "avg_turns_per_drone: 3.50",
+            "total_path_cost: 4",
+        ]
+
+    def test_format_metrics_empty_fleet(self) -> None:
+        graph = _graph(
+            [_zone("S", start=True), _zone("G", end=True)],
+            [("S", "G")],
+        )
+        schedule = Schedule(graph=graph, makespan=0, actions={})
+        assert format_metrics(schedule) == []
+
+    def test_build_output_metrics_lines(self) -> None:
+        import pathlib
+        import tempfile
+
+        with tempfile.TemporaryDirectory() as tmp:
+            path = pathlib.Path(tmp) / "map.txt"
+            path.write_text(
+                "nb_drones: 1\n"
+                "start_hub: S 0 0\n"
+                "hub: A 1 0\n"
+                "end_hub: G 2 0\n"
+                "connection: S-A\n"
+                "connection: A-G\n"
+            )
+            stdout, stderr, code = build_output(
+                str(path), show_metrics=True
+            )
+            assert code == 0
+            assert stdout[-3] == "moves_per_turn: 0.67"
+            assert stdout[-2] == "avg_turns_per_drone: 3.00"
+            assert stdout[-1] == "total_path_cost: 2"
+            assert not stderr
 
 
 class TestPaint:
