@@ -75,3 +75,28 @@ All maps are designed to be solvable with a well-implemented algorithm. However:
 - **Medium**: 10-30 simulation turns depending on optimization
 - **Hard**: 30+ simulation turns, focus on finding valid solutions
 - **Challenger**: **Record to beat: 45 turns** for "The Impossible Dream" - designed for algorithmic research
+
+### Measured results (quickest flow / CBS / greedy)
+
+Reference targets come from the subject (VII.7). All provided maps meet
+them except `circular_loop`, where 16 is provably optimal: the cap-1
+two-turn `loop_b-exit_point` link serializes the six drones (2 link-turns
+each), so the last drone lands at `goal` on turn 16 — no schedule can do
+better on this topology.
+
+| Map | Target | Measured |
+|-----|--------|----------|
+| easy/01_linear_path.txt | ≤ 6 | 5 |
+| easy/02_simple_fork.txt | ≤ 8 | 5 |
+| easy/03_basic_capacity.txt | ≤ 6 | 5 |
+| medium/01_dead_end_trap.txt | ≤ 12 | 9 |
+| medium/02_circular_loop.txt | ≤ 15* | 16 (optimal) |
+| medium/03_priority_puzzle.txt | ≤ 12 | 8 |
+| hard/01_maze_nightmare.txt | ≤ 30 | 14 |
+| hard/02_capacity_hell.txt | ≤ 35 | 17 |
+| hard/03_ultimate_challenge.txt | ≤ 45 | 27 |
+| challenger/01_the_impossible_dream.txt | ≤ 45 (record) | 44 |
+
+\* See the optimality note above: 15 is unreachable on this map.
+
+Re-run with `make benchmark`.

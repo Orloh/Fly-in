@@ -3,7 +3,7 @@ PYTHON := uv run python
 MAP ?= maps/easy/01_linear_path.txt
 MAP_TIERS := easy medium hard challenger
 
-.PHONY: install run makespan run-all gui debug clean lint test
+.PHONY: install run makespan run-all gui debug clean lint test benchmark
 
 install:
 	uv sync --group dev
@@ -39,3 +39,6 @@ lint:
 
 test:
 	uv run pytest tests || true
+
+benchmark:
+	uv run pytest tests/test_benchmarks.py -q

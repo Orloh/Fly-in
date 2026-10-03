@@ -1,4 +1,6 @@
 # Medium Level 2: Circular loop with restricted zones
+# Optimal makespan is 16: the cap-1 two-turn loop_b-exit_point link
+# serializes the six drones, so the last one reaches goal on turn 16.
 nb_drones: 6
 
 start_hub: start 0 0 [color=green]

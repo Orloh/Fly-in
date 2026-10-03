@@ -10,6 +10,7 @@ make run MAP=maps/example.map   # uv run python -m src <map>
 make gui MAP=maps/example.map   # uv run python -m src --gui <map>
 make debug MAP=maps/example.map # uv run python -m pdb -m src --debug <map>
 make lint         # uv run mypy src tests && uv run flake8 src
+make benchmark   # uv run pytest tests/test_benchmarks.py (VII.7 targets)
 make clean        # nuke .venv, .mypy_cache
 make test         # uv run pytest tests || true   ← swallows failures
 ```
