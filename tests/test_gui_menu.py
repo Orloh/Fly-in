@@ -75,3 +75,58 @@ class TestMapMenu:
 
         assert menu.selected == 2
         assert menu.current() == "c.map"
+
+
+class TestMapMenuNavigation:
+    """MapMenu two-level folder/map navigation."""
+
+    def test_descend_swaps_options_and_resets_selection(self) -> None:
+        menu = MapMenu(["maps/easy", "personal"], selected=1)
+        menu.descend(["maps/easy/a.txt", "maps/easy/b.txt"])
+
+        assert menu.options == ["maps/easy/a.txt", "maps/easy/b.txt"]
+        assert menu.selected == 0
+        assert menu.at_root() is False
+        assert menu.current() == "maps/easy/a.txt"
+
+    def test_ascend_restores_parent_options_and_selection(self) -> None:
+        menu = MapMenu(["maps/easy", "personal"], selected=1)
+        menu.descend(["maps/easy/a.txt"])
+
+        assert menu.ascend() is True
+        assert menu.options == ["maps/easy", "personal"]
+        assert menu.selected == 1
+        assert menu.at_root() is True
+
+    def test_ascend_at_root_returns_false(self) -> None:
+        menu = MapMenu(["maps/easy"])
+
+        assert menu.ascend() is False
+        assert menu.options == ["maps/easy"]
+
+    def test_at_root_true_without_breadcrumb(self) -> None:
+        menu = MapMenu(["maps/easy"])
+
+        assert menu.at_root() is True
+
+    def test_multiple_levels_ascend_in_order(self) -> None:
+        menu = MapMenu(["maps/easy"])
+        menu.descend(["maps/easy/a.txt"])
+        menu.selected = 1
+        menu.descend(["maps/easy/a.txt"])
+        menu.move(-1)
+
+        assert menu.ascend() is True
+        assert menu.options == ["maps/easy/a.txt"]
+        assert menu.selected == 1
+        assert menu.ascend() is True
+        assert menu.options == ["maps/easy"]
+        assert menu.ascend() is False
+
+    def test_descend_keeps_a_copy_of_parent_options(self) -> None:
+        menu = MapMenu(["maps/easy"])
+        menu.descend(["maps/easy/a.txt"])
+        menu.options[0] = "changed.txt"
+
+        assert menu.ascend() is True
+        assert menu.options == ["maps/easy"]

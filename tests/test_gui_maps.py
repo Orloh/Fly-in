@@ -8,7 +8,13 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from src.gui.maps import list_maps, load_map
+from src.gui.maps import (
+    list_map_folders,
+    list_maps,
+    list_maps_in_folder,
+    load_map,
+    resolve_maps_root,
+)
 
 
 VALID_MAP = (
@@ -93,6 +99,137 @@ class TestListMaps:
         maps_root = tmp_path
         _write_map(maps_root / "personal" / "a.txt")
         assert list_maps(maps_root) == ["personal/a.txt"]
+
+
+class TestListMapFolders:
+    """Unit tests for top-level folder discovery."""
+
+    def test_lists_difficulty_subdirs(self, tmp_path: Path) -> None:
+        """Each maps/ subdir holding maps is a folder."""
+        maps_root = tmp_path
+        _write_map(maps_root / "maps" / "easy" / "a.txt")
+        _write_map(maps_root / "maps" / "hard" / "b.txt")
+
+        assert list_map_folders(maps_root) == ["maps/easy", "maps/hard"]
+
+    def test_personal_is_a_folder_when_it_has_maps(
+        self, tmp_path: Path
+    ) -> None:
+        """personal/ appears only when it contains map files."""
+        maps_root = tmp_path
+        _write_map(maps_root / "maps" / "easy" / "a.txt")
+        _write_map(maps_root / "personal" / "custom.txt")
+
+        assert list_map_folders(maps_root) == [
+            "maps/easy",
+            "personal",
+        ]
+
+    def test_folders_sorted(self, tmp_path: Path) -> None:
+        """Folders are sorted by relative path."""
+        maps_root = tmp_path
+        _write_map(maps_root / "maps" / "hard" / "b.txt")
+        _write_map(maps_root / "maps" / "easy" / "a.txt")
+        _write_map(maps_root / "personal" / "c.txt")
+
+        assert list_map_folders(maps_root) == [
+            "maps/easy",
+            "maps/hard",
+            "personal",
+        ]
+
+    def test_empty_subdir_is_not_a_folder(self, tmp_path: Path) -> None:
+        """A subdir with no .txt files is excluded."""
+        maps_root = tmp_path
+        (maps_root / "maps" / "empty").mkdir(parents=True)
+        _write_map(maps_root / "maps" / "easy" / "a.txt")
+
+        assert list_map_folders(maps_root) == ["maps/easy"]
+
+    def test_missing_root_returns_empty(self, tmp_path: Path) -> None:
+        """Non-existent root yields no folders."""
+        assert list_map_folders(tmp_path / "does-not-exist") == []
+
+    def test_flat_maps_without_subdirs_have_no_folders(
+        self, tmp_path: Path
+    ) -> None:
+        """Maps directly in maps/ (no subdir) surface no folder."""
+        maps_root = tmp_path
+        _write_map(maps_root / "maps" / "a.txt")
+
+        assert list_map_folders(maps_root) == []
+
+
+class TestListMapsInFolder:
+    """Unit tests for listing a folder's map files."""
+
+    def test_returns_maps_in_folder(self, tmp_path: Path) -> None:
+        """Maps inside a folder are returned sorted."""
+        maps_root = tmp_path
+        _write_map(maps_root / "maps" / "easy" / "b.txt")
+        _write_map(maps_root / "maps" / "easy" / "a.txt")
+
+        assert list_maps_in_folder(maps_root, "maps/easy") == [
+            "maps/easy/a.txt",
+            "maps/easy/b.txt",
+        ]
+
+    def test_personal_folder(self, tmp_path: Path) -> None:
+        """personal/ folder lists its flat maps."""
+        maps_root = tmp_path
+        _write_map(maps_root / "personal" / "custom.txt")
+        _write_map(maps_root / "personal" / "another.txt")
+
+        assert list_maps_in_folder(maps_root, "personal") == [
+            "personal/another.txt",
+            "personal/custom.txt",
+        ]
+
+    def test_unknown_folder_returns_empty(self, tmp_path: Path) -> None:
+        """A folder with no map files yields an empty list."""
+        maps_root = tmp_path
+        (maps_root / "maps" / "easy").mkdir(parents=True)
+        (maps_root / "maps" / "easy" / "readme.md").write_text(
+            "", encoding="utf-8"
+        )
+
+        assert list_maps_in_folder(maps_root, "maps/easy") == []
+
+    def test_missing_folder_returns_empty(self, tmp_path: Path) -> None:
+        """A non-existent folder yields an empty list."""
+        assert list_maps_in_folder(tmp_path, "maps/ghost") == []
+
+
+class TestResolveMapsRoot:
+    """Unit tests for maps-root discovery."""
+
+    def test_finds_directory_containing_maps(self, tmp_path: Path) -> None:
+        """Nearest parent with a maps/ dir becomes the root."""
+        _write_map(tmp_path / "maps" / "easy" / "a.txt")
+        map_path = tmp_path / "maps" / "easy" / "a.txt"
+
+        assert resolve_maps_root(map_path) == tmp_path.resolve()
+
+    def test_works_when_personal_is_nested(self, tmp_path: Path) -> None:
+        """personal/ inside maps/ still resolves to the outer root."""
+        _write_map(tmp_path / "maps" / "personal" / "c.txt")
+        map_path = tmp_path / "maps" / "personal" / "c.txt"
+
+        assert resolve_maps_root(map_path) == tmp_path.resolve()
+
+    def test_accepts_string_path(self, tmp_path: Path) -> None:
+        """Function accepts string paths."""
+        _write_map(tmp_path / "maps" / "easy" / "a.txt")
+        map_path = tmp_path / "maps" / "easy" / "a.txt"
+
+        assert resolve_maps_root(str(map_path)) == tmp_path.resolve()
+
+    def test_falls_back_to_maps_dir(self, tmp_path: Path) -> None:
+        """No ancestor with maps/ falls back to a local maps/ dir."""
+        _write_map(tmp_path / "personal" / "x.txt")
+        map_path = tmp_path / "personal" / "x.txt"
+
+        assert resolve_maps_root(map_path) == Path("maps").resolve()
 
 
 class TestLoadMap:
