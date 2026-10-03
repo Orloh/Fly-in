@@ -8,7 +8,7 @@ Drone fleet routing simulation. Python 3.10+, Pydantic models, `uv` package mana
 make install      # uv sync --group dev
 make run MAP=maps/example.map   # uv run python -m src <map>
 make gui MAP=maps/example.map   # uv run python -m src --gui <map>
-make debug MAP=maps/example.map # uv run python -X dev -m src --debug <map>
+make debug MAP=maps/example.map # uv run python -m pdb -m src --debug <map>
 make lint         # uv run mypy src tests && uv run flake8 src
 make clean        # nuke .venv, .mypy_cache
 make test         # uv run pytest tests || true   ← swallows failures
@@ -19,8 +19,10 @@ make test         # uv run pytest tests || true   ← swallows failures
 - **`make test` masks failures** (`|| true` in the Makefile). For a real
   pass/fail signal run `uv run pytest tests` directly.
 - **`make run`/`make debug`** run the text-based simulation (stdout:
-  map header + per-turn `D{id}-{zone}` lines). Colors auto-disable on
-  non-tty or `NO_COLOR`. Conflicts only shown with `--debug`.
+  map header + per-turn `D{id}-{zone}` lines, with `D{id}-{from}-{to}`
+  for in-flight restricted transits). `make debug` also enters pdb.
+  Colors auto-disable on non-tty or `NO_COLOR`. Conflicts only shown
+  with `--debug`.
 - **Single test:** `uv run pytest tests/test_engine.py::Class::test_name`
   or `uv run pytest tests/test_pathfinding.py -k pattern`.
 - **Required order:** edit → `make lint` (mypy + flake8) →

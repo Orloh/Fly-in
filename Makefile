@@ -26,7 +26,7 @@ gui:
 	$(PYTHON) -m src --gui $(MAP)
 
 debug:
-	$(PYTHON) -X dev -m src --debug $(MAP)
+	$(PYTHON) -m pdb -m src --debug $(MAP)
 
 clean:
 	rm -rf .venv .mypy_cache

@@ -41,7 +41,7 @@ make install
 ```
 make run MAP=maps/easy/01_linear_path.txt     # CLI simulation
 make gui MAP=maps/easy/01_linear_path.txt     # pixel-art GUI
-make debug MAP=maps/personal/bottleneck.txt   # CLI + conflict tracing
+make debug MAP=maps/personal/bottleneck.txt   # pdb debugger + conflict tracing
 ```
 
 Maps ship in tiers under `maps/` (`easy/`, `medium/`, `hard/`,
