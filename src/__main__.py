@@ -32,6 +32,12 @@ def main() -> None:
         action="store_true",
         help="print secondary scoring metrics (moves/turn, avg turns, cost)",
     )
+    parser.add_argument(
+        "--map",
+        dest="show_map",
+        action="store_true",
+        help="echo the normalized map header before the turns",
+    )
     args = parser.parse_args()
 
     if args.gui:
@@ -48,6 +54,7 @@ def main() -> None:
         color=False if args.no_color else None,
         show_makespan=args.makespan,
         show_metrics=args.metrics,
+        show_map=args.show_map,
     )
 
 

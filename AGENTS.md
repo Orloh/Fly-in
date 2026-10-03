@@ -20,10 +20,10 @@ make test         # uv run pytest tests || true   ← swallows failures
 - **`make test` masks failures** (`|| true` in the Makefile). For a real
   pass/fail signal run `uv run pytest tests` directly.
 - **`make run`/`make debug`** run the text-based simulation (stdout:
-  map header + per-turn `D{id}-{zone}` lines, with `D{id}-{from}-{to}`
-  for in-flight restricted transits). `make debug` also enters pdb.
-  Colors auto-disable on non-tty or `NO_COLOR`. Conflicts only shown
-  with `--debug`.
+  per-turn `D{id}-{zone}` lines, with `D{id}-{from}-{to}` for
+  in-flight restricted transits; add `--map` to echo the map header).
+  `make debug` also enters pdb. Colors auto-disable on non-tty or
+  `NO_COLOR`. Conflicts only shown with `--debug`.
 - **Single test:** `uv run pytest tests/test_engine.py::Class::test_name`
   or `uv run pytest tests/test_pathfinding.py -k pattern`.
 - **Required order:** edit → `make lint` (mypy + flake8) →
@@ -181,11 +181,12 @@ Defined in `input_format.md`. Key rules:
 - **Summary flags:** `--makespan` appends `makespan: N`;
   `--metrics` appends the VII.6 secondary metrics (`moves_per_turn`,
   `avg_turns_per_drone`, `total_path_cost`).
-- **Format:** per-turn line `D{id}-{to_zone} ...` (drone-id order); map
-  header echoed first (normalized from `ParsedMap`). Drones still
-  transiting toward a restricted zone are listed as `D{id}-{from}-{to}`
-  (the connection name). Blank line only for turns with no movements
-  and no in-flight drones.
+- **Format:** per-turn line `D{id}-{to_zone} ...` (drone-id order) only
+  (subject VII.5); the map header is echoed first only with `--map`
+  (normalized from `ParsedMap`). Drones still transiting toward a
+  restricted zone are listed as `D{id}-{from}-{to}` (the connection
+  name). Blank line only for turns with no movements and no in-flight
+  drones.
 - **Zone-name coloring:** a zone's `color=` metadata maps to a rose-pine
   role (red→rose, blue→iris, green→pine, cyan→foam, gold→gold, plus
   synonyms). The zone NAME token is painted in the map header, in

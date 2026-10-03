@@ -423,6 +423,50 @@ class TestMakespan:
             assert stdout2[-1] != "makespan: 3"
 
 
+class TestMapHeader:
+    def test_header_hidden_by_default(self) -> None:
+        import pathlib
+        import tempfile
+
+        with tempfile.TemporaryDirectory() as tmp:
+            path = pathlib.Path(tmp) / "map.txt"
+            path.write_text(
+                "nb_drones: 1\n"
+                "start_hub: S 0 0\n"
+                "hub: A 1 0\n"
+                "end_hub: G 2 0\n"
+                "connection: S-A\n"
+                "connection: A-G\n"
+            )
+            stdout, stderr, code = build_output(str(path))
+            # Subject VII.5 stdout is movement lines only.
+            assert code == 0
+            assert stdout == ["D1-A", "D1-G"]
+            assert not stderr
+
+    def test_show_map_echoes_header(self) -> None:
+        import pathlib
+        import tempfile
+
+        with tempfile.TemporaryDirectory() as tmp:
+            path = pathlib.Path(tmp) / "map.txt"
+            path.write_text(
+                "nb_drones: 1\n"
+                "start_hub: S 0 0\n"
+                "hub: A 1 0\n"
+                "end_hub: G 2 0\n"
+                "connection: S-A\n"
+                "connection: A-G\n"
+            )
+            stdout, stderr, code = build_output(str(path), show_map=True)
+            assert code == 0
+            assert stdout[0] == "nb_drones: 1"
+            assert stdout[1] == "start_hub: S 0 0"
+            assert "D1-A" in stdout
+            assert "D1-G" in stdout
+            assert not stderr
+
+
 class TestMetrics:
     def test_format_metrics(self) -> None:
         graph = _graph(

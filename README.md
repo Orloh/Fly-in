@@ -66,6 +66,18 @@ connection: waypoint2-goal
 ```
 
 Expected output (`make run MAP=maps/easy/01_linear_path.txt`):
+stdout carries only the movement lines (subject VII.5); add `--map` to
+echo the normalized map header first.
+
+```
+D1-waypoint1
+D1-waypoint2 D2-waypoint1
+D1-goal D2-waypoint2
+D2-goal
+```
+
+With `--map --makespan` the same run prepends the header and appends
+the makespan:
 
 ```
 nb_drones: 2

@@ -345,13 +345,15 @@ def build_output(
     color: bool | None = None,
     show_makespan: bool = False,
     show_metrics: bool = False,
+    show_map: bool = False,
 ) -> tuple[list[str], list[str], int]:
     """Build the complete CLI output without side effects.
 
     Returns a tuple of (stdout_lines, stderr_lines, exit_code).
     exit_code is 0 for success, 1 for parse/IO errors.
     ``show_makespan`` appends a final ``makespan: N`` line;
-    ``show_metrics`` appends secondary scoring metrics.
+    ``show_metrics`` appends secondary scoring metrics; ``show_map``
+    echoes the normalized map header before the turns.
 
     Args:
         map_path: Path to the map file.
@@ -359,6 +361,7 @@ def build_output(
         color: Force enable/disable ANSI color; None = auto-detect.
         show_makespan: Whether to append a final ``makespan: N`` line.
         show_metrics: Whether to append secondary scoring metrics.
+        show_map: Whether to echo the normalized map header first.
 
     Returns:
         A ``(stdout_lines, stderr_lines, exit_code)`` tuple.
@@ -377,8 +380,9 @@ def build_output(
         stderr_lines.append(f"Error: {err}")
         return stdout_lines, stderr_lines, 1
 
-    # Map header
-    stdout_lines.extend(format_map(parsed, use_color))
+    # Map header (opt-in; subject VII.5 stdout is movement lines only)
+    if show_map:
+        stdout_lines.extend(format_map(parsed, use_color))
 
     # Simulation turns
     for line, conflicts in _simulate_raw(
@@ -401,6 +405,7 @@ def run(
     color: bool | None = None,
     show_makespan: bool = False,
     show_metrics: bool = False,
+    show_map: bool = False,
 ) -> None:
     """Parse map, run simulation, print turns.
 
@@ -408,6 +413,7 @@ def run(
     - ``color``: force enable/disable ANSI color; None = auto-detect.
     - ``show_makespan``: print a final ``makespan: N`` line.
     - ``show_metrics``: print secondary scoring metrics.
+    - ``show_map``: echo the normalized map header before the turns.
 
     Args:
         map_path: Path to the map file.
@@ -415,9 +421,10 @@ def run(
         color: Force enable/disable ANSI color; None = auto-detect.
         show_makespan: Whether to print a final ``makespan: N`` line.
         show_metrics: Whether to print secondary scoring metrics.
+        show_map: Whether to echo the normalized map header first.
     """
     stdout_lines, stderr_lines, exit_code = build_output(
-        map_path, debug, color, show_makespan, show_metrics
+        map_path, debug, color, show_makespan, show_metrics, show_map
     )
     for line in stdout_lines:
         print(line)
