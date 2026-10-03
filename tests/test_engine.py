@@ -111,6 +111,7 @@ class TestSimulation:
             )
         ]
         assert sim.state.drones[1].status == DroneStatus.IN_TRANSIT
+        assert sim.state.drones[1].transit_duration == 2
         assert sim.state.link_usage[("S", "R")] == 1
 
         second = sim.step()
@@ -123,6 +124,7 @@ class TestSimulation:
                 drone_id=1, from_zone="R", to_zone="G", turns_required=1
             )
         ]
+        assert sim.state.drones[1].transit_duration == 1
 
         sim.step()
         assert sim.finished

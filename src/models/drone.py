@@ -18,6 +18,7 @@ class Drone(BaseModel):
     schedule: list[ScheduledAction] = Field(default_factory=list)
     schedule_index: int = 0
     turns_in_transit: int = 0
+    transit_duration: int = 0
     transit_destination: str | None = None
     blocked_reason: str | None = None
 

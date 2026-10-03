@@ -207,6 +207,7 @@ class Simulation:
         drone.status = DroneStatus.IN_TRANSIT
         drone.transit_destination = next_zone_name
         drone.turns_in_transit = action.turns_required
+        drone.transit_duration = action.turns_required
 
         # Track link usage (traversal direction)
         self.state.link_usage[link_key] = (
@@ -236,6 +237,8 @@ class Simulation:
 
         drone.current_zone = drone.transit_destination
         drone.transit_destination = None
+        drone.turns_in_transit = 0
+        drone.transit_duration = 0
 
         if drone.current_zone == drone.target_zone:
             drone.status = DroneStatus.ARRIVED
