@@ -26,8 +26,9 @@ from src.gui.maps import (
 )
 from src.gui.menu import MapMenu
 from src.models.drone import Drone
-from src.models.enums import ZoneType
+from src.models.enums import DroneStatus, ZoneType
 from src.models.graph import Graph
+from src.models.graph_utils import canonical_key
 from src.models.zone import Zone
 from src.palette import PALETTE, color_role
 from src.simulation.engine import Simulation
@@ -70,6 +71,9 @@ END_RING = _ROSE
 ZONE_RADIUS = 14
 DRONE_RADIUS = 5
 RING_WIDTH = 3
+
+#: Perpendicular lane spacing (px) between in-transit drones on a link.
+LINK_SPACING = 8
 
 TOAST_BG = PALETTE["surface"]
 LEGEND_PADDING = 4
@@ -134,21 +138,95 @@ def _draw_labels(
         )
 
 
+def _in_transit_fraction(drone: Drone) -> float | None:
+    """Progress of an in-transit drone along its current hop, or None.
+
+    Returns:
+        A value in [0, 1] (0 = launch zone, 1 = destination) when the
+        drone is mid-transit, or None when it occupies no link.
+    """
+    if (
+        drone.status != DroneStatus.IN_TRANSIT
+        or drone.transit_duration <= 0
+        or drone.current_zone is None
+        or drone.transit_destination is None
+    ):
+        return None
+    fraction = 1.0 - drone.turns_in_transit / drone.transit_duration
+    return min(max(fraction, 0.0), 1.0)
+
+
+def _perpendicular_offset(
+    zone_a: str,
+    zone_b: str,
+    positions: dict[str, tuple[int, int]],
+    rank: int,
+) -> tuple[int, int]:
+    """Perpendicular offset (px) for the rank-th drone on a link.
+
+    Offsets stack same-link drones into lanes across the connection:
+    alternating sides, with spacing growing by rank. Endpoints are
+    canonicalized so the side is stable regardless of traversal direction.
+
+    Args:
+        zone_a: One endpoint zone name.
+        zone_b: The other endpoint zone name.
+        positions: Zone name to pixel position mapping.
+        rank: The drone's rank among in-transit drones on this link.
+
+    Returns:
+        The pixel offset perpendicular to the link, or (0, 0) when the
+        link has zero length.
+    """
+    a, b = sorted((zone_a, zone_b))
+    ax, ay = positions[a]
+    bx, by = positions[b]
+    vx, vy = bx - ax, by - ay
+    length = math.hypot(vx, vy)
+    if length == 0:
+        return (0, 0)
+    nx, ny = -vy / length, vx / length
+    side = 1 if rank % 2 == 0 else -1
+    distance = (rank // 2 + 1) * LINK_SPACING
+    return (round(nx * side * distance), round(ny * side * distance))
+
+
 def _draw_drones(
     surface: pygame.Surface,
     positions: dict[str, tuple[int, int]],
     drones: list[Drone],
 ) -> None:
-    """Draw each drone as a small ringed circle near its current zone."""
+    """Draw each drone as a small ringed circle at its position.
+
+    In-transit drones are drawn along their link, interpolated by hop
+    progress and stacked perpendicular to it per link; other drones sit
+    near their current zone in a golden-angle ring.
+    """
+    link_ranks: dict[tuple[str, str], int] = {}
     for index, drone in enumerate(drones):
         if drone.current_zone is None:
             continue
         if drone.current_zone not in positions:
             continue
         px, py = positions[drone.current_zone]
-        dx = round(8 * math.cos(index * _GOLDEN_ANGLE))
-        dy = round(8 * math.sin(index * _GOLDEN_ANGLE))
-        center = (px + dx, py + dy)
+        dest = drone.transit_destination
+        fraction = _in_transit_fraction(drone)
+        if dest is not None and fraction is not None and dest in positions:
+            dest_x, dest_y = positions[dest]
+            px = round(px + (dest_x - px) * fraction)
+            py = round(py + (dest_y - py) * fraction)
+            key = canonical_key(drone.current_zone, dest)
+            rank = link_ranks.get(key, 0)
+            link_ranks[key] = rank + 1
+            off_x, off_y = _perpendicular_offset(
+                drone.current_zone, dest, positions, rank
+            )
+            px += off_x
+            py += off_y
+        else:
+            px += round(8 * math.cos(index * _GOLDEN_ANGLE))
+            py += round(8 * math.sin(index * _GOLDEN_ANGLE))
+        center = (px, py)
         pygame.draw.circle(surface, DRONE_COLOR, center, DRONE_RADIUS)
         pygame.draw.circle(surface, DRONE_RING, center, DRONE_RADIUS, 1)
 

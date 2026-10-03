@@ -14,8 +14,18 @@ import pygame
 import pygame.event as pygame_event
 import pytest
 
-from src.gui.app import HUD_HEIGHT, LEGEND_PADDING, MAP_HEIGHT, MapViewer, WINDOW
+from src.gui.app import (
+    HUD_HEIGHT,
+    LEGEND_PADDING,
+    LINK_SPACING,
+    MAP_HEIGHT,
+    MapViewer,
+    WINDOW,
+)
+from src.gui.app import _in_transit_fraction
+from src.gui.app import _perpendicular_offset
 from src.gui.app import run
+from src.models.drone import Drone
 from src.models.enums import DroneStatus
 
 
@@ -49,6 +59,19 @@ LINE_MAP = (
     "connection: start-waypoint1\n"
     "connection: waypoint1-waypoint2\n"
     "connection: waypoint2-goal\n"
+)
+
+#: Mirrors maps/personal/multi_lane.txt: 4 drones cross the restricted
+#: ramp-tunnel link together at max_drones/max_link_capacity 4.
+MULTI_LANE_MAP = (
+    "nb_drones: 4\n"
+    "start_hub: base 0 0\n"
+    "hub: ramp 120 0 [max_drones=4]\n"
+    "hub: tunnel 240 0 [zone=restricted max_drones=4]\n"
+    "end_hub: goal 360 0\n"
+    "connection: base-ramp [max_link_capacity=4]\n"
+    "connection: ramp-tunnel [max_link_capacity=4]\n"
+    "connection: tunnel-goal [max_link_capacity=4]\n"
 )
 
 
@@ -328,6 +351,26 @@ class TestMapViewer:
         second = _run_to_end()
         assert second == first
 
+    def test_multi_lane_drones_stack_on_link(self, tmp_path: Path) -> None:
+        """All 4 multi_lane drones sit mid-link on ramp->tunnel at once."""
+        _write_map(tmp_path / "maps" / "easy" / "a.txt", MULTI_LANE_MAP)
+        viewer = MapViewer(tmp_path, starting_map="maps/easy/a.txt")
+        assert viewer.fleet is not None
+
+        for _ in range(3):
+            viewer._handle_event(_key(pygame.K_RIGHT))
+
+        transit = [
+            d for d in viewer.fleet
+            if d.status == DroneStatus.IN_TRANSIT
+        ]
+        assert len(transit) == 4
+        assert all(
+            d.current_zone == "ramp" and d.transit_destination == "tunnel"
+            for d in transit
+        )
+        assert {_in_transit_fraction(d) for d in transit} == {0.5}
+
     def test_right_on_finished_is_noop(self, tmp_path: Path) -> None:
         _make_maps(tmp_path, ["a.txt"])
         viewer = MapViewer(tmp_path, starting_map="maps/easy/a.txt")
@@ -581,3 +624,95 @@ class TestRun:
 
         assert started["root"] == tmp_path.resolve()
         assert started["map"] == "maps/personal/c.txt"
+
+class TestInTransitFraction:
+    """Unit tests for the mid-link drone progress helper."""
+
+    def _drone(
+        self,
+        turns: int,
+        duration: int,
+        status: DroneStatus | None = None,
+    ) -> Drone:
+        status = status or DroneStatus.IN_TRANSIT
+        return Drone(
+            id=1,
+            current_zone="a",
+            target_zone="c",
+            status=status,
+            turns_in_transit=turns,
+            transit_duration=duration,
+            transit_destination="b",
+        )
+
+    def test_just_launched_is_at_origin(self) -> None:
+        assert _in_transit_fraction(self._drone(2, 2)) == 0.0
+
+    def test_halfway_through_restricted_hop(self) -> None:
+        assert _in_transit_fraction(self._drone(1, 2)) == 0.5
+
+    def test_single_turn_hop_at_origin(self) -> None:
+        assert _in_transit_fraction(self._drone(1, 1)) == 0.0
+
+    def test_fraction_clamped_to_one(self) -> None:
+        assert _in_transit_fraction(self._drone(0, 2)) == 1.0
+
+    def test_waiting_drone_is_none(self) -> None:
+        assert (
+            _in_transit_fraction(
+                self._drone(0, 0, status=DroneStatus.WAITING)
+            )
+            is None
+        )
+
+    def test_zero_duration_in_transit_is_none(self) -> None:
+        assert _in_transit_fraction(self._drone(1, 0)) is None
+
+    def test_missing_destination_is_none(self) -> None:
+        drone = Drone(
+            id=1,
+            current_zone="a",
+            target_zone="c",
+            status=DroneStatus.IN_TRANSIT,
+            turns_in_transit=1,
+            transit_duration=2,
+        )
+        assert _in_transit_fraction(drone) is None
+
+
+class TestPerpendicularOffset:
+    """Unit tests for the perpendicular lane-offset helper."""
+
+    POS = {"a": (0, 0), "b": (100, 0), "c": (30, 40)}
+
+    def test_consecutive_ranks_are_on_opposite_sides(self) -> None:
+        o0 = _perpendicular_offset("a", "b", self.POS, 0)
+        o1 = _perpendicular_offset("a", "b", self.POS, 1)
+
+        assert o0 == (0, LINK_SPACING)
+        assert o1 == (0, -LINK_SPACING)
+
+    def test_magnitude_grows_with_rank(self) -> None:
+        o0 = _perpendicular_offset("a", "b", self.POS, 0)
+        o2 = _perpendicular_offset("a", "b", self.POS, 2)
+
+        assert abs(o2[1]) == 2 * abs(o0[1])
+        assert o2[1] > 0
+
+    def test_direction_is_canonical_invariant(self) -> None:
+        forward = _perpendicular_offset("a", "b", self.POS, 0)
+        backward = _perpendicular_offset("b", "a", self.POS, 0)
+
+        assert backward == forward
+
+    def test_offset_is_perpendicular_to_link(self) -> None:
+        offset = _perpendicular_offset("a", "c", self.POS, 0)
+
+        # Link a->c runs along (0.6, 0.8); the offset dot it ≈ 0.
+        dot = offset[0] * 0.6 + offset[1] * 0.8
+        assert abs(dot) <= 1
+
+    def test_zero_length_link_is_noop(self) -> None:
+        pos = {"a": (5, 5), "b": (5, 5)}
+
+        assert _perpendicular_offset("a", "b", pos, 0) == (0, 0)

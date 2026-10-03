@@ -103,7 +103,11 @@ Frame loop (`MapViewer.run`, per tick):
    (`←`, `→`, `M`) apply.
  2. Draw the map onto the top band of the 640 × 360 canvas (rose-pine
     palette, pixel font), then the bottom HUD bar (controls, readouts,
-    message), and the picker overlay.
+    message), and the picker overlay. In-transit drones are drawn along
+    their connection, interpolated by hop progress (`_in_transit_fraction`)
+    and stacked perpendicular to it per link (`_perpendicular_offset`), so
+    restricted crossings visibly sit mid-link — with same-link drones in
+    lanes across the connection (see `maps/personal/multi_lane.txt`).
 3. `pygame.transform.scale(canvas, screen.get_size())` → blit → `flip()`.
    Load errors appear as a 5s top-center toast and the previous map
    stays current; empty `maps/` keeps a persistent toast.

@@ -1,0 +1,14 @@
+# Multi-lane illustration: 4 drones cross the restricted ramp-tunnel
+# link together. With max_drones/max_link_capacity = 4 they stay
+# synchronized, so turn 3 shows all four mid-transit on ramp-tunnel at
+# the same hop progress (a perpendicular 4-lane stack in the GUI).
+nb_drones: 4
+
+start_hub: base 0 0
+hub: ramp 120 0 [max_drones=4]
+hub: tunnel 240 0 [zone=restricted max_drones=4]
+end_hub: goal 360 0
+
+connection: base-ramp [max_link_capacity=4]
+connection: ramp-tunnel [max_link_capacity=4]
+connection: tunnel-goal [max_link_capacity=4]
