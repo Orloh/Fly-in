@@ -18,7 +18,7 @@ run-all:
 	@for dir in $(MAP_TIERS); do \
 		for map in maps/$$dir/*.txt; do \
 			echo "=== $$map ==="; \
-			$(PYTHON) -m src --makespan $$map; \
+			$(PYTHON) -m src --makespan --metrics $$map; \
 		done; \
 	done
 
