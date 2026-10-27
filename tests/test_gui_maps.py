@@ -276,7 +276,10 @@ class TestLoadMap:
         result, _ = load_map(maps_root, "maps/map.txt")
         assert result is not None
         graph, _, _ = result
-        assert set(graph.connections) == {("base", "roof1"), ("roof1", "target")}
+        assert set(graph.connections) == {
+            ("base", "roof1"),
+            ("roof1", "target"),
+        }
 
     def test_missing_file(self, tmp_path: Path) -> None:
         """Missing file returns error."""

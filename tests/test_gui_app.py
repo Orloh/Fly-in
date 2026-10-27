@@ -731,6 +731,7 @@ class TestRun:
         assert started["root"] == tmp_path.resolve()
         assert started["map"] == "maps/personal/c.txt"
 
+
 class TestInTransitFraction:
     """Unit tests for the mid-link drone progress helper."""
 

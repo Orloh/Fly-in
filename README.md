@@ -2,22 +2,23 @@
 
 # Fly-in — Drone Fleet Routing Simulation
 
+## Description
+
 A turn-based simulation that routes a fleet of drones from a start hub to
 an end hub across a network of zones and connections, minimizing the
-**makespan** — the turn the last drone arrives. Written in Python 3.10,
-fully type-checked with mypy (strict) and flake8-clean.
+**makespan** — the number of turns until the last drone arrives. Written
+in Python 3.10, fully type-checked with mypy (strict) and flake8-clean.
 
-Routing produces provably optimal-makespan plans, replayed
-deterministically by the engine. Homogeneous fleets (every drone
-start_hub → end_hub) use a **time-expanded max-flow (quickest flow)**
-solver; multi-commodity fleets fall back to **Conflict-Based Search
-(CBS)**. Both a color terminal output and a retro pixel-art GUI
-(pygame-ce) are included.
+Routing is replayed deterministically by the engine. Homogeneous fleets
+(every drone start_hub → end_hub) use a **time-expanded max-flow
+(quickest flow)** solver; multi-commodity fleets use **Conflict-Based
+Search (CBS)**, with a greedy fallback for large fleets. Both a color
+terminal output and a retro pixel-art GUI (pygame-ce) are included.
 
-## Features
+### Features
 
-- Optimal fleet routing via quickest flow (homogeneous) / CBS
-  (heterogeneous) — capacity-aware zone and link conflicts.
+- Capacity-aware fleet routing via quickest flow (homogeneous) / CBS
+  (heterogeneous), with a greedy fallback for large heterogeneous fleets.
 - Simultaneous movement with strict capacity rules per zone and link.
 - Zone types: `normal` (1), `priority` (1, preferred), `restricted` (2),
   `blocked` (inaccessible).
@@ -27,18 +28,20 @@ solver; multi-commodity fleets fall back to **Conflict-Based Search
   a map picker (Press Start 2P font, headless-testable).
 - Deterministic replays — the GUI rewind restores exact turn snapshots.
 
-## Requirements
+## Instructions
+
+### Requirements
 
 - Python 3.10+
 - [uv](https://docs.astral.sh/uv/) (package manager)
 
-## Installation
+### Installation
 
 ```
 make install
 ```
 
-## Usage
+### Usage
 
 ```
 make run MAP=maps/easy/01_linear_path.txt     # CLI simulation
@@ -48,7 +51,7 @@ make stats MAP=maps/easy/01_linear_path.txt   # CLI + stats block
 make run-all                                  # all tier maps with --stats
 ```
 
-### Command line
+#### Command line
 
 ```
 python -m src <map> [--gui] [--debug] [--no-color] [--stats] [--map]
@@ -66,6 +69,16 @@ python -m src <map> [--gui] [--debug] [--no-color] [--stats] [--map]
 Maps ship in tiers under `maps/` (`easy/`, `medium/`, `hard/`,
 `challenger/`) plus regression maps in `maps/personal/`. The map format
 is documented in `input_format.md`.
+
+#### GUI controls
+
+| Key | Action |
+|-----|--------|
+| `→` | step forward one turn |
+| `←` | step back one turn |
+| `T` | toggle zone-name labels |
+| `M` | map picker (↑/↓ move, ENTER load, ESC/M close) |
+| `ESC` / `Ctrl+C` | quit |
 
 ## Example
 
@@ -93,9 +106,8 @@ D1-goal D2-waypoint2
 D2-goal
 ```
 
-With `--map --stats` the same run prepends the header and appends a
-stats block (blank line, `== Stats ==` header, secondary metrics, and the
-makespan):
+With `--map --stats` the same run prepends the normalized map header and
+appends the secondary metrics:
 
 ```
 nb_drones: 2
@@ -113,31 +125,14 @@ D1-goal D2-waypoint2
 D2-goal
 
 == Stats ==
-moves_per_turn: 1.20
-avg_turns_per_drone: 4.50
+moves_per_turn: 1.50
+avg_turns_per_drone: 3.50
 total_path_cost: 6
-makespan: 5
+makespan: 4
 ```
 
-Restricted zones take 2 turns. A drone mid-transit is reported as
-`D<id>-<from>-<to>` (the connection name) until it lands, so a single
-drone through a restricted tunnel yields:
-
-```
-D1-tunnel
-D1-start-tunnel
-D1-goal
-```
-
-### GUI controls
-
-| Key | Action |
-|-----|--------|
-| `→` | step forward one turn |
-| `←` | step back one turn |
-| `T` | toggle zone-name labels |
-| `M` | map picker (↑/↓ move, ENTER load, ESC/M close) |
-| `ESC` / `Ctrl+C` | quit |
+Restricted zones take 2 turns. While a drone is in transit toward one,
+its connection is reported as `D<id>-<from>-<to>` in the per-turn line.
 
 ## Visual representation
 
@@ -145,9 +140,10 @@ Two complementary views of the same simulation:
 
 - **CLI (rose-pine truecolor).** Zone names are painted according to
   their `color=` metadata (red→rose, blue→iris, green→pine, cyan→foam,
-  gold→gold), drone ids are gold, and map-header `connection:` lines
-  pine. Colors make bottleneck zones and congestion visible at a glance
-  and are auto-disabled off a TTY or under `NO_COLOR`.
+  gold→gold; other names get a deterministic palette fallback), drone
+  ids are gold, and map-header `connection:` lines pine. Colors make
+  bottleneck zones and congestion visible at a glance and are
+  auto-disabled off a TTY or under `NO_COLOR`.
 - **GUI (pygame-ce).** A low-res pixel-art canvas (640×360, upscaled)
   in the Press Start 2P font. Zones are drawn as nodes, connections as
   edges, and each drone as a moving sprite; `D{id}-{zone}` hop lines
@@ -235,20 +231,13 @@ replays it as a cursor — planned waits are silent; the only conflicts are
 no-route drones (blocked) and safety-net planner bugs (visible with
 `--debug`).
 
-### Measured results
+### Benchmark checks
 
-| Map | Before (greedy) | After (flow/CBS) |
-|-----|-----------------|------------------|
-| `maps/personal/bottleneck.txt` | 19 | **11** |
-| `maps/personal/example.txt` | 5 | **4** |
-| `maps/personal/parallel_paths.txt` | 9 | 9 (optimal) |
-| `maps/personal/priority_blocked.txt` | 8 | 8 (optimal) |
-| `maps/personal/complex_cycle.txt` | 9 | 9 (optimal) |
-| `maps/personal/simple_line.txt` | 7 | 7 (optimal) |
-
-Makespans are produced by quickest flow on all-normal maps, CBS on
-restricted maps ≤ 8 drones, and the greedy fallback on flow-invalid
-maps > 8 drones (ultimate_challenge, impossible_dream — heuristic).
+Run `make benchmark` to run the tier benchmark suite. Makespans are
+produced by quickest flow on
+all-normal maps, CBS on restricted maps with small fleets, and the
+greedy fallback on flow-invalid maps with more than 8 drones (the two
+heuristic maps `ultimate_challenge` and `impossible_dream`).
 
 ## Resources
 
@@ -259,7 +248,7 @@ maps > 8 drones (ultimate_challenge, impossible_dream — heuristic).
 - CBS literature: Sharon et al., "Conflict-Based Search for Optimal
   Multi-Agent Pathfinding" (2015).
 
-## AI utilization
+### AI utilization
 
 This project was developed iteratively with an AI coding assistant
 (opencode). Concretely, AI was used for:

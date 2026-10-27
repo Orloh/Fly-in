@@ -29,13 +29,15 @@ debug:
 	$(PYTHON) -m pdb -m src --debug $(MAP)
 
 clean:
-	rm -rf .venv .mypy_cache
+	rm -rf .venv .mypy_cache .pytest_cache
 	find . -type d -name __pycache__ -exec rm -rf {} +
 	find . -type d -name '*.egg-info' -exec rm -rf {} +
 
 lint:
-	uv run mypy src tests
-	uv run flake8 src
+	uv run flake8 .
+	uv run mypy . --warn-return-any --warn-unused-ignores \
+		--ignore-missing-imports --disallow-untyped-defs \
+		--check-untyped-defs
 
 test:
 	uv run pytest tests || true
