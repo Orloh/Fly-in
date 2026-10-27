@@ -18,7 +18,7 @@ os.environ.setdefault("SDL_AUDIODRIVER", "dummy")
 
 @pytest.fixture
 def simple_graph() -> Graph:
-    """S -> A -> G (all normal, cap 1). Single drone makespan = 3."""
+    """S -> A -> G (all normal, cap 1). Single drone makespan = 2."""
     zones = {
         "S": Zone(name="S", x=0, y=0, zone_type=ZoneType.NORMAL,
                   is_start_hub=True, max_drones=1),
@@ -37,7 +37,7 @@ def simple_graph() -> Graph:
 
 @pytest.fixture
 def restricted_graph() -> Graph:
-    """S -> R -> G (R restricted, cost 2). Single drone makespan = 4."""
+    """S -> R -> G (R restricted, cost 2). Single drone makespan = 3."""
     zones = {
         "S": Zone(name="S", x=0, y=0, zone_type=ZoneType.NORMAL,
                   is_start_hub=True, max_drones=1),
@@ -57,7 +57,7 @@ def restricted_graph() -> Graph:
 
 @pytest.fixture
 def split_graph() -> Graph:
-    """Two disjoint routes S->A->G and S->B->G. 2 drones can arrive T3."""
+    """Two disjoint routes S->A->G and S->B->G. 2 drones arrive T2."""
     zones = {
         "S": Zone(name="S", x=0, y=0, zone_type=ZoneType.NORMAL,
                   is_start_hub=True, max_drones=1),
@@ -83,7 +83,7 @@ def split_graph() -> Graph:
 
 @pytest.fixture
 def head_on_graph() -> Graph:
-    """A <-> B (link cap 1). Head-on collision test, makespan = 3."""
+    """A <-> B (link cap 1). Head-on collision test, makespan = 2."""
     zones = {
         "A": Zone(name="A", x=0, y=0, zone_type=ZoneType.NORMAL, max_drones=1),
         "B": Zone(name="B", x=1, y=0, zone_type=ZoneType.NORMAL, max_drones=1),

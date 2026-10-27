@@ -8,7 +8,6 @@ from __future__ import annotations
 from src.models import (
     Connection,
     Drone,
-    DroneStatus,
     Graph,
     Movement,
     ParsedConnection,
@@ -20,7 +19,6 @@ from src.models import (
     Zone,
     ZoneType,
 )
-from src.simulation.engine import Simulation
 from src.cli import (
     paint,
     format_map,
@@ -29,7 +27,6 @@ from src.cli import (
     format_metrics,
     format_stats,
     simulate,
-    run,
     build_output,
 )
 from src.palette import (
@@ -105,7 +102,11 @@ def _parsed_conn(
     )
 
 
-def _parsed_map(nb_drones: int, zones: list[ParsedZone], conns: list[ParsedConnection]) -> ParsedMap:
+def _parsed_map(
+    nb_drones: int,
+    zones: list[ParsedZone],
+    conns: list[ParsedConnection],
+) -> ParsedMap:
     return ParsedMap(
         nb_drones=nb_drones,
         start_hub=zones[0],
@@ -148,8 +149,14 @@ class TestColorRole:
         assert color_role("none") is None
         assert color_role("NONE") is None
 
-    def test_unknown_returns_none(self) -> None:
-        assert color_role("banana") is None
+    def test_unknown_gets_deterministic_role(self) -> None:
+        role = color_role("banana")
+        assert role in PALETTE
+        assert role == color_role("BANANA")
+
+    def test_shipped_colors_are_mapped(self) -> None:
+        for name in ("brown", "crimson", "darkred", "lime", "maroon"):
+            assert color_role(name) is not None
 
     def test_synonyms_exist(self) -> None:
         # Verify all map colors from maps/*.map are covered
@@ -160,7 +167,9 @@ class TestColorRole:
 
 class TestFormatTurn:
     def test_single_movement(self) -> None:
-        result = Movement(drone_id=1, from_zone="S", to_zone="A", turns_required=1)
+        result = Movement(
+            drone_id=1, from_zone="S", to_zone="A", turns_required=1
+        )
         turn = TurnResult(turn_number=1, movements=[result])
         assert format_turn(turn) == "D1-A"
 
@@ -200,24 +209,42 @@ class TestFormatTurn:
         assert "\033[38;2;235;111;146mexit_point\033[0m" in colored
 
     def test_colored_default_foam(self) -> None:
-        result = Movement(drone_id=1, from_zone="S", to_zone="A", turns_required=1)
+        result = Movement(
+            drone_id=1, from_zone="S", to_zone="A", turns_required=1
+        )
         turn = TurnResult(turn_number=1, movements=[result])
         colored = format_turn(turn, color=True)
         # Default zone color is foam
-        assert colored.startswith("\033[38;2;246;193;119mD1\033[0m-\033[38;2;156;207;216mA\033[0m")
+        assert colored.startswith(
+            "\033[38;2;246;193;119mD1\033[0m-"
+            "\033[38;2;156;207;216mA\033[0m"
+        )
 
     def test_colored_with_zone_roles(self) -> None:
-        result = Movement(drone_id=1, from_zone="S", to_zone="A", turns_required=1)
+        result = Movement(
+            drone_id=1, from_zone="S", to_zone="A", turns_required=1
+        )
         turn = TurnResult(turn_number=1, movements=[result])
         colored = format_turn(turn, zone_roles={"A": "rose"}, color=True)
         # Zone A painted rose
-        assert colored.startswith("\033[38;2;246;193;119mD1\033[0m-\033[38;2;235;111;146mA\033[0m")
+        assert colored.startswith(
+            "\033[38;2;246;193;119mD1\033[0m-"
+            "\033[38;2;235;111;146mA\033[0m"
+        )
 
     def test_multiple_zones_different_colors(self) -> None:
-        m1 = Movement(drone_id=1, from_zone="S", to_zone="A", turns_required=1)
-        m2 = Movement(drone_id=2, from_zone="S", to_zone="B", turns_required=1)
+        m1 = Movement(
+            drone_id=1, from_zone="S", to_zone="A", turns_required=1
+        )
+        m2 = Movement(
+            drone_id=2, from_zone="S", to_zone="B", turns_required=1
+        )
         turn = TurnResult(turn_number=1, movements=[m1, m2])
-        colored = format_turn(turn, zone_roles={"A": "rose", "B": "iris"}, color=True)
+        colored = format_turn(
+            turn,
+            zone_roles={"A": "rose", "B": "iris"},
+            color=True,
+        )
         assert "\033[38;2;235;111;146mA\033[0m" in colored
         assert "\033[38;2;196;167;231mB\033[0m" in colored
 
@@ -229,7 +256,9 @@ class TestFormatMap:
             zones=[
                 _parsed_zone("base", 0, 0),
                 _parsed_zone("target", 10, 10),
-                _parsed_zone("mid", 5, 5, {"zone": "priority", "color": "blue"}),
+                _parsed_zone(
+                    "mid", 5, 5, {"zone": "priority", "color": "blue"}
+                ),
             ],
             conns=[
                 _parsed_conn("base", "mid", {"max_link_capacity": "3"}),
@@ -253,12 +282,17 @@ class TestFormatMap:
                 _parsed_zone("t", 1, 1),
             ],
             conns=[
-                _parsed_conn("s", "t", {"max_link_capacity": "2", "foo": "bar"}),
+                _parsed_conn(
+                    "s", "t", {"max_link_capacity": "2", "foo": "bar"}
+                ),
             ],
         )
         lines = format_map(pmap)
         # metadata keys sorted alphabetically
-        assert "foo=bar max_link_capacity=2" in lines[3] or "max_link_capacity=2 foo=bar" in lines[3]
+        assert (
+            "foo=bar max_link_capacity=2" in lines[3]
+            or "max_link_capacity=2 foo=bar" in lines[3]
+        )
 
     def test_colored_header(self) -> None:
         pmap = _parsed_map(
@@ -305,7 +339,7 @@ class TestFormatMap:
             ],
         )
         lines = format_map(pmap, color=True)
-        # lines: 0=nb_drones, 1=start_hub, 2=end_hub, 3=hub a, 4=hub b, 5=connection, 6=blank
+        # 0=nb_drones, 1=start, 2=end, 3=hub a, 4=hub b, 5=conn, 6=blank
         conn_line = lines[5]
         # a should be rose, b should be iris
         assert "\033[38;2;235;111;146ma\033[0m" in conn_line
@@ -341,7 +375,11 @@ class TestSimulate:
 
     def test_restricted_zone_empty_turn(self) -> None:
         graph = _graph(
-            [_zone("S", start=True), _zone("R", ZoneType.RESTRICTED), _zone("G", end=True)],
+            [
+                _zone("S", start=True),
+                _zone("R", ZoneType.RESTRICTED),
+                _zone("G", end=True),
+            ],
             [("S", "R"), ("R", "G")],
         )
         lines = list(simulate(graph, [_drone(1, "S", "G")]))
@@ -358,7 +396,9 @@ class TestSimulate:
             ],
             [("S", "R"), ("R", "G")],
         )
-        lines = list(simulate(graph, [_drone(1, "S", "G"), _drone(2, "S", "G")]))
+        lines = list(
+            simulate(graph, [_drone(1, "S", "G"), _drone(2, "S", "G")])
+        )
         # D1 leads through the cap-1 restricted link, D2 follows. D1's
         # arrival-then-replan at R is a movement, not an in-flight line.
         assert lines == ["D1-R", "D1-S-R", "D1-G D2-R", "D2-S-R", "D2-G"]
@@ -369,30 +409,54 @@ class TestSimulate:
             [_zone("S", start=True), _zone("A")],
             [("S", "A")],
         )
-        lines = list(simulate(graph, [_drone(1, "S", "A"), _drone(2, "A", "S")]))
+        lines = list(
+            simulate(
+                graph, [_drone(1, "S", "A"), _drone(2, "A", "S")]
+            )
+        )
         # D1 moves S->A, D2 blocked; D1 arrives, then D2 moves A->S
         assert "D1-A" in lines
         assert "D2-S" in lines
 
     def test_multi_drone_simultaneous(self) -> None:
         graph = _graph(
-            [_zone("S", start=True), _zone("A", max_drones=2), _zone("G", end=True)],
+            [
+                _zone("S", start=True),
+                _zone("A", max_drones=2),
+                _zone("G", end=True),
+            ],
             [("S", "A"), ("A", "G")],
             link_capacity=2,
         )
-        lines = list(simulate(graph, [_drone(1, "S", "G"), _drone(2, "S", "G")]))
+        lines = list(
+            simulate(graph, [_drone(1, "S", "G"), _drone(2, "S", "G")])
+        )
         # Both move S->A on turn 1
         assert "D1-A D2-A" in lines[0]
 
     def test_colored_turn_lines(self) -> None:
         graph = _graph(
-            [_zone("S", start=True), _zone("A", color="red"), _zone("G", end=True, color="green")],
+            [
+                _zone("S", start=True),
+                _zone("A", color="red"),
+                _zone("G", end=True, color="green"),
+            ],
             [("S", "A"), ("A", "G")],
         )
-        lines = list(simulate(graph, [_drone(1, "S", "G")], color=True))
+        lines = list(
+            simulate(graph, [_drone(1, "S", "G")], color=True)
+        )
         # A should be rose, G should be pine
-        assert any("\033[38;2;235;111;146m" in line for line in lines if "A" in line)
-        assert any("\033[38;2;49;116;143m" in line for line in lines if "G" in line)
+        assert any(
+            "\033[38;2;235;111;146m" in line
+            for line in lines
+            if "A" in line
+        )
+        assert any(
+            "\033[38;2;49;116;143m" in line
+            for line in lines
+            if "G" in line
+        )
 
 
 class TestMakespan:
@@ -452,7 +516,7 @@ class TestMetrics:
         )
         schedule = Schedule(
             graph=graph,
-            makespan=4,
+            makespan=3,
             actions={
                 1: [
                     ScheduledAction(
@@ -477,8 +541,8 @@ class TestMetrics:
             },
         )
         assert format_metrics(schedule) == [
-            "moves_per_turn: 1.00",
-            "avg_turns_per_drone: 3.50",
+            "moves_per_turn: 1.33",
+            "avg_turns_per_drone: 2.50",
             "total_path_cost: 4",
         ]
 
@@ -499,7 +563,7 @@ class TestStats:
         )
         schedule = Schedule(
             graph=graph,
-            makespan=4,
+            makespan=3,
             actions={
                 1: [
                     ScheduledAction(
@@ -526,10 +590,10 @@ class TestStats:
         assert format_stats(schedule) == [
             "",
             "== Stats ==",
-            "moves_per_turn: 1.00",
-            "avg_turns_per_drone: 3.50",
+            "moves_per_turn: 1.33",
+            "avg_turns_per_drone: 2.50",
             "total_path_cost: 4",
-            "makespan: 4",
+            "makespan: 3",
         ]
 
     def test_format_stats_empty_fleet(self) -> None:
@@ -563,15 +627,15 @@ class TestStats:
                 "D1-G",
                 "",
                 "== Stats ==",
-                "moves_per_turn: 0.67",
-                "avg_turns_per_drone: 3.00",
+                "moves_per_turn: 1.00",
+                "avg_turns_per_drone: 2.00",
                 "total_path_cost: 2",
-                "makespan: 3",
+                "makespan: 2",
             ]
             assert not stderr
             stdout2, _, code2 = build_output(str(path))
             assert code2 == 0
-            assert stdout2[-1] != "makespan: 3"
+            assert stdout2[-1] != "makespan: 2"
 
 
 class TestPaint:

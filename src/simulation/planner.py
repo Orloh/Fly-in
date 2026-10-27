@@ -484,10 +484,15 @@ def _route_to_actions(route: TimedRoute) -> list[ScheduledAction]:
 
 
 def _makespan(routes: dict[int, TimedRoute]) -> int:
-    """The turn the last drone arrives (0 for an empty fleet)."""
+    """The number of simulation turns until the last drone is delivered.
+
+    Routes store the arrival state as the first turn after the movement
+    completes. The emitted simulation turn is therefore one less than
+    that arrival index, including restricted-zone transits.
+    """
     if not routes:
         return 0
-    return max(route[-1][1] for route in routes.values())
+    return max(route[-1][1] - 1 for route in routes.values())
 
 
 def _cost_consistent(schedule: Schedule, graph: Graph) -> bool:

@@ -230,15 +230,13 @@ def format_metrics(schedule: Schedule) -> list[str]:
     path_cost = 0
     arrivals: list[int] = []
     for drone_actions in actions.values():
-        arrival = 0
+        delivered = 0
         for action in drone_actions:
             if action.kind == "MOVE":
                 moves += 1
                 path_cost += action.turns_required
-                arrival = action.turn + action.turns_required
-            else:
-                arrival = max(arrival, action.turn)
-        arrivals.append(arrival)
+                delivered = action.turn + action.turns_required - 1
+        arrivals.append(delivered)
     makespan = schedule.makespan
     moves_per_turn = (moves / makespan) if makespan else 0.0
     avg_turns = sum(arrivals) / n_drones

@@ -214,18 +214,23 @@ class _Network:
         self.dinic = Dinic(self._n_nodes)
 
     def _zone_in(self, zi: int, turn: int) -> int:
+        """Node index for entering zone ``zi`` at ``turn``."""
         return self._zone_base + (zi * (self.t + 1) + turn) * 2
 
     def _zone_out(self, zi: int, turn: int) -> int:
+        """Node index for leaving zone ``zi`` at ``turn``."""
         return self._zone_in(zi, turn) + 1
 
     def _link_in(self, li: int, turn: int) -> int:
+        """Node index for entering link ``li`` at ``turn``."""
         return self._link_base + (li * (self.t + 1) + turn) * 2
 
     def _link_out(self, li: int, turn: int) -> int:
+        """Node index for leaving link ``li`` at ``turn``."""
         return self._link_in(li, turn) + 1
 
     def _zone_cap(self, zone_name: str) -> int:
+        """Capacity of ``zone_name``, using the unlimited sentinel for hubs."""
         zone = self.graph.zones[zone_name]
         return _INF if zone.capacity is None else zone.capacity
 
@@ -445,5 +450,5 @@ def _routes_to_schedule(
     makespan = 0
     for drone, route in zip(sorted(drones, key=lambda d: d.id), ordered):
         actions[drone.id] = _route_to_actions(route)
-        makespan = max(makespan, route[-1][1])
+        makespan = max(makespan, route[-1][1] - 1)
     return Schedule(actions=actions, makespan=makespan, graph=graph)

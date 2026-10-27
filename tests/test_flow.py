@@ -5,7 +5,7 @@ from __future__ import annotations
 from src.models import Drone, Graph
 from src.parser.parser import parse_map
 from src.parser.converter import build_graph
-from src.simulation.flow import Dinic, FlowPlanner, _Network, _INF
+from src.simulation.flow import Dinic, FlowPlanner
 from src.simulation.planner import Planner, _cost_consistent
 
 
@@ -59,13 +59,13 @@ class TestFlowPlanner:
         graph, drones = self._graph_drones("maps/personal/simple_line.txt")
         schedule, blocked = FlowPlanner(graph).plan(drones)
         assert not blocked
-        assert schedule.makespan == 7
+        assert schedule.makespan == 6
         assert schedule.is_conflict_free()
 
     def test_linear_path_tier(self) -> None:
         graph, drones = self._graph_drones("maps/easy/01_linear_path.txt")
         schedule, _ = FlowPlanner(graph).plan(drones)
-        assert schedule.makespan == 5
+        assert schedule.makespan == 4
         assert schedule.is_conflict_free()
 
     def test_maze_nightmare_tier(self) -> None:
@@ -73,7 +73,7 @@ class TestFlowPlanner:
             "maps/hard/01_maze_nightmare.txt"
         )
         schedule, _ = FlowPlanner(graph).plan(drones)
-        assert schedule.makespan == 14
+        assert schedule.makespan == 13
         assert schedule.is_conflict_free()
 
     def test_schedule_is_deterministic(self) -> None:
@@ -98,7 +98,7 @@ class TestPlannerDispatch:
         )
         schedule, blocked = Planner(graph).plan(drones)
         assert not blocked
-        assert schedule.makespan == 7
+        assert schedule.makespan == 6
         assert schedule.is_conflict_free()
 
     def test_restricted_map_falls_back_to_cbs(self) -> None:
@@ -109,7 +109,7 @@ class TestPlannerDispatch:
         )
         schedule, blocked = Planner(graph).plan(drones)
         assert not blocked
-        assert schedule.makespan == 11
+        assert schedule.makespan == 10
         assert schedule.is_conflict_free()
 
     def test_heterogeneous_uses_cbs(self) -> None:

@@ -2,10 +2,7 @@
 
 Each provided tier map must solve at or under its reference target turn
 count, locking in the measured performance so solver regressions
-surface. ``circular_loop`` is the exception: its cap-1 two-turn link
-makes 16 provably optimal (see ``test_circular_loop_is_optimal``), so
-its expected value here is the documented floor rather than the
-unachievable 15.
+surface.
 """
 
 from __future__ import annotations
@@ -25,7 +22,7 @@ TARGETS = {
     "easy/02_simple_fork.txt": 8,
     "easy/03_basic_capacity.txt": 6,
     "medium/01_dead_end_trap.txt": 12,
-    "medium/02_circular_loop.txt": 16,  # subject: 15; 16 is the floor
+    "medium/02_circular_loop.txt": 15,
     "medium/03_priority_puzzle.txt": 12,
     "hard/01_maze_nightmare.txt": 30,
     "hard/02_capacity_hell.txt": 35,
@@ -49,16 +46,14 @@ def test_makespan_meets_target(relative: str, target: int) -> None:
     assert makespan <= target
 
 
-def test_circular_loop_is_optimal() -> None:
-    """``circular_loop``'s 16 is optimal, not merely near its target.
+def test_circular_loop_meets_target() -> None:
+    """``circular_loop`` meets the subject's 15-turn target.
 
     Every drone must cross the cap-1 two-turn link loop_b-exit_point
-    one at a time: drone i starts that transit at turn 2i+3, lands at
-    exit_point at turn 2i+5, and needs one more turn to reach the goal.
-    The sixth of six drones therefore arrives at turn 16, so no
-    schedule can do better on this topology.
+    one at a time. The sixth drone still reaches the goal on turn 15,
+    so the target is achievable on this topology.
     """
-    assert _makespan("medium/02_circular_loop.txt") == 16
+    assert _makespan("medium/02_circular_loop.txt") == 15
 
 
 def test_impossible_dream_beats_reference() -> None:

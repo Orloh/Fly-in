@@ -27,6 +27,7 @@ class Zone(BaseModel):
     @field_validator("name")
     @classmethod
     def _validate_name(cls, value: str) -> str:
+        """Reject zone names containing dashes or spaces."""
         if "-" in value or " " in value:
             raise ValueError(
                 "zone names cannot contain dashes or spaces"

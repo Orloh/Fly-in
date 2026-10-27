@@ -125,10 +125,10 @@ Locked decisions (do not re-litigate):
 - Conflict model is capacity-based (N+1th drone at a `(zone, turn)` or
   link interval); link budgets are shared across both directions;
   arrived drones keep occupying finite-capacity goals.
-- Measured result: `bottleneck.map` 19 → 11 and `example.map` 5 → 4
-  are the gap maps (now optimal). `parallel_paths.map` 9 = 9,
-  `priority_blocked.map` 8 = 8, `complex_cycle.map` 9 = 9 are
-  merge/exit-bound regression maps, unchanged at optimal. Which solver
+- Measured result: `bottleneck.map` and `example.map` are the gap maps
+  (now optimal). `parallel_paths.map`, `priority_blocked.map`, and
+  `complex_cycle.map` are merge/exit-bound regression maps, unchanged
+  at optimal. Which solver
   produces each makespan: FLOW on all-normal maps (linear_path,
   simple_fork, basic_capacity, dead_end_trap, maze_nightmare,
   capacity_hell, bottleneck_10, example, parallel_paths,

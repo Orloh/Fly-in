@@ -17,13 +17,13 @@ class TestPlannerMakespan:
         graph, drones = build_graph(parse_map("maps/personal/bottleneck.txt"))
         schedule, blocked = Planner(graph).plan(drones)
         assert not blocked
-        assert schedule.makespan == 11
+        assert schedule.makespan == 10
 
     def test_example_map(self) -> None:
         graph, drones = build_graph(parse_map("maps/personal/example.txt"))
         schedule, blocked = Planner(graph).plan(drones)
         assert not blocked
-        assert schedule.makespan == 4
+        assert schedule.makespan == 3
 
     def test_parallel_paths_map(self) -> None:
         graph, drones = build_graph(
@@ -31,7 +31,7 @@ class TestPlannerMakespan:
         )
         schedule, blocked = Planner(graph).plan(drones)
         assert not blocked
-        assert schedule.makespan == 9
+        assert schedule.makespan == 8
 
     def test_priority_blocked_map(self) -> None:
         graph, drones = build_graph(
@@ -39,7 +39,7 @@ class TestPlannerMakespan:
         )
         schedule, blocked = Planner(graph).plan(drones)
         assert not blocked
-        assert schedule.makespan == 8
+        assert schedule.makespan == 7
 
     def test_complex_cycle_map(self) -> None:
         graph, drones = build_graph(
@@ -47,7 +47,7 @@ class TestPlannerMakespan:
         )
         schedule, blocked = Planner(graph).plan(drones)
         assert not blocked
-        assert schedule.makespan == 9
+        assert schedule.makespan == 8
 
     def test_simple_line_map(self) -> None:
         graph, drones = build_graph(
@@ -55,7 +55,7 @@ class TestPlannerMakespan:
         )
         schedule, blocked = Planner(graph).plan(drones)
         assert not blocked
-        assert schedule.makespan == 7
+        assert schedule.makespan == 6
 
     def test_two_branches_map(self) -> None:
         # Two branches: 3 normal nodes vs 1 restricted node, 10 drones.
@@ -66,7 +66,7 @@ class TestPlannerMakespan:
         )
         schedule, blocked = Planner(graph).plan(drones)
         assert not blocked
-        assert schedule.makespan == 10
+        assert schedule.makespan == 9
         assert schedule.is_conflict_free()
 
 
@@ -80,7 +80,7 @@ class TestPlannerSynthetic:
     ) -> None:
         drones = drones_at_start(1, "S", "G")
         schedule, _ = Planner(simple_graph).plan(drones)
-        assert schedule.makespan == 3
+        assert schedule.makespan == 2
 
     def test_single_drone_restricted_route(
         self,
@@ -89,7 +89,7 @@ class TestPlannerSynthetic:
     ) -> None:
         drones = drones_at_start(1, "S", "G")
         schedule, _ = Planner(restricted_graph).plan(drones)
-        assert schedule.makespan == 4
+        assert schedule.makespan == 3
 
     def test_split_routes_two_drones(
         self,
@@ -98,7 +98,7 @@ class TestPlannerSynthetic:
     ) -> None:
         drones = drones_at_start(2, "S", "G")
         schedule, _ = Planner(split_graph).plan(drones)
-        assert schedule.makespan == 3
+        assert schedule.makespan == 2
 
     def test_head_on_collision_link_cap1(self, head_on_graph: Graph) -> None:
         drones = [
@@ -106,7 +106,7 @@ class TestPlannerSynthetic:
             Drone(id=2, current_zone="B", target_zone="A"),
         ]
         schedule, _ = Planner(head_on_graph).plan(drones)
-        assert schedule.makespan == 3
+        assert schedule.makespan == 2
 
 
 class TestPlannerConflictFree:

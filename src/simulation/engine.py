@@ -248,16 +248,17 @@ class Simulation:
 
 
 def _schedule_makespan(drones: list[Drone]) -> int:
-    """The latest arrival turn across the drones' stored schedules.
+    """The number of simulation turns until every drone is delivered.
 
     Returns:
-        The maximum ``turn + turns_required`` over every MOVE action,
-        or 0 when no drone has any move scheduled.
+        The latest emitted movement turn over every MOVE action, or 0
+        when no drone has any move scheduled.
     """
     makespan = 0
     for drone in drones:
         for action in drone.schedule:
             if action.kind != "MOVE":
                 continue
-            makespan = max(makespan, action.turn + action.turns_required)
+            delivered = action.turn + action.turns_required - 1
+            makespan = max(makespan, delivered)
     return makespan
