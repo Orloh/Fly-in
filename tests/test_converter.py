@@ -126,6 +126,18 @@ class TestConvertZone:
         assert zone.is_end_hub is True
         assert zone.capacity is None
 
+    def test_start_hub_ignores_invalid_max_drones(self) -> None:
+        parsed = _make_zone("A", metadata={"max_drones": "abc"})
+        zone = _convert_zone(parsed, True, False)
+        assert zone.max_drones == 1
+        assert zone.capacity is None
+
+    def test_end_hub_ignores_zero_max_drones(self) -> None:
+        parsed = _make_zone("A", metadata={"max_drones": "0"})
+        zone = _convert_zone(parsed, False, True)
+        assert zone.max_drones == 1
+        assert zone.capacity is None
+
     def test_regular_zone_capacity(self) -> None:
         parsed = _make_zone("A", metadata={"max_drones": "2"})
         zone = _convert_zone(parsed, False, False)

@@ -95,17 +95,22 @@ def _convert_zone(
             parsed.line_number, "unknown zone type"
         ) from None
 
-    token = parsed.metadata.get("max_drones", "1")
-    try:
-        max_drones = int(token)
-    except ValueError:
-        raise ParseError(
-            parsed.line_number, "max_drones must be an integer"
-        ) from None
-    if max_drones < 1:
-        raise ParseError(
-            parsed.line_number, "max_drones must be a positive integer"
-        )
+    if is_start or is_end:
+        # Hubs have unlimited capacity; max_drones is ignored entirely.
+        max_drones = 1
+    else:
+        token = parsed.metadata.get("max_drones", "1")
+        try:
+            max_drones = int(token)
+        except ValueError:
+            raise ParseError(
+                parsed.line_number, "max_drones must be an integer"
+            ) from None
+        if max_drones < 1:
+            raise ParseError(
+                parsed.line_number,
+                "max_drones must be a positive integer",
+            )
 
     color = parsed.metadata.get("color", "none")
 

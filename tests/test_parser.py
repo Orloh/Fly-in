@@ -245,29 +245,6 @@ class TestParseMapHappyPaths:
             "max_link_capacity": "3"
         }
 
-    def test_connections_before_zones(self, tmp_path: Path) -> None:
-        content = (
-            "nb_drones: 2\n"
-            "start_hub: A 0 0\n"
-            "connection: B-C\n"
-            "connection: A-B\n"
-            "hub: B 1 1\n"
-            "end_hub: C 2 2\n"
-        )
-        path = tmp_path / "forward.map"
-        path.write_text(content)
-        result = parse_map(str(path))
-        assert len(result.connections) == 2
-        assert result.connections[0].zone_a == "B"
-        assert result.connections[0].zone_b == "C"
-        assert result.connections[0].line_number == 3
-        assert result.connections[1].zone_a == "A"
-        assert result.connections[1].zone_b == "B"
-        assert result.connections[1].line_number == 4
-        assert len(result.zones) == 1
-        assert result.zones[0].name == "B"
-        assert result.zones[0].line_number == 5
-
     def test_comments_and_blank_lines(self, tmp_path: Path) -> None:
         content = (
             "# This is a comment\n"
@@ -527,6 +504,23 @@ class TestParseMapErrors:
         with pytest.raises(ParseError) as exc:
             parse_map(str(path))
         assert exc.value.line_number == 3
+
+    def test_connection_before_zone_definition_raises_error(
+        self, tmp_path: Path
+    ) -> None:
+        content = (
+            "nb_drones: 2\n"
+            "start_hub: A 0 0\n"
+            "connection: B-C\n"
+            "hub: B 1 1\n"
+            "end_hub: C 2 2\n"
+        )
+        path = tmp_path / "forward.map"
+        path.write_text(content)
+        with pytest.raises(ParseError) as exc:
+            parse_map(str(path))
+        assert exc.value.line_number == 3
+        assert "B" in exc.value.message
 
     def test_connection_with_three_parts_raises_error(
         self, tmp_path: Path

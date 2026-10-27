@@ -43,6 +43,7 @@ def parse_map(path: str) -> ParsedMap:
         end_hub: ParsedZone | None = None
         zones: list[ParsedZone] = []
         connections: list[ParsedConnection] = []
+        defined_zones: set[str] = set()
 
         for line_number, line in content_lines[1:]:
             head = line.split("[", 1)[0].strip()
@@ -59,6 +60,7 @@ def parse_map(path: str) -> ParsedMap:
                             line_number, "Duplicate start_hub defined"
                         )
                     start_hub = _parse_hub_line(line, line_number)
+                    defined_zones.add(start_hub.name)
 
                 case "end_hub:":
                     if end_hub is not None:
@@ -66,14 +68,26 @@ def parse_map(path: str) -> ParsedMap:
                             line_number, "Duplicate end_hub defined"
                         )
                     end_hub = _parse_hub_line(line, line_number)
+                    defined_zones.add(end_hub.name)
 
                 case "hub:":
-                    zones.append(_parse_hub_line(line, line_number))
+                    zone = _parse_hub_line(line, line_number)
+                    zones.append(zone)
+                    defined_zones.add(zone.name)
 
                 case "connection:":
-                    connections.append(
-                        _parse_connection_line(line, line_number)
-                    )
+                    connection = _parse_connection_line(line, line_number)
+                    for endpoint in (
+                        connection.zone_a,
+                        connection.zone_b,
+                    ):
+                        if endpoint not in defined_zones:
+                            raise ParseError(
+                                line_number,
+                                f"connection references zone '{endpoint}' "
+                                "before it is defined",
+                            )
+                    connections.append(connection)
 
                 case _:
                     raise ParseError(
