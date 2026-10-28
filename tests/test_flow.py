@@ -2,7 +2,14 @@
 
 from __future__ import annotations
 
-from src.models import Drone, Graph
+from src.models import (
+    Connection,
+    Drone,
+    Graph,
+    Zone,
+    ZoneType,
+    canonical_key,
+)
 from src.parser.parser import parse_map
 from src.parser.converter import build_graph
 from src.simulation.flow import Dinic, FlowPlanner
@@ -75,6 +82,46 @@ class TestFlowPlanner:
         schedule, _ = FlowPlanner(graph).plan(drones)
         assert schedule.makespan == 13
         assert schedule.is_conflict_free()
+
+    def test_priority_path_wins_equal_cost_tie(self) -> None:
+        zones = {
+            "S": Zone(
+                name="S", x=0, y=0, is_start_hub=True
+            ),
+            "normal": Zone(name="normal", x=1, y=0),
+            "priority": Zone(
+                name="priority",
+                x=1,
+                y=1,
+                zone_type=ZoneType.PRIORITY,
+            ),
+            "G": Zone(name="G", x=2, y=0, is_end_hub=True),
+        }
+        connections = {
+            canonical_key("S", "normal"): Connection(
+                zone_a="S", zone_b="normal"
+            ),
+            canonical_key("normal", "G"): Connection(
+                zone_a="normal", zone_b="G"
+            ),
+            canonical_key("S", "priority"): Connection(
+                zone_a="S", zone_b="priority"
+            ),
+            canonical_key("priority", "G"): Connection(
+                zone_a="priority", zone_b="G"
+            ),
+        }
+        graph = Graph(zones=zones, connections=connections)
+        drones = [Drone(id=1, current_zone="S", target_zone="G")]
+        schedule, blocked = FlowPlanner(graph).plan(drones)
+        assert not blocked
+        visited = [
+            action.to_zone
+            for action in schedule.actions[1]
+            if action.kind == "MOVE"
+        ]
+        assert "priority" in visited
+        assert "normal" not in visited
 
     def test_schedule_is_deterministic(self) -> None:
         graph, drones = self._graph_drones("maps/personal/simple_line.txt")

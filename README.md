@@ -208,7 +208,9 @@ a single-commodity evacuation. A **time-expanded network** over turns
 link chains, shared across both directions), and post-arrival goal
 occupancy. **Binary-searching** the smallest `T` where max-flow equals
 the drone count yields the optimal makespan; unit flows are decomposed
-into timed routes. Polynomial and provably optimal for this case.
+into timed routes. Move arcs are ordered priority-first, so equal-cost
+flow choices prefer priority zones. Polynomial and provably optimal for
+this case.
 
 The shared link chain can "splice" a 1-turn transit into a restricted
 zone, so the flow schedule is **validated for cost-consistency** and

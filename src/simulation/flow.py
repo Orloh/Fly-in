@@ -30,7 +30,7 @@ from __future__ import annotations
 
 import sys
 
-from src.models import Drone, DroneStatus, Graph, canonical_key
+from src.models import Drone, DroneStatus, Graph, ZoneType, canonical_key
 from src.models.schedule import Schedule
 from src.simulation.pathfinding import (
     _enter_cost,
@@ -296,7 +296,19 @@ class _Network:
         # Waits are expressed by the wait arcs, which compose with this
         # edge to model "wait then move".
         for zi, zone_name in enumerate(self.zones):
-            for neighbor in self.graph.neighbors(zone_name):
+            # Priority zones are a soft preference: insert their move
+            # arcs first so equal-cost augmenting paths prefer them.
+            neighbors = sorted(
+                self.graph.neighbors(zone_name),
+                key=lambda name: (
+                    0
+                    if self.graph.zones[name].zone_type
+                    == ZoneType.PRIORITY
+                    else 1,
+                    self.zone_index[name],
+                ),
+            )
+            for neighbor in neighbors:
                 nb_zone = self.graph.zones[neighbor]
                 cost = _enter_cost(nb_zone)
                 if not isinstance(cost, int):
