@@ -28,7 +28,9 @@ from src.cli import (
     format_stats,
     simulate,
     build_output,
+    _has_future_action,
 )
+from src.simulation.engine import Simulation
 from src.palette import (
     PALETTE,
     COLOR_NAME_TO_ROLE,
@@ -187,6 +189,18 @@ class TestFormatTurn:
         turn = TurnResult(turn_number=1, movements=[])
         line = format_turn(turn, in_flight={2: "loop_b-exit_point"})
         assert line == "D2-loop_b-exit_point"
+
+    def test_restricted_launch_uses_connection(self) -> None:
+        move = Movement(
+            drone_id=1, from_zone="S", to_zone="R", turns_required=2
+        )
+        turn = TurnResult(turn_number=1, movements=[move])
+        assert format_turn(turn) == "D1-S-R"
+
+    def test_arrival_uses_destination(self) -> None:
+        turn = TurnResult(turn_number=2, movements=[])
+        line = format_turn(turn, arrivals={1: "R"})
+        assert line == "D1-R"
 
     def test_in_flight_with_movements_sorted(self) -> None:
         m1 = Movement(drone_id=1, from_zone="S", to_zone="A", turns_required=1)
@@ -373,6 +387,27 @@ class TestSimulate:
         # Final arrival turn with no movements is not printed
         assert lines == ["D1-A", "D1-G"]
 
+    def test_future_action_prevents_deadlock_break(self) -> None:
+        graph = _graph(
+            [_zone("S", start=True), _zone("A"), _zone("G", end=True)],
+            [("S", "A"), ("A", "G")],
+        )
+        sim = Simulation(graph, [_drone(1, "S", "G")])
+        drone = sim.state.drones[1]
+        drone.schedule = [
+            ScheduledAction(
+                kind="WAIT",
+                turn=2,
+                from_zone="S",
+                to_zone="S",
+            )
+        ]
+        drone.schedule_index = 0
+        sim.state.turn = 1
+        assert _has_future_action(sim) is True
+        sim.state.turn = 2
+        assert _has_future_action(sim) is False
+
     def test_restricted_zone_empty_turn(self) -> None:
         graph = _graph(
             [
@@ -383,9 +418,9 @@ class TestSimulate:
             [("S", "R"), ("R", "G")],
         )
         lines = list(simulate(graph, [_drone(1, "S", "G")]))
-        # turn 1: S->R (cost 2), turn 2: in flight on S-R connection,
+        # turn 1: move onto the S-R connection, turn 2: reach R,
         # turn 3: R->G, turn 4: arrival (not printed)
-        assert lines == ["D1-R", "D1-S-R", "D1-G"]
+        assert lines == ["D1-S-R", "D1-R", "D1-G"]
 
     def test_in_flight_and_movement_same_line(self) -> None:
         graph = _graph(
@@ -401,7 +436,13 @@ class TestSimulate:
         )
         # D1 leads through the cap-1 restricted link, D2 follows. D1's
         # arrival-then-replan at R is a movement, not an in-flight line.
-        assert lines == ["D1-R", "D1-S-R", "D1-G D2-R", "D2-S-R", "D2-G"]
+        assert lines == [
+            "D1-S-R",
+            "D1-R",
+            "D1-G D2-S-R",
+            "D2-R",
+            "D2-G",
+        ]
 
     def test_deadlock_breaks(self) -> None:
         # Two drones head-on on capacity-1 link: D1 S->A, D2 A->S. Link cap 1.

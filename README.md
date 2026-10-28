@@ -131,8 +131,15 @@ total_path_cost: 6
 makespan: 4
 ```
 
-Restricted zones take 2 turns. While a drone is in transit toward one,
-its connection is reported as `D<id>-<from>-<to>` in the per-turn line.
+Restricted zones take 2 turns. The launch turn reports the connection,
+the next turn reports the destination, and the following turn reports
+the next movement:
+
+```
+D1-start-tunnel
+D1-tunnel
+D1-goal
+```
 
 ## Visual representation
 
