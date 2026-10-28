@@ -171,8 +171,8 @@ uv run pytest tests   # real pass/fail signal (make test masks failures)
 ```
 
 Test-driven: write tests in `tests/` first, then `make lint` and
-`uv run pytest tests`. The design and measured baselines live in
-`CBS_PLAN.md` and `GUI_PLAN.md`.
+`uv run pytest tests`. Algorithm details are documented below; measured
+baselines can be reproduced with `make benchmark`.
 
 ## Architecture
 
@@ -266,11 +266,11 @@ This project was developed iteratively with an AI coding assistant
   line-numbered error handling.
 - Building the routing solvers — the time-expanded quickest-flow planner
   (`src/simulation/flow.py`) and the Conflict-Based Search planner
-  (`src/simulation/planner.py`) — following the design in `CBS_PLAN.md`.
+  (`src/simulation/planner.py`) — as described in the Algorithm section.
 - Designing the turn-based engine (`src/simulation/engine.py`) and its
   conflict-free schedule replay model.
 - The pygame-ce GUI (`src/gui/`) and the shared rose-pine palette
-  (`src/palette.py`), per `GUI_PLAN.md`.
+  (`src/palette.py`), including its headless test suite.
 - Writing the test suite and the tiered benchmark maps.
 
 Human review covered the algorithm choices, the solver dispatch cascade

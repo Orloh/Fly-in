@@ -19,7 +19,7 @@ LoadedMap: TypeAlias = tuple[
     Graph, list[Drone], dict[str, tuple[int, int]]
 ]
 
-#: Default low-res canvas the map is laid out onto (see GUI_PLAN.md).
+#: Default low-res canvas the map is laid out onto.
 DEFAULT_CANVAS = (640, 360)
 
 #: Subdirectories under maps_root to search for map files.
