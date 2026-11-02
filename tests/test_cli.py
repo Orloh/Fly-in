@@ -727,6 +727,7 @@ class TestStats:
             "avg_turns_per_drone: 2.50",
             "total_path_cost: 4",
             "makespan: 3",
+            "",
         ]
 
     def test_format_stats_empty_fleet(self) -> None:
@@ -764,6 +765,7 @@ class TestStats:
                 "avg_turns_per_drone: 2.00",
                 "total_path_cost: 2",
                 "makespan: 2",
+                "",
             ]
             assert not stderr
             stdout2, _, code2 = build_output(str(path))

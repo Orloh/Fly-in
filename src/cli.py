@@ -213,8 +213,10 @@ def format_makespan(makespan: int) -> str:
 
 
 def format_stats(schedule: Schedule) -> list[str]:
-    """Format the stats block: blank line, ``== Stats ==`` header, then
-    the secondary metrics and the makespan.
+    """Format the stats block: leading separator, metrics, trailing blank.
+
+    The trailing blank line separates consecutive map runs in
+    ``make run-all``.
 
     Args:
         schedule: The schedule to summarize.
@@ -230,6 +232,7 @@ def format_stats(schedule: Schedule) -> list[str]:
         "== Stats ==",
         *metrics,
         format_makespan(schedule.makespan),
+        "",
     ]
 
 
