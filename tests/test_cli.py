@@ -476,7 +476,7 @@ class TestSimulate:
             simulate(graph, [_drone(1, "S", "G"), _drone(2, "S", "G")])
         )
         # D1 leads through the cap-1 restricted link, D2 follows. D1's
-        # arrival-then-replan at R is a movement, not an in-flight line.
+        # arrival-then-departure at R is a movement, not an in-flight line.
         assert lines == [
             "D1-S-R",
             "D1-R",

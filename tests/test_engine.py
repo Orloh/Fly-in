@@ -111,7 +111,6 @@ class TestSimulation:
             )
         ]
         assert sim.state.drones[1].status == DroneStatus.IN_TRANSIT
-        assert sim.state.drones[1].transit_duration == 2
         assert sim.state.link_usage[("S", "R")] == 1
 
         second = sim.step()
@@ -124,11 +123,43 @@ class TestSimulation:
                 drone_id=1, from_zone="R", to_zone="G", turns_required=1
             )
         ]
-        assert sim.state.drones[1].transit_duration == 1
 
         sim.step()
         assert sim.finished
         assert sim.state.turn == 4
+
+    def test_turn_result_occupancy_after_normal_move(self) -> None:
+        graph = _graph(
+            [_zone("S", start=True), _zone("A"), _zone("G", end=True)],
+            [("S", "A"), ("A", "G")],
+        )
+        sim = Simulation(graph, [_drone(1, "S", "G")])
+
+        first = sim.step()
+        assert first.zone_occupancy == {"A": 1}
+
+        second = sim.step()
+        assert second.zone_occupancy == {"G": 1}
+
+    def test_turn_result_occupancy_during_restricted_transit(self) -> None:
+        graph = _graph(
+            [
+                _zone("S", start=True),
+                _zone("R", ZoneType.RESTRICTED),
+                _zone("G", end=True),
+            ],
+            [("S", "R"), ("R", "G")],
+        )
+        sim = Simulation(graph, [_drone(1, "S", "G")])
+
+        launch = sim.step()
+        assert launch.zone_occupancy == {}
+
+        final_transit = sim.step()
+        assert final_transit.zone_occupancy == {"R": 1}
+
+        onward = sim.step()
+        assert onward.zone_occupancy == {"G": 1}
 
     def test_unreachable_goal_blocks_drone(self) -> None:
         graph = _graph(
@@ -293,42 +324,6 @@ class TestSimulation:
         assert first.movements[1].turns_required == 1
         assert sim.state.drones[1].schedule_index == 1
         assert sim.state.drones[2].schedule_index == 1
-
-    def test_replay_without_replan_keeps_original_makespan(self) -> None:
-        """Rebuilding mid-run with replan=False replays the original plan.
-
-        Re-planning would anchor a fresh schedule at turn 1 and shift a
-        resumed run's timing (extra turns); replaying the stored drone
-        schedules must finish at the original makespan.
-        """
-        graph = _graph(
-            [
-                _zone("S", start=True),
-                _zone("W1"),
-                _zone("W2"),
-                _zone("G", end=True),
-            ],
-            [("S", "W1"), ("W1", "W2"), ("W2", "G")],
-        )
-        fleet = [_drone(1, "S", "G"), _drone(2, "S", "G")]
-
-        sim = Simulation(graph, fleet)
-        while not sim.finished:
-            sim.step()
-        original = sim.state.turn
-        assert original > 0
-
-        mid = Simulation(graph, [_drone(1, "S", "G"), _drone(2, "S", "G")])
-        for _ in range(2):
-            mid.step()
-        snapshot = [d.model_copy(deep=True) for d in mid.state.drones.values()]
-        replay = Simulation(graph, snapshot, replan=False)
-        replay.state.turn = mid.state.turn
-
-        while not replay.finished:
-            replay.step()
-
-        assert replay.state.turn == original
 
     def test_safety_net_blocks_bad_schedule(self) -> None:
         """An injected over-capacity MOVE surfaces a conflict + wait."""

@@ -352,34 +352,10 @@ def _transit_after(
     return in_flight, arrivals
 
 
-def _occupancy_after_turn(
-    sim: Simulation,
-    result: TurnResult,
-    arrivals: dict[int, str],
-) -> dict[str, int]:
-    """Project zone occupancy at the end of the current turn."""
-    counts = dict(sim.state.zone_occupancy)
-
-    for movement in result.movements:
-        counts[movement.from_zone] = max(
-            0, counts.get(movement.from_zone, 0) - 1
-        )
-        if movement.turns_required == 1:
-            counts[movement.to_zone] = (
-                counts.get(movement.to_zone, 0) + 1
-            )
-
-    for destination in arrivals.values():
-        counts[destination] = counts.get(destination, 0) + 1
-
-    return counts
-
-
 def _capacity_tags(
     graph: Graph,
     result: TurnResult,
     arrivals: dict[int, str],
-    occupancy: dict[str, int],
 ) -> dict[str, str]:
     """Build capacity annotations for zone tokens shown this turn."""
     zones: set[str] = set()
@@ -394,7 +370,7 @@ def _capacity_tags(
     for zone_name in zones:
         zone = graph.zones[zone_name]
         maximum = "∞" if zone.capacity is None else str(zone.capacity)
-        occupied = occupancy.get(zone_name, 0)
+        occupied = result.zone_occupancy.get(zone_name, 0)
         tags[zone_name] = f" ({occupied}/{maximum})"
     return tags
 
@@ -428,10 +404,7 @@ def _simulate_raw(
 
         capacity_tags: dict[str, str] | None = None
         if capacity:
-            occupancy = _occupancy_after_turn(sim, result, arrivals)
-            capacity_tags = _capacity_tags(
-                graph, result, arrivals, occupancy
-            )
+            capacity_tags = _capacity_tags(graph, result, arrivals)
 
         if sim.finished:
             # Final arrival turn: only emit if there were movements

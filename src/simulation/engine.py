@@ -44,37 +44,21 @@ class Simulation:
         graph: Graph,
         drones: list[Drone],
         planner: PlannerProtocol | None = None,
-        *,
-        replan: bool = True,
     ) -> None:
-        """Plan an optimal Schedule and prepare the replay state.
-
-        With ``replan=False`` the drones' existing ``schedule`` lists are
-        replayed instead of re-planning (the replay path); this keeps
-        a mid-run replay deterministic — re-planning would anchor a fresh
-        schedule at turn 1, shifting a resumed run's timing.
+        """Plan a Schedule and prepare the replay state.
 
         Args:
             graph: The routing graph.
             drones: The fleet to simulate.
             planner: The planner to use; defaults to ``Planner``.
-            replan: Whether to compute a schedule (True) or replay the
-                drones' stored schedules (False).
         """
         self.graph = graph
-        if replan:
-            planner = planner or Planner(graph)
-            schedule, blocked = planner.plan(drones)
-            for drone in drones:
-                drone.schedule = schedule.actions.get(drone.id, [])
-                drone.schedule_index = 0
-            self.schedule = schedule
-        else:
-            self.schedule = Schedule(
-                actions={d.id: list(d.schedule) for d in drones},
-                makespan=_schedule_makespan(drones),
-                graph=graph,
-            )
+        planner = planner or Planner(graph)
+        schedule, _blocked = planner.plan(drones)
+        for drone in drones:
+            drone.schedule = schedule.actions.get(drone.id, [])
+            drone.schedule_index = 0
+        self.schedule = schedule
         self._schedule_zone_time, self._schedule_link_time = (
             self.schedule._occupancy()
         )
@@ -112,7 +96,7 @@ class Simulation:
                 if drone.turns_in_transit <= 0:
                     self._arrive(drone)
 
-        self.state.update_occupancy()
+        start_occupancy = self._zone_counts()
 
         # Replay the schedule in drone-id order
         for drone in sorted(
@@ -155,7 +139,61 @@ class Simulation:
             turn_number=self.state.turn,
             movements=movements,
             conflicts=conflicts,
+            zone_occupancy=self._occupancy_after_moves(
+                start_occupancy, movements
+            ),
         )
+
+    def _zone_counts(self) -> dict[str, int]:
+        """Count drones occupying zones after arrivals, before moves."""
+        counts: dict[str, int] = {}
+        for drone in self.state.drones.values():
+            if drone.status == DroneStatus.IN_TRANSIT:
+                continue
+            if drone.current_zone is None:
+                continue
+            counts[drone.current_zone] = (
+                counts.get(drone.current_zone, 0) + 1
+            )
+        return counts
+
+    def _occupancy_after_moves(
+        self,
+        start_occupancy: dict[str, int],
+        movements: list[Movement],
+    ) -> dict[str, int]:
+        """Project zone occupancy at the end of the current turn.
+
+        Normal moves arrive by the end of the turn. Restricted moves
+        remain in flight unless this is their final transit turn.
+        """
+        counts = dict(start_occupancy)
+        moved_ids = {movement.drone_id for movement in movements}
+
+        for movement in movements:
+            counts[movement.from_zone] = max(
+                0, counts.get(movement.from_zone, 0) - 1
+            )
+            if movement.turns_required == 1:
+                counts[movement.to_zone] = (
+                    counts.get(movement.to_zone, 0) + 1
+                )
+
+        for drone in self.state.drones.values():
+            if (
+                drone.id not in moved_ids
+                and drone.status == DroneStatus.IN_TRANSIT
+                and drone.turns_in_transit <= 1
+                and drone.transit_destination is not None
+            ):
+                destination = drone.transit_destination
+                counts[destination] = counts.get(destination, 0) + 1
+
+        return {
+            zone_name: count
+            for zone_name, count in counts.items()
+            if count > 0
+        }
 
     def _capacity_conflict(
         self,
@@ -207,7 +245,6 @@ class Simulation:
         drone.status = DroneStatus.IN_TRANSIT
         drone.transit_destination = next_zone_name
         drone.turns_in_transit = action.turns_required
-        drone.transit_duration = action.turns_required
 
         # Track link usage (traversal direction)
         self.state.link_usage[link_key] = (
@@ -238,27 +275,9 @@ class Simulation:
         drone.current_zone = drone.transit_destination
         drone.transit_destination = None
         drone.turns_in_transit = 0
-        drone.transit_duration = 0
 
         if drone.current_zone == drone.target_zone:
             drone.status = DroneStatus.ARRIVED
             self.state.completed_drones.add(drone.id)
         else:
             drone.status = DroneStatus.WAITING
-
-
-def _schedule_makespan(drones: list[Drone]) -> int:
-    """The number of simulation turns until every drone is delivered.
-
-    Returns:
-        The latest emitted movement turn over every MOVE action, or 0
-        when no drone has any move scheduled.
-    """
-    makespan = 0
-    for drone in drones:
-        for action in drone.schedule:
-            if action.kind != "MOVE":
-                continue
-            delivered = action.turn + action.turns_required - 1
-            makespan = max(makespan, delivered)
-    return makespan
