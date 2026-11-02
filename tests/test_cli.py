@@ -119,33 +119,33 @@ def _parsed_map(
 
 
 class TestColorRole:
-    def test_red_maps_to_rose(self) -> None:
-        assert color_role("red") == "rose"
-        assert color_role("RED") == "rose"
-        assert color_role("Red") == "rose"
+    def test_red_maps_to_red(self) -> None:
+        assert color_role("red") == "red"
+        assert color_role("RED") == "red"
+        assert color_role("Red") == "red"
 
-    def test_blue_maps_to_iris(self) -> None:
-        assert color_role("blue") == "iris"
-        assert color_role("purple") == "iris"
-        assert color_role("violet") == "iris"
+    def test_blue_maps_to_blue(self) -> None:
+        assert color_role("blue") == "blue"
+        assert color_role("purple") == "blue"
+        assert color_role("violet") == "blue"
 
-    def test_green_maps_to_pine(self) -> None:
-        assert color_role("green") == "pine"
-        assert color_role("teal") == "pine"
+    def test_green_maps_to_green(self) -> None:
+        assert color_role("green") == "green"
+        assert color_role("teal") == "green"
 
-    def test_cyan_maps_to_foam(self) -> None:
-        assert color_role("cyan") == "foam"
-        assert color_role("aqua") == "foam"
+    def test_cyan_maps_to_blue(self) -> None:
+        assert color_role("cyan") == "blue"
+        assert color_role("aqua") == "blue"
 
-    def test_gold_maps_to_gold(self) -> None:
-        assert color_role("gold") == "gold"
-        assert color_role("yellow") == "gold"
-        assert color_role("orange") == "gold"
+    def test_gold_maps_to_yellow(self) -> None:
+        assert color_role("gold") == "yellow"
+        assert color_role("yellow") == "yellow"
+        assert color_role("orange") == "yellow"
 
     def test_neutrals(self) -> None:
-        assert color_role("white") == "text"
-        assert color_role("gray") == "muted"
-        assert color_role("grey") == "muted"
+        assert color_role("white") == "white"
+        assert color_role("gray") == "gray"
+        assert color_role("grey") == "gray"
 
     def test_none_returns_none(self) -> None:
         assert color_role("none") is None
@@ -213,25 +213,34 @@ class TestFormatTurn:
         colored = format_turn(
             turn,
             color=True,
-            zone_roles={"loop_b": "pine", "exit_point": "rose"},
+            zone_roles={"loop_b": "green", "exit_point": "red"},
             in_flight={2: "loop_b-exit_point"},
         )
         assert colored.startswith(
-            "\033[38;2;246;193;119mD2\033[0m-"
+            f"\033[38;2;{PALETTE['yellow'][0]};"
+            f"{PALETTE['yellow'][1]};{PALETTE['yellow'][2]}mD2\033[0m-"
         )
-        assert "\033[38;2;49;116;143mloop_b\033[0m" in colored
-        assert "\033[38;2;235;111;146mexit_point\033[0m" in colored
+        assert (
+            f"\033[38;2;{PALETTE['green'][0]};"
+            f"{PALETTE['green'][1]};{PALETTE['green'][2]}mloop_b\033[0m"
+        ) in colored
+        assert (
+            f"\033[38;2;{PALETTE['red'][0]};"
+            f"{PALETTE['red'][1]};{PALETTE['red'][2]}mexit_point\033[0m"
+        ) in colored
 
-    def test_colored_default_foam(self) -> None:
+    def test_colored_default_blue(self) -> None:
         result = Movement(
             drone_id=1, from_zone="S", to_zone="A", turns_required=1
         )
         turn = TurnResult(turn_number=1, movements=[result])
         colored = format_turn(turn, color=True)
-        # Default zone color is foam
+        # Default zone color is Google blue
         assert colored.startswith(
-            "\033[38;2;246;193;119mD1\033[0m-"
-            "\033[38;2;156;207;216mA\033[0m"
+            f"\033[38;2;{PALETTE['yellow'][0]};"
+            f"{PALETTE['yellow'][1]};{PALETTE['yellow'][2]}mD1\033[0m-"
+            f"\033[38;2;{PALETTE['blue'][0]};"
+            f"{PALETTE['blue'][1]};{PALETTE['blue'][2]}mA\033[0m"
         )
 
     def test_colored_with_zone_roles(self) -> None:
@@ -239,11 +248,13 @@ class TestFormatTurn:
             drone_id=1, from_zone="S", to_zone="A", turns_required=1
         )
         turn = TurnResult(turn_number=1, movements=[result])
-        colored = format_turn(turn, zone_roles={"A": "rose"}, color=True)
-        # Zone A painted rose
+        colored = format_turn(turn, zone_roles={"A": "red"}, color=True)
+        # Zone A painted Google red
         assert colored.startswith(
-            "\033[38;2;246;193;119mD1\033[0m-"
-            "\033[38;2;235;111;146mA\033[0m"
+            f"\033[38;2;{PALETTE['yellow'][0]};"
+            f"{PALETTE['yellow'][1]};{PALETTE['yellow'][2]}mD1\033[0m-"
+            f"\033[38;2;{PALETTE['red'][0]};"
+            f"{PALETTE['red'][1]};{PALETTE['red'][2]}mA\033[0m"
         )
 
     def test_multiple_zones_different_colors(self) -> None:
@@ -256,11 +267,17 @@ class TestFormatTurn:
         turn = TurnResult(turn_number=1, movements=[m1, m2])
         colored = format_turn(
             turn,
-            zone_roles={"A": "rose", "B": "iris"},
+            zone_roles={"A": "red", "B": "blue"},
             color=True,
         )
-        assert "\033[38;2;235;111;146mA\033[0m" in colored
-        assert "\033[38;2;196;167;231mB\033[0m" in colored
+        assert (
+            f"\033[38;2;{PALETTE['red'][0]};"
+            f"{PALETTE['red'][1]};{PALETTE['red'][2]}mA\033[0m"
+        ) in colored
+        assert (
+            f"\033[38;2;{PALETTE['blue'][0]};"
+            f"{PALETTE['blue'][1]};{PALETTE['blue'][2]}mB\033[0m"
+        ) in colored
 
 
 class TestFormatMap:
@@ -318,8 +335,12 @@ class TestFormatMap:
             conns=[],
         )
         lines = format_map(pmap, color=True)
-        # nb_drones line colored gold
-        assert "\033[38;2;246;193;119mnb_drones: 2\033[0m" in lines[0]
+        # nb_drones line colored Google blue
+        assert (
+            f"\033[38;2;{PALETTE['blue'][0]};"
+            f"{PALETTE['blue'][1]};{PALETTE['blue'][2]}mnb_drones: 2"
+            "\033[0m"
+        ) in lines[0]
 
     def test_colored_zone_name_in_hub_line(self) -> None:
         pmap = _parsed_map(
@@ -332,12 +353,17 @@ class TestFormatMap:
             conns=[],
         )
         lines = format_map(pmap, color=True)
-        # hub line: name "landing" should be rose, rest foam
+        # hub line: name "landing" should be red, prefix white
         hub_line = lines[3]
         assert "landing" in hub_line
-        assert "\033[38;2;235;111;146mlanding\033[0m" in hub_line
-        # Prefix "hub: " should still be foam
-        assert "\033[38;2;156;207;216mhub: \033[0m" in hub_line
+        assert (
+            f"\033[38;2;{PALETTE['red'][0]};"
+            f"{PALETTE['red'][1]};{PALETTE['red'][2]}mlanding\033[0m"
+        ) in hub_line
+        assert (
+            f"\033[38;2;{PALETTE['white'][0]};"
+            f"{PALETTE['white'][1]};{PALETTE['white'][2]}mhub: \033[0m"
+        ) in hub_line
 
     def test_colored_zone_name_in_connection(self) -> None:
         pmap = _parsed_map(
@@ -355,11 +381,21 @@ class TestFormatMap:
         lines = format_map(pmap, color=True)
         # 0=nb_drones, 1=start, 2=end, 3=hub a, 4=hub b, 5=conn, 6=blank
         conn_line = lines[5]
-        # a should be rose, b should be iris
-        assert "\033[38;2;235;111;146ma\033[0m" in conn_line
-        assert "\033[38;2;196;167;231mb\033[0m" in conn_line
-        # connection prefix should be pine
-        assert "\033[38;2;49;116;143mconnection: \033[0m" in conn_line
+        # a should be red, b should be blue
+        assert (
+            f"\033[38;2;{PALETTE['red'][0]};"
+            f"{PALETTE['red'][1]};{PALETTE['red'][2]}ma\033[0m"
+        ) in conn_line
+        assert (
+            f"\033[38;2;{PALETTE['blue'][0]};"
+            f"{PALETTE['blue'][1]};{PALETTE['blue'][2]}mb\033[0m"
+        ) in conn_line
+        # connection prefix should be gray
+        assert (
+            f"\033[38;2;{PALETTE['gray'][0]};"
+            f"{PALETTE['gray'][1]};{PALETTE['gray'][2]}mconnection: "
+            "\033[0m"
+        ) in conn_line
 
     def test_start_end_hub_colored(self) -> None:
         pmap = _parsed_map(
@@ -371,10 +407,15 @@ class TestFormatMap:
             conns=[],
         )
         lines = format_map(pmap, color=True)
-        # start_hub name should be gold (text default overridden)
-        assert "\033[38;2;246;193;119mstart\033[0m" in lines[1]
-        # end_hub name should be pine (green -> pine)
-        assert "\033[38;2;49;116;143mend\033[0m" in lines[2]
+        # start_hub name should be yellow, end_hub name green
+        assert (
+            f"\033[38;2;{PALETTE['yellow'][0]};"
+            f"{PALETTE['yellow'][1]};{PALETTE['yellow'][2]}mstart\033[0m"
+        ) in lines[1]
+        assert (
+            f"\033[38;2;{PALETTE['green'][0]};"
+            f"{PALETTE['green'][1]};{PALETTE['green'][2]}mend\033[0m"
+        ) in lines[2]
 
 
 class TestSimulate:
@@ -487,17 +528,17 @@ class TestSimulate:
         lines = list(
             simulate(graph, [_drone(1, "S", "G")], color=True)
         )
-        # A should be rose, G should be pine
-        assert any(
-            "\033[38;2;235;111;146m" in line
-            for line in lines
-            if "A" in line
+        # A should be red, G should be green
+        red_code = (
+            f"\033[38;2;{PALETTE['red'][0]};"
+            f"{PALETTE['red'][1]};{PALETTE['red'][2]}m"
         )
-        assert any(
-            "\033[38;2;49;116;143m" in line
-            for line in lines
-            if "G" in line
+        green_code = (
+            f"\033[38;2;{PALETTE['green'][0]};"
+            f"{PALETTE['green'][1]};{PALETTE['green'][2]}m"
         )
+        assert any(red_code in line for line in lines if "A" in line)
+        assert any(green_code in line for line in lines if "G" in line)
 
 
 class TestCapacity:

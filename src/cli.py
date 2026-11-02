@@ -1,15 +1,14 @@
 """Pure CLI output layer for the Fly-in simulation.
 
-Mirrors the GUI's pure-helper + thin-run pattern: formatters are
-side-effect-free and unit-testable; ``run`` wires parsing, simulation
-and printing.
+Formatters are side-effect-free and unit-testable; ``run`` wires
+parsing, simulation and printing.
 """
 
 from __future__ import annotations
 
 import os
 import sys
-from typing import Iterator, TypeAlias
+from typing import Iterator
 
 from src.models import (
     Drone,
@@ -19,15 +18,18 @@ from src.models import (
     ParsedZone,
     Schedule,
     TurnResult,
+    ZoneType,
 )
 from src.parser import build_graph, ParseError, parse_map
 from src.palette import PALETTE, color_role
 from src.simulation.engine import Simulation
 
-# Type aliases for clarity
-RGB: TypeAlias = tuple[int, int, int]
-Positions: TypeAlias = dict[str, tuple[int, int]]
-ZoneRoles: TypeAlias = dict[str, str]
+ZONE_TYPE_ROLES: dict[ZoneType, str] = {
+    ZoneType.NORMAL: "blue",
+    ZoneType.PRIORITY: "green",
+    ZoneType.RESTRICTED: "yellow",
+    ZoneType.BLOCKED: "gray",
+}
 
 
 def paint(text: str, role: str, color: bool = False) -> str:
@@ -37,7 +39,7 @@ def paint(text: str, role: str, color: bool = False) -> str:
 
     Args:
         text: The text to wrap.
-        role: The rose-pine role name to paint with.
+        role: The Google palette role name to paint with.
         color: Whether to enable ANSI color output.
 
     Returns:
@@ -80,7 +82,7 @@ def format_map(parsed: ParsedMap, color: bool = False) -> list[str]:
 
     Returns lines including a trailing blank separator line.
     Zone names are painted with their ``color=`` metadata mapped to
-    rose-pine roles; uncolored zones keep the line's default role.
+    Google palette roles; uncolored zones keep the line's default role.
 
     Args:
         parsed: The parsed map to echo.
@@ -91,7 +93,7 @@ def format_map(parsed: ParsedMap, color: bool = False) -> list[str]:
     """
     lines: list[str] = []
 
-    lines.append(paint(f"nb_drones: {parsed.nb_drones}", "gold", color))
+    lines.append(paint(f"nb_drones: {parsed.nb_drones}", "blue", color))
 
     # Build name -> color_name lookup for all zones
     zone_colors: dict[str, str] = {}
@@ -100,22 +102,24 @@ def format_map(parsed: ParsedMap, color: bool = False) -> list[str]:
 
     lines.append(
         _format_zone_line(
-            "start_hub: ", parsed.start_hub, "text", zone_colors, color
+            "start_hub: ", parsed.start_hub, "green", zone_colors, color
         )
     )
     lines.append(
         _format_zone_line(
-            "end_hub: ", parsed.end_hub, "text", zone_colors, color
+            "end_hub: ", parsed.end_hub, "blue", zone_colors, color
         )
     )
 
     for z in parsed.zones:
-        lines.append(_format_zone_line("hub: ", z, "foam", zone_colors, color))
+        lines.append(
+            _format_zone_line("hub: ", z, "white", zone_colors, color)
+        )
 
     for c in parsed.connections:
-        a_role = color_role(zone_colors.get(c.zone_a, "none")) or "pine"
-        b_role = color_role(zone_colors.get(c.zone_b, "none")) or "pine"
-        prefix = paint("connection: ", "pine", color)
+        a_role = color_role(zone_colors.get(c.zone_a, "none")) or "gray"
+        b_role = color_role(zone_colors.get(c.zone_b, "none")) or "gray"
+        prefix = paint("connection: ", "gray", color)
         name_a = paint(c.zone_a, a_role, color)
         name_b = paint(c.zone_b, b_role, color)
         line = f"{prefix}{name_a}-{name_b}" + _format_metadata(c.metadata)
@@ -144,8 +148,8 @@ def format_turn(
     Args:
         result: The turn's movements and conflicts.
         color: Whether to enable ANSI color output.
-        zone_roles: Zone name to rose-pine role mapping; unlisted
-            zones default to ``foam``.
+        zone_roles: Zone name to Google palette role mapping; unlisted
+            zones default to ``blue``.
         in_flight: In-transit drone id to connection name pairs.
         arrivals: Final-transit drone id to destination zone pairs.
         capacity_tags: Zone name to capacity suffix mapping.
@@ -158,7 +162,7 @@ def format_turn(
     tags = capacity_tags or {}
     parts: list[tuple[int, str]] = []
     for mv in sorted(result.movements, key=lambda m: m.drone_id):
-        drone_part = paint(f"D{mv.drone_id}", "gold", color)
+        drone_part = paint(f"D{mv.drone_id}", "yellow", color)
         if mv.turns_required > 1:
             connection = f"{mv.from_zone}-{mv.to_zone}"
             connection_part = _paint_connection(
@@ -166,17 +170,17 @@ def format_turn(
             )
             parts.append((mv.drone_id, f"{drone_part}-{connection_part}"))
             continue
-        role = (zone_roles or {}).get(mv.to_zone, "foam")
+        role = (zone_roles or {}).get(mv.to_zone, "blue")
         zone_part = paint(mv.to_zone, role, color)
         tag = tags.get(mv.to_zone, "")
         parts.append((mv.drone_id, f"{drone_part}-{zone_part}{tag}"))
     for drone_id, connection in (in_flight or {}).items():
-        drone_part = paint(f"D{drone_id}", "gold", color)
+        drone_part = paint(f"D{drone_id}", "yellow", color)
         connection_part = _paint_connection(connection, zone_roles, color)
         parts.append((drone_id, f"{drone_part}-{connection_part}"))
     for drone_id, destination in (arrivals or {}).items():
-        drone_part = paint(f"D{drone_id}", "gold", color)
-        role = (zone_roles or {}).get(destination, "foam")
+        drone_part = paint(f"D{drone_id}", "yellow", color)
+        role = (zone_roles or {}).get(destination, "blue")
         destination_part = paint(destination, role, color)
         tag = tags.get(destination, "")
         parts.append((drone_id, f"{drone_part}-{destination_part}{tag}"))
@@ -191,8 +195,8 @@ def _paint_connection(
     """Paint a ``zone_a-zone_b`` connection name by endpoint roles."""
     zone_a, zone_b = connection.split("-", 1)
     roles = zone_roles or {}
-    role_a = roles.get(zone_a, "foam")
-    role_b = roles.get(zone_b, "foam")
+    role_a = roles.get(zone_a, "blue")
+    role_b = roles.get(zone_b, "blue")
     return f"{paint(zone_a, role_a, color)}-{paint(zone_b, role_b, color)}"
 
 
@@ -405,10 +409,11 @@ def _simulate_raw(
     """Internal: step simulation, yielding (line, conflicts) per turn."""
     sim = Simulation(graph, drones)
 
-    # Build zone_roles from graph: zone.name -> rose-pine role (default foam)
+    # Build zone_roles from graph: zone.name -> Google role (default blue)
     zone_roles: dict[str, str] = {}
     for name, zone in graph.zones.items():
-        zone_roles[name] = color_role(zone.color) or "foam"
+        explicit = color_role(zone.color)
+        zone_roles[name] = explicit or ZONE_TYPE_ROLES[zone.zone_type]
 
     while not sim.finished:
         in_flight_before = {

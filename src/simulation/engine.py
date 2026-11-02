@@ -50,7 +50,7 @@ class Simulation:
         """Plan an optimal Schedule and prepare the replay state.
 
         With ``replan=False`` the drones' existing ``schedule`` lists are
-        replayed instead of re-planning (the GUI rewind path); this keeps
+        replayed instead of re-planning (the replay path); this keeps
         a mid-run replay deterministic — re-planning would anchor a fresh
         schedule at turn 1, shifting a resumed run's timing.
 

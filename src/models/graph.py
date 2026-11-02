@@ -7,7 +7,6 @@ from functools import cached_property
 from pydantic import BaseModel, Field
 
 from src.models.connection import Connection
-from src.models.graph_utils import canonical_key
 from src.models.zone import Zone
 
 
@@ -46,17 +45,3 @@ class Graph(BaseModel):
             The connected zone names, or an empty list.
         """
         return self.adjacency.get(zone_name, [])
-
-    def connection_between(
-        self, zone_a: str, zone_b: str
-    ) -> Connection | None:
-        """The connection linking two zones, if any.
-
-        Args:
-            zone_a: The first endpoint zone name.
-            zone_b: The second endpoint zone name.
-
-        Returns:
-            The connection between the zones, or None if absent.
-        """
-        return self.connections.get(canonical_key(zone_a, zone_b))

@@ -11,8 +11,8 @@ in Python 3.10, fully type-checked with mypy (strict) and flake8-clean.
 
 Routing uses a deterministic **greedy prioritized planner**: drones are
 planned in id order, and each route respects the capacity reservations
-of all previously committed routes. Both a color terminal output and a
-retro pixel-art GUI (pygame-ce) are included.
+of all previously committed routes. Output is a Google-colored
+truecolor terminal interface.
 
 ### Features
 
@@ -22,10 +22,9 @@ retro pixel-art GUI (pygame-ce) are included.
 - Zone types: `normal` (1), `priority` (1, preferred), `restricted` (2),
   `blocked` (inaccessible).
 - Full map parser with line-numbered error messages.
-- CLI: rose-pine truecolor terminal output (`D1-zoneA D2-zoneB` per turn).
-- GUI: keyboard-driven pixel-art viewer with `←`/`→` turn stepping and
-  a map picker (Press Start 2P font, headless-testable).
-- Deterministic replays — the GUI rewind restores exact turn snapshots.
+- CLI: Google-colored truecolor terminal output (`D1-zoneA D2-zoneB` per turn).
+- Optional `--capacity` annotations for zone occupancy.
+- Deterministic replays and reproducible benchmark results.
 
 ## Instructions
 
@@ -44,7 +43,6 @@ make install
 
 ```
 make run MAP=maps/easy/01_linear_path.txt     # CLI simulation
-make gui MAP=maps/easy/01_linear_path.txt     # pixel-art GUI
 make debug MAP=maps/personal/bottleneck.txt   # pdb debugger + conflict tracing
 make stats MAP=maps/easy/01_linear_path.txt   # CLI + stats block
 make run-all                                  # all tier maps with --stats
@@ -53,13 +51,12 @@ make run-all                                  # all tier maps with --stats
 #### Command line
 
 ```
-python -m src <map> [--gui] [--debug] [--no-color] [--stats] [--map] [--capacity]
+python -m src <map> [--debug] [--no-color] [--stats] [--map] [--capacity]
 ```
 
 | Arg | Meaning |
 |-----|---------|
 | `map` (positional) | path to the map file |
-| `--gui` | render the map in a pygame window instead of the text CLI |
 | `--debug` | print engine conflicts to stderr |
 | `--no-color` | disable ANSI truecolor (default: auto, off on non-TTY / `NO_COLOR`) |
 | `--stats` | append a stats block after the turns: blank line, `== Stats ==`, secondary metrics and the makespan |
@@ -69,16 +66,6 @@ python -m src <map> [--gui] [--debug] [--no-color] [--stats] [--map] [--capacity
 Maps ship in tiers under `maps/` (`easy/`, `medium/`, `hard/`,
 `challenger/`) plus regression maps in `maps/personal/`. The map format
 is documented in `input_format.md`.
-
-#### GUI controls
-
-| Key | Action |
-|-----|--------|
-| `→` | step forward one turn |
-| `←` | step back one turn |
-| `T` | toggle zone-name labels |
-| `M` | map picker (↑/↓ move, ENTER load, ESC/M close) |
-| `ESC` / `Ctrl+C` | quit |
 
 ## Example
 
@@ -143,25 +130,35 @@ D1-goal
 
 ## Visual representation
 
-Two complementary views of the same simulation:
+The CLI uses a Google-inspired truecolor palette:
 
-- **CLI (rose-pine truecolor).** Zone names are painted according to
-  their `color=` metadata (red→rose, blue→iris, green→pine, cyan→foam,
-  gold→gold; other names get a deterministic palette fallback), drone
-  ids are gold, and map-header `connection:` lines pine. Colors make
-  bottleneck zones and congestion visible at a glance and are
-  auto-disabled off a TTY or under `NO_COLOR`.
-- **GUI (pygame-ce).** A low-res pixel-art canvas (640×360, upscaled)
-  in the Press Start 2P font. Zones are drawn as nodes, connections as
-  edges, and each drone as a moving sprite; `D{id}-{zone}` hop lines
-  appear in a per-turn log. The `←`/`→` step controls let you scrub
-  through a run, so conflicts, waits, and capacity deadlocks can be
-  replayed and analyzed frame by frame. The rewind restores exact turn
-  snapshots, and a map picker (`M`) switches files without restarting.
+- normal zones and the end hub use Google Blue,
+- priority zones and the start hub use Google Green,
+- restricted zones use Google Yellow,
+- blocked zones use Google Gray,
+- drone ids use Google Yellow,
+- errors and conflicts use Google Red.
 
-Together they make the schedule legible: you can watch the fleet feed
-through a bottleneck, pause at a wait, and rewind to understand *why*
-a drone held — which the raw turn log alone does not convey.
+Zone names can also be colored by their `color=` metadata. Unknown
+single-word colors get a deterministic Google-palette fallback.
+
+Colors are auto-disabled when stdout is not a TTY or when `NO_COLOR` is
+set. With `--capacity`, zone tokens include projected end-of-turn
+occupancy:
+
+```text
+D1-waypoint1 (1/1)
+D1-goal (1/∞)
+```
+
+Connections remain unchanged:
+
+```text
+D1-loop_b-exit_point
+```
+
+The movement lines make waits, bottlenecks, and capacity pressure easy
+to spot, while `--debug` prints engine conflicts to stderr.
 
 ## Development
 
@@ -178,7 +175,7 @@ baselines can be reproduced with `make benchmark`.
 
 ```
 src/
-  __main__.py        # entry point: python -m src <map> [--gui] [--debug]
+  __main__.py        # entry point: python -m src <map> [--debug]
   parser/            # parse_map (raw file) -> converter.build_graph
   models/            # pydantic: Zone, Connection, Graph, Drone, Schedule, ...
   simulation/
@@ -186,8 +183,7 @@ src/
     planner.py       # Greedy prioritized planner with capacity reservations
     engine.py        # Simulation: replays the Schedule turn by turn
   cli.py             # terminal output layer
-  palette.py         # shared rose-pine palette (CLI + GUI)
-  gui/               # pygame-ce viewer (app, controller, menu, transform)
+  palette.py         # Google truecolor palette
 ```
 
 ## Algorithm
@@ -230,9 +226,8 @@ produced by the greedy prioritized planner for every supplied map.
 ## Resources
 
 - Python 3.10, [pydantic](https://docs.pydantic.dev/), `uv`.
-- GUI: [pygame-ce](https://pyga.me/) + vendored **Press Start 2P**
-  font (SIL OFL-1.1, `assets/fonts/OFL.txt`).
-- Rose-pine color palette.
+- Google brand colors for terminal output.
+- Timed A* and greedy prioritized planning.
 
 ### AI utilization
 
@@ -245,8 +240,8 @@ This project was developed iteratively with an AI coding assistant
   as described in the Algorithm section.
 - Designing the turn-based engine (`src/simulation/engine.py`) and its
   conflict-free schedule replay model.
-- The pygame-ce GUI (`src/gui/`) and the shared rose-pine palette
-  (`src/palette.py`), including its headless test suite.
+- The Google-inspired terminal palette (`src/palette.py`) and CLI
+  capacity annotations.
 - Writing the test suite and the tiered benchmark maps.
 
 Human review covered the algorithm choices, reservation model, test

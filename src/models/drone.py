@@ -22,15 +22,6 @@ class Drone(BaseModel):
     transit_destination: str | None = None
     blocked_reason: str | None = None
 
-    @property
-    def arrived(self) -> bool:
-        """Whether the drone has reached its target zone.
-
-        Returns:
-            True when the drone's status is ``ARRIVED``.
-        """
-        return self.status == DroneStatus.ARRIVED
-
 
 class Movement(BaseModel):
     """A single drone movement announced on a simulation turn."""

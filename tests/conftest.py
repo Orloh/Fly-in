@@ -1,19 +1,10 @@
-"""Headless test configuration for the pygame GUI.
-
-Sets SDL dummy drivers before any pygame module initializes a display,
-so GUI tests can run without a video device or audio output.
-"""
-
-import os
+"""Shared graph and drone fixtures for the test suite."""
 
 import pytest
 
 from collections.abc import Callable
 from src.models import Graph, Zone, Connection, ZoneType, Drone
 from src.models.graph_utils import canonical_key
-
-os.environ.setdefault("SDL_VIDEODRIVER", "dummy")
-os.environ.setdefault("SDL_AUDIODRIVER", "dummy")
 
 
 @pytest.fixture

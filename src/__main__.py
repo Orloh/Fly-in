@@ -12,9 +12,6 @@ def main() -> None:
     )
     parser.add_argument("map", help="path to the map file")
     parser.add_argument(
-        "--gui", action="store_true", help="render the map in a window"
-    )
-    parser.add_argument(
         "--debug",
         action="store_true",
         help="enable debug mode (conflicts to stderr)",
@@ -39,12 +36,6 @@ def main() -> None:
         help="show occupancy/max capacity for zones in each turn",
     )
     args = parser.parse_args()
-
-    if args.gui:
-        from src.gui import run_gui
-
-        run_gui(args.map)
-        return
 
     from src.cli import run as run_cli
 

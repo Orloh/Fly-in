@@ -26,16 +26,3 @@ class Connection(BaseModel):
             The canonical ``(a, b)`` key with ``a <= b``.
         """
         return canonical_key(self.zone_a, self.zone_b)
-
-    def other(self, zone_name: str) -> str:
-        """Return the endpoint opposite to ``zone_name``.
-
-        Args:
-            zone_name: One endpoint of the connection.
-
-        Returns:
-            The connection's other endpoint.
-        """
-        if zone_name == self.zone_a:
-            return self.zone_b
-        return self.zone_a

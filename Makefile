@@ -3,7 +3,7 @@ PYTHON := uv run python
 MAP ?= maps/easy/01_linear_path.txt
 MAP_TIERS := easy medium hard challenger
 
-.PHONY: install run stats run-all gui debug clean lint test benchmark
+.PHONY: install run stats run-all debug clean lint test benchmark
 
 install:
 	uv sync --group dev
@@ -21,9 +21,6 @@ run-all:
 			$(PYTHON) -m src --stats $$map; \
 		done; \
 	done
-
-gui:
-	$(PYTHON) -m src --gui $(MAP)
 
 debug:
 	$(PYTHON) -m pdb -m src --debug $(MAP)
