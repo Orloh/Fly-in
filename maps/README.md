@@ -76,7 +76,7 @@ All maps are designed to be solvable with a well-implemented algorithm. However:
 - **Hard**: 30+ simulation turns, focus on finding valid solutions
 - **Challenger**: **Record to beat: 45 turns** for "The Impossible Dream" - designed for algorithmic research
 
-### Measured results (quickest flow / CBS / greedy)
+### Measured results (greedy)
 
 Reference targets come from the subject (VII.7). All provided maps meet
 their targets.

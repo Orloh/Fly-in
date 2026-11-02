@@ -131,6 +131,7 @@ def format_turn(
     zone_roles: dict[str, str] | None = None,
     in_flight: dict[int, str] | None = None,
     arrivals: dict[int, str] | None = None,
+    capacity_tags: dict[str, str] | None = None,
 ) -> str:
     """Format a turn's movements as ``D{id}-{to_zone} ...``.
 
@@ -138,7 +139,7 @@ def format_turn(
     (the connection) because the drone is in flight, not yet at the
     destination. ``in_flight`` holds connections for other transit
     turns; ``arrivals`` holds destinations reached on the final transit
-    turn. Returns empty string when nothing to report.
+    turn. Capacity tags are applied only to zone tokens.
 
     Args:
         result: The turn's movements and conflicts.
@@ -147,12 +148,14 @@ def format_turn(
             zones default to ``foam``.
         in_flight: In-transit drone id to connection name pairs.
         arrivals: Final-transit drone id to destination zone pairs.
+        capacity_tags: Zone name to capacity suffix mapping.
 
     Returns:
         The turn line, or an empty string when nothing to report.
     """
     if not result.movements and not in_flight and not arrivals:
         return ""
+    tags = capacity_tags or {}
     parts: list[tuple[int, str]] = []
     for mv in sorted(result.movements, key=lambda m: m.drone_id):
         drone_part = paint(f"D{mv.drone_id}", "gold", color)
@@ -165,7 +168,8 @@ def format_turn(
             continue
         role = (zone_roles or {}).get(mv.to_zone, "foam")
         zone_part = paint(mv.to_zone, role, color)
-        parts.append((mv.drone_id, f"{drone_part}-{zone_part}"))
+        tag = tags.get(mv.to_zone, "")
+        parts.append((mv.drone_id, f"{drone_part}-{zone_part}{tag}"))
     for drone_id, connection in (in_flight or {}).items():
         drone_part = paint(f"D{drone_id}", "gold", color)
         connection_part = _paint_connection(connection, zone_roles, color)
@@ -174,7 +178,8 @@ def format_turn(
         drone_part = paint(f"D{drone_id}", "gold", color)
         role = (zone_roles or {}).get(destination, "foam")
         destination_part = paint(destination, role, color)
-        parts.append((drone_id, f"{drone_part}-{destination_part}"))
+        tag = tags.get(destination, "")
+        parts.append((drone_id, f"{drone_part}-{destination_part}{tag}"))
     return " ".join(token for _, token in sorted(parts))
 
 
@@ -263,7 +268,10 @@ def format_metrics(schedule: Schedule) -> list[str]:
 
 
 def simulate(
-    graph: Graph, drones: list[Drone], color: bool = False
+    graph: Graph,
+    drones: list[Drone],
+    color: bool = False,
+    capacity: bool = False,
 ) -> Iterator[str]:
     """Step the simulation, yielding one line per turn.
 
@@ -278,11 +286,14 @@ def simulate(
         graph: The routing graph.
         drones: The fleet to simulate.
         color: Whether to enable ANSI color output.
+        capacity: Whether to annotate zones with occupancy/capacity.
 
     Yields:
         One formatted line per simulation turn.
     """
-    for line, _ in _simulate_raw(graph, drones, color):
+    for line, _ in _simulate_raw(
+        graph, drones, color, capacity=capacity
+    ):
         yield line
 
 
@@ -337,11 +348,59 @@ def _transit_after(
     return in_flight, arrivals
 
 
+def _occupancy_after_turn(
+    sim: Simulation,
+    result: TurnResult,
+    arrivals: dict[int, str],
+) -> dict[str, int]:
+    """Project zone occupancy at the end of the current turn."""
+    counts = dict(sim.state.zone_occupancy)
+
+    for movement in result.movements:
+        counts[movement.from_zone] = max(
+            0, counts.get(movement.from_zone, 0) - 1
+        )
+        if movement.turns_required == 1:
+            counts[movement.to_zone] = (
+                counts.get(movement.to_zone, 0) + 1
+            )
+
+    for destination in arrivals.values():
+        counts[destination] = counts.get(destination, 0) + 1
+
+    return counts
+
+
+def _capacity_tags(
+    graph: Graph,
+    result: TurnResult,
+    arrivals: dict[int, str],
+    occupancy: dict[str, int],
+) -> dict[str, str]:
+    """Build capacity annotations for zone tokens shown this turn."""
+    zones: set[str] = set()
+
+    for movement in result.movements:
+        if movement.turns_required == 1:
+            zones.add(movement.to_zone)
+
+    zones.update(arrivals.values())
+
+    tags: dict[str, str] = {}
+    for zone_name in zones:
+        zone = graph.zones[zone_name]
+        maximum = "∞" if zone.capacity is None else str(zone.capacity)
+        occupied = occupancy.get(zone_name, 0)
+        tags[zone_name] = f" ({occupied}/{maximum})"
+    return tags
+
+
 def _simulate_raw(
     graph: Graph,
     drones: list[Drone],
     color: bool = False,
     show_stats: bool = False,
+    capacity: bool = False,
 ) -> Iterator[tuple[str, list[str]]]:
     """Internal: step simulation, yielding (line, conflicts) per turn."""
     sim = Simulation(graph, drones)
@@ -362,11 +421,23 @@ def _simulate_raw(
         result = sim.step()
         in_flight, arrivals = _transit_after(sim, in_flight_before)
 
+        capacity_tags: dict[str, str] | None = None
+        if capacity:
+            occupancy = _occupancy_after_turn(sim, result, arrivals)
+            capacity_tags = _capacity_tags(
+                graph, result, arrivals, occupancy
+            )
+
         if sim.finished:
             # Final arrival turn: only emit if there were movements
             if result.movements:
                 yield format_turn(
-                    result, color, zone_roles, in_flight, arrivals
+                    result,
+                    color,
+                    zone_roles,
+                    in_flight,
+                    arrivals,
+                    capacity_tags=capacity_tags,
                 ), result.conflicts
             break
 
@@ -376,16 +447,23 @@ def _simulate_raw(
             d.status == DroneStatus.IN_TRANSIT
             for d in sim.state.drones.values()
         )
+        line = format_turn(
+            result,
+            color,
+            zone_roles,
+            in_flight,
+            arrivals,
+            capacity_tags=capacity_tags,
+        )
         if (
             not result.movements
             and not in_transit
             and not _has_future_action(sim)
         ):
+            yield line, result.conflicts
             break
 
-        yield format_turn(
-            result, color, zone_roles, in_flight, arrivals
-        ), result.conflicts
+        yield line, result.conflicts
 
     if show_stats:
         for line in format_stats(sim.schedule):
@@ -403,6 +481,7 @@ def build_output(
     color: bool | None = None,
     show_stats: bool = False,
     show_map: bool = False,
+    capacity: bool = False,
 ) -> tuple[list[str], list[str], int]:
     """Build the complete CLI output without side effects.
 
@@ -417,6 +496,7 @@ def build_output(
         color: Force enable/disable ANSI color; None = auto-detect.
         show_stats: Whether to append the stats block.
         show_map: Whether to echo the normalized map header first.
+        capacity: Whether to annotate zones with occupancy/capacity.
 
     Returns:
         A ``(stdout_lines, stderr_lines, exit_code)`` tuple.
@@ -445,6 +525,7 @@ def build_output(
         fleet,
         use_color,
         show_stats=show_stats,
+        capacity=capacity,
     ):
         stdout_lines.append(line)
         if debug:
@@ -459,6 +540,7 @@ def run(
     color: bool | None = None,
     show_stats: bool = False,
     show_map: bool = False,
+    capacity: bool = False,
 ) -> None:
     """Parse map, run simulation, print turns.
 
@@ -474,9 +556,10 @@ def run(
         color: Force enable/disable ANSI color; None = auto-detect.
         show_stats: Whether to append the stats block.
         show_map: Whether to echo the normalized map header first.
+        capacity: Whether to annotate zones with occupancy/capacity.
     """
     stdout_lines, stderr_lines, exit_code = build_output(
-        map_path, debug, color, show_stats, show_map
+        map_path, debug, color, show_stats, show_map, capacity
     )
     for line in stdout_lines:
         print(line)

@@ -1,6 +1,6 @@
 """Turn-by-turn drone fleet simulation engine.
 
-``Simulation`` computes an optimal ``Schedule`` once via the CBS
+``Simulation`` computes a ``Schedule`` once via the greedy
 ``Planner`` at construction, then ``step()`` replays it as a cursor.
 Waiting drones look up their scheduled action for the current turn:
 MOVE starts a hop, WAIT stays silently. Planned waits are silent; the

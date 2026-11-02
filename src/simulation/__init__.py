@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 from src.simulation.engine import Conflict, Simulation
-from src.simulation.flow import FlowPlanner
 from src.simulation.pathfinding import (
     TimedRoute,
     VertexConstraint,
@@ -24,7 +23,6 @@ __all__ = [
     "dist_to_goal",
     "find_path_timed",
     "Planner",
-    "FlowPlanner",
     "Heuristic",
     "sum_entry_cost",
 ]

@@ -1,4 +1,4 @@
-"""Tests for the CBS Planner — optimal makespan schedules."""
+"""Tests for the greedy planner — makespan and conflict checks."""
 
 from __future__ import annotations
 
@@ -11,7 +11,7 @@ from src.simulation.planner import Planner
 
 
 class TestPlannerMakespan:
-    """Optimal makespan assertions for test matrix."""
+    """Makespan assertions for the test matrix."""
 
     def test_bottleneck_map(self) -> None:
         graph, drones = build_graph(parse_map("maps/personal/bottleneck.txt"))
@@ -71,7 +71,7 @@ class TestPlannerMakespan:
 
 
 class TestPlannerSynthetic:
-    """Synthetic unit tests for core CBS behaviors."""
+    """Synthetic unit tests for core greedy behaviors."""
 
     def test_single_drone_normal_route(
         self,
@@ -105,8 +105,9 @@ class TestPlannerSynthetic:
             Drone(id=1, current_zone="A", target_zone="B"),
             Drone(id=2, current_zone="B", target_zone="A"),
         ]
-        schedule, _ = Planner(head_on_graph).plan(drones)
-        assert schedule.makespan == 2
+        schedule, blocked = Planner(head_on_graph).plan(drones)
+        assert schedule.makespan == 1
+        assert len(blocked) == 1
 
 
 class TestPlannerConflictFree:

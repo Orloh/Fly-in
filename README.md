@@ -9,16 +9,15 @@ an end hub across a network of zones and connections, minimizing the
 **makespan** — the number of turns until the last drone arrives. Written
 in Python 3.10, fully type-checked with mypy (strict) and flake8-clean.
 
-Routing is replayed deterministically by the engine. Homogeneous fleets
-(every drone start_hub → end_hub) use a **time-expanded max-flow
-(quickest flow)** solver; multi-commodity fleets use **Conflict-Based
-Search (CBS)**, with a greedy fallback for large fleets. Both a color
-terminal output and a retro pixel-art GUI (pygame-ce) are included.
+Routing uses a deterministic **greedy prioritized planner**: drones are
+planned in id order, and each route respects the capacity reservations
+of all previously committed routes. Both a color terminal output and a
+retro pixel-art GUI (pygame-ce) are included.
 
 ### Features
 
-- Capacity-aware fleet routing via quickest flow (homogeneous) / CBS
-  (heterogeneous), with a greedy fallback for large heterogeneous fleets.
+- Capacity-aware greedy fleet routing with per-turn zone and link
+  reservations.
 - Simultaneous movement with strict capacity rules per zone and link.
 - Zone types: `normal` (1), `priority` (1, preferred), `restricted` (2),
   `blocked` (inaccessible).
@@ -54,7 +53,7 @@ make run-all                                  # all tier maps with --stats
 #### Command line
 
 ```
-python -m src <map> [--gui] [--debug] [--no-color] [--stats] [--map]
+python -m src <map> [--gui] [--debug] [--no-color] [--stats] [--map] [--capacity]
 ```
 
 | Arg | Meaning |
@@ -65,6 +64,7 @@ python -m src <map> [--gui] [--debug] [--no-color] [--stats] [--map]
 | `--no-color` | disable ANSI truecolor (default: auto, off on non-TTY / `NO_COLOR`) |
 | `--stats` | append a stats block after the turns: blank line, `== Stats ==`, secondary metrics and the makespan |
 | `--map` | echo the normalized map header before the turns (hidden by default) |
+| `--capacity` | show occupancy/max capacity for zones in each turn; connections stay unchanged |
 
 Maps ship in tiers under `maps/` (`easy/`, `medium/`, `hard/`,
 `challenger/`) plus regression maps in `maps/personal/`. The map format
@@ -183,8 +183,7 @@ src/
   models/            # pydantic: Zone, Connection, Graph, Drone, Schedule, ...
   simulation/
     pathfinding.py   # dist_to_goal (reverse Dijkstra), find_path_timed (A*)
-    flow.py          # FlowPlanner: time-expanded max-flow (homogeneous fleets)
-    planner.py       # Planner: dispatches flow / CBS; CBS constraint tree
+    planner.py       # Greedy prioritized planner with capacity reservations
     engine.py        # Simulation: replays the Schedule turn by turn
   cli.py             # terminal output layer
   palette.py         # shared rose-pine palette (CLI + GUI)
@@ -195,58 +194,38 @@ src/
 
 The objective is the **makespan**: the fewest turns until every drone
 reaches the end hub. Two drones conflict when a zone's `max_drones` or a
-link's `max_link_capacity` would be exceeded at a given turn (links share
-their budget across both directions; arrived drones keep occupying
-finite-capacity goals).
+link's `max_link_capacity` would be exceeded at a given turn.
 
-**Two solvers, dispatched by `Planner` on fleet structure:**
+**Greedy prioritized planning** (`Planner`). Drones are processed in
+ascending id order:
 
-**1. Quickest flow — homogeneous fleets** (`FlowPlanner`). Since every
-real map gives all drones the same `(start_hub → end_hub)`, the fleet is
-a single-commodity evacuation. A **time-expanded network** over turns
-`1..T` models zone capacity (zone in/out arcs), link capacity (per-turn
-link chains, shared across both directions), and post-arrival goal
-occupancy. **Binary-searching** the smallest `T` where max-flow equals
-the drone count yields the optimal makespan; unit flows are decomposed
-into timed routes. Move arcs are ordered priority-first, so equal-cost
-flow choices prefer priority zones. Polynomial and provably optimal for
-this case.
+1. Drone 1 is routed with time-expanded A* using no reservations.
+2. Its route is committed.
+3. The planner builds occupancy for committed routes and converts every
+   cell that is already at capacity into a constraint:
+   `(zone, turn)` for zones and `(link, turn)` for connections.
+4. Drone 2 is routed with A* while respecting those constraints.
+5. The process repeats for every drone.
 
-The shared link chain can "splice" a 1-turn transit into a restricted
-zone, so the flow schedule is **validated for cost-consistency** and
-used only when sound; otherwise the planner falls back to CBS (optimal).
+The low-level search is `find_path_timed` (`src/simulation/pathfinding.py`):
+it searches the `(zone, turn)` state space, uses a reverse-Dijkstra
+heuristic from the goal, and permits waiting. Equal-cost paths prefer
+priority zones. Restricted zones cost two turns and occupy their link
+during transit.
 
-**2. Conflict-Based Search (CBS) — heterogeneous fleets** (`Planner`).
-Multi-commodity fleets (different goals, e.g. the head-on swap) are
-NP-hard as flow, so CBS handles them:
+Because each new drone is planned around already-full cells, the final
+schedule is conflict-free by construction. The planner is fast and
+deterministic, but not guaranteed to minimize makespan: early drone id
+choices can force later drones to wait or detour.
 
-1. **Low level — time-expanded A\*** (`find_path_timed`). Searches the
-   `(zone, turn)` state space for one drone, guided by a consistent
-   reverse-Dijkstra heuristic (`dist_to_goal`, the cost to reach the goal
-   ignoring other drones). A `constraints` pair
-   (`set[VertexConstraint]`, `set[LinkConstraint]`) prunes forbidden
-   `(zone, turn)` occupancies and link transits. Equal-cost paths prefer
-   priority zones.
-2. **High level — constraint tree** (`Planner`). Each node holds one
-   route per drone. Its routes are merged into an occupancy index; the
-   first conflict (lowest turn) splits the node into two children, each
-   adding one constraint to one of the two offending drones and
-   re-planning only that drone. The first conflict-free node is
-   makespan-optimal. A route-multiset dedup key kills the exponential
-   blowup on homogeneous fleets.
-
-The plan is computed **once** at `Simulation.__init__` and `step()`
-replays it as a cursor — planned waits are silent; the only conflicts are
-no-route drones (blocked) and safety-net planner bugs (visible with
-`--debug`).
+The plan is computed **once** at `Simulation.__init__`; `step()` replays
+it as a cursor. Planned waits are silent; conflicts are limited to
+no-route drones and safety-net planner bugs (visible with `--debug`).
 
 ### Benchmark checks
 
 Run `make benchmark` to run the tier benchmark suite. Makespans are
-produced by quickest flow on
-all-normal maps, CBS on restricted maps with small fleets, and the
-greedy fallback on flow-invalid maps with more than 8 drones (the two
-heuristic maps `ultimate_challenge` and `impossible_dream`).
+produced by the greedy prioritized planner for every supplied map.
 
 ## Resources
 
@@ -254,8 +233,6 @@ heuristic maps `ultimate_challenge` and `impossible_dream`).
 - GUI: [pygame-ce](https://pyga.me/) + vendored **Press Start 2P**
   font (SIL OFL-1.1, `assets/fonts/OFL.txt`).
 - Rose-pine color palette.
-- CBS literature: Sharon et al., "Conflict-Based Search for Optimal
-  Multi-Agent Pathfinding" (2015).
 
 ### AI utilization
 
@@ -264,15 +241,14 @@ This project was developed iteratively with an AI coding assistant
 
 - Implementing the two-stage map parser (`src/parser/`) and its
   line-numbered error handling.
-- Building the routing solvers — the time-expanded quickest-flow planner
-  (`src/simulation/flow.py`) and the Conflict-Based Search planner
-  (`src/simulation/planner.py`) — as described in the Algorithm section.
+- Building the greedy prioritized planner (`src/simulation/planner.py`)
+  as described in the Algorithm section.
 - Designing the turn-based engine (`src/simulation/engine.py`) and its
   conflict-free schedule replay model.
 - The pygame-ce GUI (`src/gui/`) and the shared rose-pine palette
   (`src/palette.py`), including its headless test suite.
 - Writing the test suite and the tiered benchmark maps.
 
-Human review covered the algorithm choices, the solver dispatch cascade
-(flow → CBS → greedy), test expectations, and final polish; every
-AI-generated component was read, validated, and tested before adoption.
+Human review covered the algorithm choices, reservation model, test
+expectations, and final polish; every AI-generated component was read,
+validated, and tested before adoption.

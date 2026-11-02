@@ -1,4 +1,4 @@
-"""Schedule domain models produced by the CBS planner."""
+"""Schedule domain models produced by the planner."""
 
 from __future__ import annotations
 

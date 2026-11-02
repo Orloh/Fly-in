@@ -270,11 +270,9 @@ class TestSimulation:
         first = sim.step()
 
         assert len(first.movements) == 1
-        assert len(first.conflicts) == 0
-
-        while not sim.finished:
-            sim.step()
-        assert sim.state.turn == 3
+        assert len(first.conflicts) == 1
+        assert "drone 2" in first.conflicts[0]
+        assert sim.state.drones[2].status == DroneStatus.BLOCKED
 
     def test_schedule_replays_moves_in_id_order(self) -> None:
         graph = _graph(

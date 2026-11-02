@@ -1,6 +1,6 @@
 """Timed shortest-path planning for the Fly-in simulation.
 
-The CBS low-level search provides two timed functions:
+The planner's low-level search provides two timed functions:
 ``dist_to_goal`` (reverse Dijkstra heuristic) and ``find_path_timed``
 (time-expanded A* with vertex/link constraints).
 """

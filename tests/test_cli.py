@@ -500,6 +500,57 @@ class TestSimulate:
         )
 
 
+class TestCapacity:
+    def test_capacity_annotates_zone_occupancy(self) -> None:
+        import pathlib
+        import tempfile
+
+        with tempfile.TemporaryDirectory() as tmp:
+            path = pathlib.Path(tmp) / "capacity.txt"
+            path.write_text(
+                "nb_drones: 1\n"
+                "start_hub: S 0 0\n"
+                "hub: A 1 0 [max_drones=2]\n"
+                "end_hub: G 2 0\n"
+                "connection: S-A\n"
+                "connection: A-G\n"
+            )
+            stdout, stderr, code = build_output(
+                str(path), capacity=True
+            )
+            assert code == 0
+            assert not stderr
+            assert stdout == [
+                "D1-A (1/2)",
+                "D1-G (1/∞)",
+            ]
+
+    def test_capacity_leaves_connections_unchanged(self) -> None:
+        import pathlib
+        import tempfile
+
+        with tempfile.TemporaryDirectory() as tmp:
+            path = pathlib.Path(tmp) / "restricted.txt"
+            path.write_text(
+                "nb_drones: 1\n"
+                "start_hub: S 0 0\n"
+                "hub: R 1 0 [zone=restricted]\n"
+                "end_hub: G 2 0\n"
+                "connection: S-R\n"
+                "connection: R-G\n"
+            )
+            stdout, stderr, code = build_output(
+                str(path), capacity=True
+            )
+            assert code == 0
+            assert not stderr
+            assert stdout == [
+                "D1-S-R",
+                "D1-R (1/1)",
+                "D1-G (1/∞)",
+            ]
+
+
 class TestMakespan:
     def test_format_makespan(self) -> None:
         assert format_makespan(11) == "makespan: 11"
