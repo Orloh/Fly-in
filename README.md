@@ -23,7 +23,6 @@ truecolor terminal interface.
   `blocked` (inaccessible).
 - Full map parser with line-numbered error messages.
 - CLI: Google-colored truecolor terminal output (`D1-zoneA D2-zoneB` per turn).
-- Optional `--capacity` annotations for zone occupancy.
 - Deterministic replays and reproducible benchmark results.
 
 ## Instructions
@@ -51,7 +50,7 @@ make run-all                                  # all tier maps with --stats
 #### Command line
 
 ```
-python -m src <map> [--debug] [--no-color] [--stats] [--map] [--capacity]
+python -m src <map> [--debug] [--no-color] [--stats] [--map]
 ```
 
 | Arg | Meaning |
@@ -61,7 +60,6 @@ python -m src <map> [--debug] [--no-color] [--stats] [--map] [--capacity]
 | `--no-color` | disable ANSI truecolor (default: auto, off on non-TTY / `NO_COLOR`) |
 | `--stats` | append a stats block after the turns: blank line, `== Stats ==`, secondary metrics and the makespan |
 | `--map` | echo the normalized map header before the turns (hidden by default) |
-| `--capacity` | show occupancy/max capacity for zones in each turn; connections stay unchanged |
 
 Maps ship in tiers under `maps/` (`easy/`, `medium/`, `hard/`,
 `challenger/`) plus regression maps in `maps/personal/`. The map format
@@ -143,22 +141,8 @@ Zone names can also be colored by their `color=` metadata. Unknown
 single-word colors get a deterministic Google-palette fallback.
 
 Colors are auto-disabled when stdout is not a TTY or when `NO_COLOR` is
-set. With `--capacity`, zone tokens include projected end-of-turn
-occupancy:
-
-```text
-D1-waypoint1 (1/1)
-D1-goal (1/∞)
-```
-
-Connections remain unchanged:
-
-```text
-D1-loop_b-exit_point
-```
-
-The movement lines make waits, bottlenecks, and capacity pressure easy
-to spot, while `--debug` prints engine conflicts to stderr.
+set. The movement lines make waits, bottlenecks, and capacity pressure
+easy to spot, while `--debug` prints engine conflicts to stderr.
 
 ## Development
 
@@ -216,8 +200,8 @@ choices can force later drones to wait or detour.
 
 The plan is computed **once** at `Simulation.__init__`; `step()` replays
 it as a cursor. Each `TurnResult` also carries the projected end-of-turn
-`zone_occupancy`, which the CLI uses for `--capacity` annotations and
-optional diagnostics. Planned waits are silent; conflicts are limited
+`zone_occupancy`, `moved_zones`, and per-zone `capacities` for
+diagnostics or future output extensions. Planned waits are silent; conflicts are limited
 to no-route drones and safety-net planner bugs (visible with `--debug`).
 
 ### Benchmark checks
@@ -242,8 +226,7 @@ This project was developed iteratively with an AI coding assistant
   as described in the Algorithm section.
 - Designing the turn-based engine (`src/simulation/engine.py`) and its
   conflict-free schedule replay model.
-- The Google-inspired terminal palette (`src/palette.py`) and CLI
-  capacity annotations.
+- The Google-inspired terminal palette (`src/palette.py`).
 - Writing the test suite and the tiered benchmark maps.
 
 Human review covered the algorithm choices, reservation model, test

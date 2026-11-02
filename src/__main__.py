@@ -30,11 +30,6 @@ def main() -> None:
         action="store_true",
         help="echo the normalized map header before the turns",
     )
-    parser.add_argument(
-        "--capacity",
-        action="store_true",
-        help="show occupancy/max capacity for zones in each turn",
-    )
     args = parser.parse_args()
 
     from src.cli import run as run_cli
@@ -45,7 +40,6 @@ def main() -> None:
         color=False if args.no_color else None,
         show_stats=args.stats,
         show_map=args.show_map,
-        capacity=args.capacity,
     )
 
 

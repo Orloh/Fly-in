@@ -135,6 +135,11 @@ class Simulation:
                     )
                     self._blocked_reported.add(drone.id)
 
+        moved_zones = self._moved_zones(movements)
+        capacities = {
+            zone_name: self.graph.zones[zone_name].capacity
+            for zone_name in moved_zones
+        }
         return TurnResult(
             turn_number=self.state.turn,
             movements=movements,
@@ -142,7 +147,28 @@ class Simulation:
             zone_occupancy=self._occupancy_after_moves(
                 start_occupancy, movements
             ),
+            moved_zones=moved_zones,
+            capacities=capacities,
         )
+
+    def _moved_zones(self, movements: list[Movement]) -> set[str]:
+        """Return zones displayed as zone tokens on this turn."""
+        moved_ids = {movement.drone_id for movement in movements}
+        zones = {
+            movement.to_zone
+            for movement in movements
+            if movement.turns_required == 1
+        }
+
+        for drone in self.state.drones.values():
+            if (
+                drone.id not in moved_ids
+                and drone.status == DroneStatus.IN_TRANSIT
+                and drone.turns_in_transit <= 1
+                and drone.transit_destination is not None
+            ):
+                zones.add(drone.transit_destination)
+        return zones
 
     def _zone_counts(self) -> dict[str, int]:
         """Count drones occupying zones after arrivals, before moves."""

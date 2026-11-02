@@ -13,12 +13,16 @@ class TurnResult(BaseModel):
 
     ``zone_occupancy`` is the projected end-of-turn occupancy, after all
     launches and normal arrivals for this turn have been applied.
+    ``moved_zones`` contains the zones that appear as zone tokens this
+    turn, and ``capacities`` maps those zones to their maximum capacity.
     """
 
     turn_number: int
     movements: list[Movement] = Field(default_factory=list)
     conflicts: list[str] = Field(default_factory=list)
     zone_occupancy: dict[str, int] = Field(default_factory=dict)
+    moved_zones: set[str] = Field(default_factory=set)
+    capacities: dict[str, int | None] = Field(default_factory=dict)
 
 
 class SimulationState(BaseModel):
