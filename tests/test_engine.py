@@ -160,16 +160,22 @@ class TestSimulation:
         assert launch.zone_occupancy == {}
         assert launch.moved_zones == set()
         assert launch.capacities == {}
+        assert launch.in_flight == {}
+        assert launch.restricted_arrivals == {}
 
         final_transit = sim.step()
         assert final_transit.zone_occupancy == {"R": 1}
         assert final_transit.moved_zones == {"R"}
         assert final_transit.capacities == {"R": 1}
+        assert final_transit.in_flight == {}
+        assert final_transit.restricted_arrivals == {1: "R"}
 
         onward = sim.step()
         assert onward.zone_occupancy == {"G": 1}
         assert onward.moved_zones == {"G"}
         assert onward.capacities == {"G": None}
+        assert onward.in_flight == {}
+        assert onward.restricted_arrivals == {}
 
     def test_unreachable_goal_blocks_drone(self) -> None:
         graph = _graph(

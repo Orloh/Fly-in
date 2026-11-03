@@ -186,8 +186,12 @@ class TestFormatTurn:
         assert format_turn(turn) == ""
 
     def test_in_flight_connection(self) -> None:
-        turn = TurnResult(turn_number=1, movements=[])
-        line = format_turn(turn, in_flight={2: "loop_b-exit_point"})
+        turn = TurnResult(
+            turn_number=1,
+            movements=[],
+            in_flight={2: "loop_b-exit_point"},
+        )
+        line = format_turn(turn)
         assert line == "D2-loop_b-exit_point"
 
     def test_restricted_launch_uses_connection(self) -> None:
@@ -198,23 +202,34 @@ class TestFormatTurn:
         assert format_turn(turn) == "D1-S-R"
 
     def test_arrival_uses_destination(self) -> None:
-        turn = TurnResult(turn_number=2, movements=[])
-        line = format_turn(turn, arrivals={1: "R"})
+        turn = TurnResult(
+            turn_number=2,
+            movements=[],
+            restricted_arrivals={1: "R"},
+        )
+        line = format_turn(turn)
         assert line == "D1-R"
 
     def test_in_flight_with_movements_sorted(self) -> None:
         m1 = Movement(drone_id=1, from_zone="S", to_zone="A", turns_required=1)
-        turn = TurnResult(turn_number=2, movements=[m1])
-        line = format_turn(turn, in_flight={2: "loop_b-exit_point"})
+        turn = TurnResult(
+            turn_number=2,
+            movements=[m1],
+            in_flight={2: "loop_b-exit_point"},
+        )
+        line = format_turn(turn)
         assert line == "D1-A D2-loop_b-exit_point"
 
     def test_in_flight_colored_endpoints(self) -> None:
-        turn = TurnResult(turn_number=1, movements=[])
+        turn = TurnResult(
+            turn_number=1,
+            movements=[],
+            in_flight={2: "loop_b-exit_point"},
+        )
         colored = format_turn(
             turn,
             color=True,
             zone_roles={"loop_b": "green", "exit_point": "red"},
-            in_flight={2: "loop_b-exit_point"},
         )
         assert colored.startswith(
             f"\033[38;2;{PALETTE['yellow'][0]};"

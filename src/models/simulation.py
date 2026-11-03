@@ -15,6 +15,8 @@ class TurnResult(BaseModel):
     launches and normal arrivals for this turn have been applied.
     ``moved_zones`` contains the zones that appear as zone tokens this
     turn, and ``capacities`` maps those zones to their maximum capacity.
+    ``in_flight`` and ``restricted_arrivals`` describe continuing and
+    final restricted transits for output formatting.
     """
 
     turn_number: int
@@ -23,6 +25,8 @@ class TurnResult(BaseModel):
     zone_occupancy: dict[str, int] = Field(default_factory=dict)
     moved_zones: set[str] = Field(default_factory=set)
     capacities: dict[str, int | None] = Field(default_factory=dict)
+    in_flight: dict[int, str] = Field(default_factory=dict)
+    restricted_arrivals: dict[int, str] = Field(default_factory=dict)
 
 
 class SimulationState(BaseModel):

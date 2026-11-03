@@ -133,29 +133,27 @@ def format_turn(
     result: TurnResult,
     color: bool = False,
     zone_roles: dict[str, str] | None = None,
-    in_flight: dict[int, str] | None = None,
-    arrivals: dict[int, str] | None = None,
 ) -> str:
     """Format a turn's movements as ``D{id}-{to_zone} ...``.
 
     A restricted-zone launch is reported as ``D{id}-{from}-{to}``
     (the connection) because the drone is in flight, not yet at the
-    destination. ``in_flight`` holds connections for other transit
-    turns; ``arrivals`` holds destinations reached on the final transit
-    turn.
+    destination.
 
     Args:
         result: The turn's movements and conflicts.
         color: Whether to enable ANSI color output.
         zone_roles: Zone name to Google palette role mapping; unlisted
             zones default to ``blue``.
-        in_flight: In-transit drone id to connection name pairs.
-        arrivals: Final-transit drone id to destination zone pairs.
 
     Returns:
         The turn line, or an empty string when nothing to report.
     """
-    if not result.movements and not in_flight and not arrivals:
+    if (
+        not result.movements
+        and not result.in_flight
+        and not result.restricted_arrivals
+    ):
         return ""
     parts: list[tuple[int, str]] = []
     for mv in sorted(result.movements, key=lambda m: m.drone_id):
@@ -170,11 +168,11 @@ def format_turn(
         role = (zone_roles or {}).get(mv.to_zone, "blue")
         zone_part = paint(mv.to_zone, role, color)
         parts.append((mv.drone_id, f"{drone_part}-{zone_part}"))
-    for drone_id, connection in (in_flight or {}).items():
+    for drone_id, connection in result.in_flight.items():
         drone_part = paint(f"D{drone_id}", "yellow", color)
         connection_part = _paint_connection(connection, zone_roles, color)
         parts.append((drone_id, f"{drone_part}-{connection_part}"))
-    for drone_id, destination in (arrivals or {}).items():
+    for drone_id, destination in result.restricted_arrivals.items():
         drone_part = paint(f"D{drone_id}", "yellow", color)
         role = (zone_roles or {}).get(destination, "blue")
         destination_part = paint(destination, role, color)
@@ -311,39 +309,6 @@ def _has_future_action(sim: Simulation) -> bool:
     return False
 
 
-def _transit_after(
-    sim: Simulation,
-    in_flight_before: dict[int, tuple[str, str]],
-) -> tuple[dict[int, str], dict[int, str]]:
-    """Connections and final-turn destinations after ``sim.step()``.
-
-    A drone continues an in-flight hop only when its
-    ``(current_zone, transit_destination)`` is unchanged across the
-    turn; arrivals (and hops launched on arrival) are excluded because
-    they are already reported as movements. On the final transit turn
-    the destination is reported instead of the connection.
-    """
-    in_flight: dict[int, str] = {}
-    arrivals: dict[int, str] = {}
-    for d in sim.state.drones.values():
-        if d.id not in in_flight_before:
-            continue
-        if d.status != DroneStatus.IN_TRANSIT:
-            continue
-        if d.current_zone is None or d.transit_destination is None:
-            continue
-        if in_flight_before[d.id] != (
-            d.current_zone,
-            d.transit_destination,
-        ):
-            continue
-        if d.turns_in_transit <= 1:
-            arrivals[d.id] = d.transit_destination
-        else:
-            in_flight[d.id] = f"{d.current_zone}-{d.transit_destination}"
-    return in_flight, arrivals
-
-
 def _simulate_raw(
     graph: Graph,
     drones: list[Drone],
@@ -360,25 +325,13 @@ def _simulate_raw(
         zone_roles[name] = explicit or ZONE_TYPE_ROLES[zone.zone_type]
 
     while not sim.finished:
-        in_flight_before = {
-            d.id: (d.current_zone, d.transit_destination)
-            for d in sim.state.drones.values()
-            if d.status == DroneStatus.IN_TRANSIT
-            and d.current_zone is not None
-            and d.transit_destination is not None
-        }
         result = sim.step()
-        in_flight, arrivals = _transit_after(sim, in_flight_before)
 
         if sim.finished:
             # Final arrival turn: only emit if there were movements
             if result.movements:
                 yield format_turn(
-                    result,
-                    color,
-                    zone_roles,
-                    in_flight,
-                    arrivals,
+                    result, color, zone_roles
                 ), result.conflicts
             break
 
@@ -388,13 +341,7 @@ def _simulate_raw(
             d.status == DroneStatus.IN_TRANSIT
             for d in sim.state.drones.values()
         )
-        line = format_turn(
-            result,
-            color,
-            zone_roles,
-            in_flight,
-            arrivals,
-        )
+        line = format_turn(result, color, zone_roles)
         if (
             not result.movements
             and not in_transit

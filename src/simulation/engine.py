@@ -88,6 +88,13 @@ class Simulation:
         self.state.turn += 1
         movements: list[Movement] = []
         conflicts: list[Conflict] = []
+        in_transit_before = {
+            drone.id: (drone.current_zone, drone.transit_destination)
+            for drone in self.state.drones.values()
+            if drone.status == DroneStatus.IN_TRANSIT
+            and drone.current_zone is not None
+            and drone.transit_destination is not None
+        }
 
         # Process in-transit drones (arrivals)
         for drone in self.state.drones.values():
@@ -140,6 +147,9 @@ class Simulation:
             zone_name: self.graph.zones[zone_name].capacity
             for zone_name in moved_zones
         }
+        in_flight, restricted_arrivals = self._transit_after(
+            in_transit_before
+        )
         return TurnResult(
             turn_number=self.state.turn,
             movements=movements,
@@ -149,7 +159,36 @@ class Simulation:
             ),
             moved_zones=moved_zones,
             capacities=capacities,
+            in_flight=in_flight,
+            restricted_arrivals=restricted_arrivals,
         )
+
+    def _transit_after(
+        self,
+        in_transit_before: dict[int, tuple[str, str]],
+    ) -> tuple[dict[int, str], dict[int, str]]:
+        """Return continuing connections and final restricted arrivals."""
+        in_flight: dict[int, str] = {}
+        restricted_arrivals: dict[int, str] = {}
+        for drone in self.state.drones.values():
+            if drone.id not in in_transit_before:
+                continue
+            if drone.status != DroneStatus.IN_TRANSIT:
+                continue
+            if drone.current_zone is None or drone.transit_destination is None:
+                continue
+            if in_transit_before[drone.id] != (
+                drone.current_zone,
+                drone.transit_destination,
+            ):
+                continue
+            if drone.turns_in_transit <= 1:
+                restricted_arrivals[drone.id] = drone.transit_destination
+            else:
+                in_flight[drone.id] = (
+                    f"{drone.current_zone}-{drone.transit_destination}"
+                )
+        return in_flight, restricted_arrivals
 
     def _moved_zones(self, movements: list[Movement]) -> set[str]:
         """Return zones displayed as zone tokens on this turn."""
