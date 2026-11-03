@@ -138,12 +138,12 @@ class TestSimulation:
         first = sim.step()
         assert first.zone_occupancy == {"A": 1}
         assert first.moved_zones == {"A"}
-        assert first.capacities == {"A": 1}
+        assert first.zone_capacities == {"A": 1}
 
         second = sim.step()
         assert second.zone_occupancy == {"G": 1}
         assert second.moved_zones == {"G"}
-        assert second.capacities == {"G": None}
+        assert second.zone_capacities == {"G": None}
 
     def test_turn_result_occupancy_during_restricted_transit(self) -> None:
         graph = _graph(
@@ -159,23 +159,24 @@ class TestSimulation:
         launch = sim.step()
         assert launch.zone_occupancy == {}
         assert launch.moved_zones == set()
-        assert launch.capacities == {}
-        assert launch.in_flight == {}
-        assert launch.restricted_arrivals == {}
+        assert launch.zone_capacities == {}
+        assert launch.link_usage == {("R", "S"): 1}
+        assert launch.events[0].kind == "connection"
+        assert launch.positions[1].connection == ("S", "R")
 
         final_transit = sim.step()
         assert final_transit.zone_occupancy == {"R": 1}
         assert final_transit.moved_zones == {"R"}
-        assert final_transit.capacities == {"R": 1}
-        assert final_transit.in_flight == {}
-        assert final_transit.restricted_arrivals == {1: "R"}
+        assert final_transit.zone_capacities == {"R": 1}
+        assert final_transit.link_usage == {}
+        assert final_transit.events[0].kind == "zone"
 
         onward = sim.step()
         assert onward.zone_occupancy == {"G": 1}
         assert onward.moved_zones == {"G"}
-        assert onward.capacities == {"G": None}
-        assert onward.in_flight == {}
-        assert onward.restricted_arrivals == {}
+        assert onward.zone_capacities == {"G": None}
+        assert onward.link_usage == {}
+        assert onward.events[0].kind == "zone"
 
     def test_unreachable_goal_blocks_drone(self) -> None:
         graph = _graph(

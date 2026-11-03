@@ -10,13 +10,20 @@ from src.models.enums import DroneStatus, ZoneType
 from src.models.graph import Graph
 from src.models.parsing import ParsedConnection, ParsedMap, ParsedZone
 from src.models.schedule import Schedule, ScheduledAction
-from src.models.simulation import SimulationState, TurnResult
+from src.models.simulation import (
+    DronePosition,
+    SimulationState,
+    TurnEvent,
+    TurnResult,
+    TurnSnapshot,
+)
 from src.models.zone import Zone
 from src.models.graph_utils import canonical_key
 
 __all__ = [
     "Connection",
     "Drone",
+    "DronePosition",
     "DroneStatus",
     "Graph",
     "Movement",
@@ -26,7 +33,9 @@ __all__ = [
     "Schedule",
     "ScheduledAction",
     "SimulationState",
+    "TurnEvent",
     "TurnResult",
+    "TurnSnapshot",
     "Zone",
     "ZoneType",
     "canonical_key",

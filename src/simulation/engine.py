@@ -2,10 +2,8 @@
 
 ``Simulation`` computes a ``Schedule`` once via the greedy
 ``Planner`` at construction, then ``step()`` replays it as a cursor.
-Waiting drones look up their scheduled action for the current turn:
-MOVE starts a hop, WAIT stays silently. Planned waits are silent; the
-only conflicts are no-route (BLOCKED drones, first step) and safety-net
-violations (planner bugs, visible with --debug).
+Each step returns a logical end-of-turn ``TurnSnapshot`` containing the
+events to print, every drone's logical position, and derived occupancy.
 """
 
 from __future__ import annotations
@@ -14,11 +12,13 @@ from typing import Protocol, TypeAlias
 
 from src.models import (
     Drone,
+    DronePosition,
     DroneStatus,
     Graph,
     Movement,
     SimulationState,
-    TurnResult,
+    TurnEvent,
+    TurnSnapshot,
 )
 from src.models.schedule import Schedule, ScheduledAction
 from src.models.graph_utils import canonical_key
@@ -32,7 +32,7 @@ class PlannerProtocol(Protocol):
     """Structural type for any planner the engine can replay."""
 
     def plan(self, drones: list[Drone]) -> tuple[Schedule, list[Drone]]:
-        """Compute an optimal Schedule; return (schedule, blocked drones)."""
+        """Compute a Schedule; return (schedule, blocked drones)."""
         ...
 
 
@@ -79,12 +79,8 @@ class Simulation:
             for d in self.state.drones.values()
         )
 
-    def step(self) -> TurnResult:
-        """Advance one turn and return its movements and conflicts.
-
-        Returns:
-            The movements and conflicts reported on this turn.
-        """
+    def step(self) -> TurnSnapshot:
+        """Advance one turn and return its logical end-of-turn snapshot."""
         self.state.turn += 1
         movements: list[Movement] = []
         conflicts: list[Conflict] = []
@@ -102,8 +98,6 @@ class Simulation:
                 drone.turns_in_transit -= 1
                 if drone.turns_in_transit <= 0:
                     self._arrive(drone)
-
-        start_occupancy = self._zone_counts()
 
         # Replay the schedule in drone-id order
         for drone in sorted(
@@ -142,123 +136,156 @@ class Simulation:
                     )
                     self._blocked_reported.add(drone.id)
 
-        moved_zones = self._moved_zones(movements)
-        capacities = {
-            zone_name: self.graph.zones[zone_name].capacity
-            for zone_name in moved_zones
-        }
-        in_flight, restricted_arrivals = self._transit_after(
-            in_transit_before
+        positions, events, moved_zones = self._build_snapshot_parts(
+            movements, in_transit_before
         )
-        return TurnResult(
+        zone_occupancy: dict[str, int] = {}
+        link_usage: dict[tuple[str, str], int] = {}
+        for position in positions.values():
+            if position.zone is not None:
+                zone_occupancy[position.zone] = (
+                    zone_occupancy.get(position.zone, 0) + 1
+                )
+            if position.connection is not None:
+                key = canonical_key(*position.connection)
+                link_usage[key] = link_usage.get(key, 0) + 1
+
+        zone_capacities = {
+            zone_name: self.graph.zones[zone_name].capacity
+            for zone_name in zone_occupancy
+        }
+        link_capacities = {
+            key: self.graph.connections[key].max_link_capacity
+            for key in link_usage
+            if key in self.graph.connections
+        }
+
+        return TurnSnapshot(
             turn_number=self.state.turn,
             movements=movements,
+            events=events,
+            positions=positions,
+            zone_occupancy=zone_occupancy,
+            link_usage=link_usage,
             conflicts=conflicts,
-            zone_occupancy=self._occupancy_after_moves(
-                start_occupancy, movements
-            ),
             moved_zones=moved_zones,
-            capacities=capacities,
-            in_flight=in_flight,
-            restricted_arrivals=restricted_arrivals,
+            zone_capacities=zone_capacities,
+            link_capacities=link_capacities,
         )
 
-    def _transit_after(
+    def _build_snapshot_parts(
         self,
-        in_transit_before: dict[int, tuple[str, str]],
-    ) -> tuple[dict[int, str], dict[int, str]]:
-        """Return continuing connections and final restricted arrivals."""
-        in_flight: dict[int, str] = {}
-        restricted_arrivals: dict[int, str] = {}
-        for drone in self.state.drones.values():
-            if drone.id not in in_transit_before:
-                continue
-            if drone.status != DroneStatus.IN_TRANSIT:
-                continue
-            if drone.current_zone is None or drone.transit_destination is None:
-                continue
-            if in_transit_before[drone.id] != (
-                drone.current_zone,
-                drone.transit_destination,
-            ):
-                continue
-            if drone.turns_in_transit <= 1:
-                restricted_arrivals[drone.id] = drone.transit_destination
-            else:
-                in_flight[drone.id] = (
-                    f"{drone.current_zone}-{drone.transit_destination}"
-                )
-        return in_flight, restricted_arrivals
-
-    def _moved_zones(self, movements: list[Movement]) -> set[str]:
-        """Return zones displayed as zone tokens on this turn."""
-        moved_ids = {movement.drone_id for movement in movements}
-        zones = {
-            movement.to_zone
-            for movement in movements
-            if movement.turns_required == 1
-        }
-
-        for drone in self.state.drones.values():
-            if (
-                drone.id not in moved_ids
-                and drone.status == DroneStatus.IN_TRANSIT
-                and drone.turns_in_transit <= 1
-                and drone.transit_destination is not None
-            ):
-                zones.add(drone.transit_destination)
-        return zones
-
-    def _zone_counts(self) -> dict[str, int]:
-        """Count drones occupying zones after arrivals, before moves."""
-        counts: dict[str, int] = {}
-        for drone in self.state.drones.values():
-            if drone.status == DroneStatus.IN_TRANSIT:
-                continue
-            if drone.current_zone is None:
-                continue
-            counts[drone.current_zone] = (
-                counts.get(drone.current_zone, 0) + 1
-            )
-        return counts
-
-    def _occupancy_after_moves(
-        self,
-        start_occupancy: dict[str, int],
         movements: list[Movement],
-    ) -> dict[str, int]:
-        """Project zone occupancy at the end of the current turn.
-
-        Normal moves arrive by the end of the turn. Restricted moves
-        remain in flight unless this is their final transit turn.
-        """
-        counts = dict(start_occupancy)
-        moved_ids = {movement.drone_id for movement in movements}
-
-        for movement in movements:
-            counts[movement.from_zone] = max(
-                0, counts.get(movement.from_zone, 0) - 1
-            )
-            if movement.turns_required == 1:
-                counts[movement.to_zone] = (
-                    counts.get(movement.to_zone, 0) + 1
-                )
+        in_transit_before: dict[int, tuple[str, str]],
+    ) -> tuple[
+        dict[int, DronePosition],
+        list[TurnEvent],
+        set[str],
+    ]:
+        """Build logical positions, printed events, and zone tokens."""
+        movement_by_id = {
+            movement.drone_id: movement for movement in movements
+        }
+        positions: dict[int, DronePosition] = {}
+        events: list[TurnEvent] = []
+        moved_zones: set[str] = set()
 
         for drone in self.state.drones.values():
-            if (
-                drone.id not in moved_ids
-                and drone.status == DroneStatus.IN_TRANSIT
-                and drone.turns_in_transit <= 1
-                and drone.transit_destination is not None
-            ):
-                destination = drone.transit_destination
-                counts[destination] = counts.get(destination, 0) + 1
+            movement = movement_by_id.get(drone.id)
+            if movement is not None:
+                if movement.turns_required == 1:
+                    zone = movement.to_zone
+                    positions[drone.id] = DronePosition(
+                        zone=zone,
+                        status=self._logical_status(drone, zone),
+                    )
+                    events.append(
+                        TurnEvent(
+                            drone_id=drone.id,
+                            kind="zone",
+                            label=zone,
+                        )
+                    )
+                    moved_zones.add(zone)
+                else:
+                    connection = (
+                        movement.from_zone,
+                        movement.to_zone,
+                    )
+                    positions[drone.id] = DronePosition(
+                        connection=connection,
+                        status=DroneStatus.IN_TRANSIT,
+                    )
+                    events.append(
+                        TurnEvent(
+                            drone_id=drone.id,
+                            kind="connection",
+                            label=(
+                                f"{movement.from_zone}-"
+                                f"{movement.to_zone}"
+                            ),
+                        )
+                    )
+                continue
 
-        return {
-            zone_name: count
-            for zone_name, count in counts.items()
-            if count > 0
-        }
+            before = in_transit_before.get(drone.id)
+            if (
+                before is not None
+                and drone.status == DroneStatus.IN_TRANSIT
+                and drone.current_zone is not None
+                and drone.transit_destination is not None
+                and before
+                == (drone.current_zone, drone.transit_destination)
+            ):
+                if drone.turns_in_transit <= 1:
+                    zone = drone.transit_destination
+                    positions[drone.id] = DronePosition(
+                        zone=zone,
+                        status=self._logical_status(drone, zone),
+                    )
+                    events.append(
+                        TurnEvent(
+                            drone_id=drone.id,
+                            kind="zone",
+                            label=zone,
+                        )
+                    )
+                    moved_zones.add(zone)
+                else:
+                    connection = (
+                        drone.current_zone,
+                        drone.transit_destination,
+                    )
+                    positions[drone.id] = DronePosition(
+                        connection=connection,
+                        status=DroneStatus.IN_TRANSIT,
+                    )
+                    events.append(
+                        TurnEvent(
+                            drone_id=drone.id,
+                            kind="connection",
+                            label=(
+                                f"{drone.current_zone}-"
+                                f"{drone.transit_destination}"
+                            ),
+                        )
+                    )
+                continue
+
+            positions[drone.id] = DronePosition(
+                zone=drone.current_zone,
+                status=drone.status,
+            )
+
+        events.sort(key=lambda event: event.drone_id)
+        return positions, events, moved_zones
+
+    @staticmethod
+    def _logical_status(drone: Drone, zone: str) -> DroneStatus:
+        """Return the logical status after arriving at ``zone``."""
+        if zone == drone.target_zone:
+            return DroneStatus.ARRIVED
+        return DroneStatus.WAITING
 
     def _capacity_conflict(
         self,

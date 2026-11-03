@@ -1,32 +1,54 @@
-"""Runtime simulation state models."""
+"""Runtime simulation state and end-of-turn snapshot models."""
 
 from __future__ import annotations
 
+from typing import Literal
+
 from pydantic import BaseModel, Field
 
-from src.models.drone import Drone
-from src.models.drone import Movement
+from src.models.drone import Drone, Movement
+from src.models.enums import DroneStatus
 
 
-class TurnResult(BaseModel):
-    """The outcome of a single simulation turn.
+class TurnEvent(BaseModel):
+    """One printed event for a drone on a turn."""
 
-    ``zone_occupancy`` is the projected end-of-turn occupancy, after all
-    launches and normal arrivals for this turn have been applied.
-    ``moved_zones`` contains the zones that appear as zone tokens this
-    turn, and ``capacities`` maps those zones to their maximum capacity.
-    ``in_flight`` and ``restricted_arrivals`` describe continuing and
-    final restricted transits for output formatting.
+    drone_id: int
+    kind: Literal["zone", "connection"]
+    label: str
+
+
+class DronePosition(BaseModel):
+    """Logical position of a drone at the end of a turn."""
+
+    zone: str | None = None
+    connection: tuple[str, str] | None = None
+    status: DroneStatus = DroneStatus.WAITING
+
+
+class TurnSnapshot(BaseModel):
+    """Logical end-of-turn snapshot used for output and diagnostics.
+
+    ``events`` are the tokens that should be printed for this turn.
+    ``positions`` holds every drone's logical position after the turn.
+    ``zone_occupancy`` and ``link_usage`` are derived from those positions.
+    ``moved_zones`` contains the zones shown as zone tokens.
     """
 
     turn_number: int
     movements: list[Movement] = Field(default_factory=list)
-    conflicts: list[str] = Field(default_factory=list)
+    events: list[TurnEvent] = Field(default_factory=list)
+    positions: dict[int, DronePosition] = Field(default_factory=dict)
     zone_occupancy: dict[str, int] = Field(default_factory=dict)
+    link_usage: dict[tuple[str, str], int] = Field(default_factory=dict)
+    conflicts: list[str] = Field(default_factory=list)
     moved_zones: set[str] = Field(default_factory=set)
-    capacities: dict[str, int | None] = Field(default_factory=dict)
-    in_flight: dict[int, str] = Field(default_factory=dict)
-    restricted_arrivals: dict[int, str] = Field(default_factory=dict)
+    zone_capacities: dict[str, int | None] = Field(default_factory=dict)
+    link_capacities: dict[tuple[str, str], int] = Field(default_factory=dict)
+
+
+#: Backwards-compatible alias for code that used the old result name.
+TurnResult = TurnSnapshot
 
 
 class SimulationState(BaseModel):

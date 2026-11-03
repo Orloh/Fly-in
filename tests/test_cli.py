@@ -9,13 +9,13 @@ from src.models import (
     Connection,
     Drone,
     Graph,
-    Movement,
     ParsedConnection,
     ParsedMap,
     ParsedZone,
     Schedule,
     ScheduledAction,
-    TurnResult,
+    TurnEvent,
+    TurnSnapshot,
     Zone,
     ZoneType,
 )
@@ -169,62 +169,87 @@ class TestColorRole:
 
 class TestFormatTurn:
     def test_single_movement(self) -> None:
-        result = Movement(
-            drone_id=1, from_zone="S", to_zone="A", turns_required=1
+        turn = TurnSnapshot(
+            turn_number=1,
+            events=[
+                TurnEvent(drone_id=1, kind="zone", label="A"),
+            ],
         )
-        turn = TurnResult(turn_number=1, movements=[result])
         assert format_turn(turn) == "D1-A"
 
     def test_multiple_movements_id_order(self) -> None:
-        m1 = Movement(drone_id=2, from_zone="S", to_zone="B", turns_required=1)
-        m2 = Movement(drone_id=1, from_zone="S", to_zone="A", turns_required=1)
-        turn = TurnResult(turn_number=1, movements=[m1, m2])
+        turn = TurnSnapshot(
+            turn_number=1,
+            events=[
+                TurnEvent(drone_id=2, kind="zone", label="B"),
+                TurnEvent(drone_id=1, kind="zone", label="A"),
+            ],
+        )
         assert format_turn(turn) == "D1-A D2-B"
 
     def test_empty_movements(self) -> None:
-        turn = TurnResult(turn_number=2, movements=[])
+        turn = TurnSnapshot(turn_number=2, events=[])
         assert format_turn(turn) == ""
 
     def test_in_flight_connection(self) -> None:
-        turn = TurnResult(
+        turn = TurnSnapshot(
             turn_number=1,
-            movements=[],
-            in_flight={2: "loop_b-exit_point"},
+            events=[
+                TurnEvent(
+                    drone_id=2,
+                    kind="connection",
+                    label="loop_b-exit_point",
+                ),
+            ],
         )
-        line = format_turn(turn)
-        assert line == "D2-loop_b-exit_point"
+        assert format_turn(turn) == "D2-loop_b-exit_point"
 
     def test_restricted_launch_uses_connection(self) -> None:
-        move = Movement(
-            drone_id=1, from_zone="S", to_zone="R", turns_required=2
+        turn = TurnSnapshot(
+            turn_number=1,
+            events=[
+                TurnEvent(
+                    drone_id=1,
+                    kind="connection",
+                    label="S-R",
+                ),
+            ],
         )
-        turn = TurnResult(turn_number=1, movements=[move])
         assert format_turn(turn) == "D1-S-R"
 
     def test_arrival_uses_destination(self) -> None:
-        turn = TurnResult(
+        turn = TurnSnapshot(
             turn_number=2,
-            movements=[],
-            restricted_arrivals={1: "R"},
+            events=[
+                TurnEvent(drone_id=1, kind="zone", label="R"),
+            ],
         )
-        line = format_turn(turn)
-        assert line == "D1-R"
+        assert format_turn(turn) == "D1-R"
 
     def test_in_flight_with_movements_sorted(self) -> None:
-        m1 = Movement(drone_id=1, from_zone="S", to_zone="A", turns_required=1)
-        turn = TurnResult(
+        turn = TurnSnapshot(
             turn_number=2,
-            movements=[m1],
-            in_flight={2: "loop_b-exit_point"},
+            events=[
+                TurnEvent(drone_id=1, kind="zone", label="A"),
+                TurnEvent(
+                    drone_id=2,
+                    kind="connection",
+                    label="loop_b-exit_point",
+                ),
+            ],
         )
-        line = format_turn(turn)
-        assert line == "D1-A D2-loop_b-exit_point"
+        assert format_turn(turn) == "D1-A D2-loop_b-exit_point"
 
     def test_in_flight_colored_endpoints(self) -> None:
-        turn = TurnResult(
+        turn = TurnSnapshot(
             turn_number=1,
-            movements=[],
-            in_flight={2: "loop_b-exit_point"},
+            events=[
+                TurnEvent(
+                    drone_id=2,
+                    kind="connection",
+                    label="loop_b-exit_point",
+                ),
+            ],
         )
         colored = format_turn(
             turn,
@@ -245,12 +270,13 @@ class TestFormatTurn:
         ) in colored
 
     def test_colored_default_blue(self) -> None:
-        result = Movement(
-            drone_id=1, from_zone="S", to_zone="A", turns_required=1
+        turn = TurnSnapshot(
+            turn_number=1,
+            events=[
+                TurnEvent(drone_id=1, kind="zone", label="A"),
+            ],
         )
-        turn = TurnResult(turn_number=1, movements=[result])
         colored = format_turn(turn, color=True)
-        # Default zone color is Google blue
         assert colored.startswith(
             f"\033[38;2;{PALETTE['yellow'][0]};"
             f"{PALETTE['yellow'][1]};{PALETTE['yellow'][2]}mD1\033[0m-"
@@ -259,12 +285,13 @@ class TestFormatTurn:
         )
 
     def test_colored_with_zone_roles(self) -> None:
-        result = Movement(
-            drone_id=1, from_zone="S", to_zone="A", turns_required=1
+        turn = TurnSnapshot(
+            turn_number=1,
+            events=[
+                TurnEvent(drone_id=1, kind="zone", label="A"),
+            ],
         )
-        turn = TurnResult(turn_number=1, movements=[result])
         colored = format_turn(turn, zone_roles={"A": "red"}, color=True)
-        # Zone A painted Google red
         assert colored.startswith(
             f"\033[38;2;{PALETTE['yellow'][0]};"
             f"{PALETTE['yellow'][1]};{PALETTE['yellow'][2]}mD1\033[0m-"
@@ -273,13 +300,13 @@ class TestFormatTurn:
         )
 
     def test_multiple_zones_different_colors(self) -> None:
-        m1 = Movement(
-            drone_id=1, from_zone="S", to_zone="A", turns_required=1
+        turn = TurnSnapshot(
+            turn_number=1,
+            events=[
+                TurnEvent(drone_id=1, kind="zone", label="A"),
+                TurnEvent(drone_id=2, kind="zone", label="B"),
+            ],
         )
-        m2 = Movement(
-            drone_id=2, from_zone="S", to_zone="B", turns_required=1
-        )
-        turn = TurnResult(turn_number=1, movements=[m1, m2])
         colored = format_turn(
             turn,
             zone_roles={"A": "red", "B": "blue"},
