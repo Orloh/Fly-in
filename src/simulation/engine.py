@@ -136,7 +136,7 @@ class Simulation:
                     )
                     self._blocked_reported.add(drone.id)
 
-        positions, events, moved_zones = self._build_snapshot_parts(
+        positions, events = self._build_snapshot_parts(
             movements, in_transit_before
         )
         zone_occupancy: dict[str, int] = {}
@@ -150,9 +150,12 @@ class Simulation:
                 key = canonical_key(*position.connection)
                 link_usage[key] = link_usage.get(key, 0) + 1
 
+        zone_names = {
+            event.label for event in events if event.kind == "zone"
+        }
         zone_capacities = {
             zone_name: self.graph.zones[zone_name].capacity
-            for zone_name in zone_occupancy
+            for zone_name in zone_names
         }
         link_capacities = {
             key: self.graph.connections[key].max_link_capacity
@@ -168,7 +171,6 @@ class Simulation:
             zone_occupancy=zone_occupancy,
             link_usage=link_usage,
             conflicts=conflicts,
-            moved_zones=moved_zones,
             zone_capacities=zone_capacities,
             link_capacities=link_capacities,
         )
@@ -177,18 +179,13 @@ class Simulation:
         self,
         movements: list[Movement],
         in_transit_before: dict[int, tuple[str, str]],
-    ) -> tuple[
-        dict[int, DronePosition],
-        list[TurnEvent],
-        set[str],
-    ]:
-        """Build logical positions, printed events, and zone tokens."""
+    ) -> tuple[dict[int, DronePosition], list[TurnEvent]]:
+        """Build logical positions and printed events."""
         movement_by_id = {
             movement.drone_id: movement for movement in movements
         }
         positions: dict[int, DronePosition] = {}
         events: list[TurnEvent] = []
-        moved_zones: set[str] = set()
 
         for drone in self.state.drones.values():
             movement = movement_by_id.get(drone.id)
@@ -206,7 +203,6 @@ class Simulation:
                             label=zone,
                         )
                     )
-                    moved_zones.add(zone)
                 else:
                     connection = (
                         movement.from_zone,
@@ -250,7 +246,6 @@ class Simulation:
                             label=zone,
                         )
                     )
-                    moved_zones.add(zone)
                 else:
                     connection = (
                         drone.current_zone,
@@ -278,7 +273,7 @@ class Simulation:
             )
 
         events.sort(key=lambda event: event.drone_id)
-        return positions, events, moved_zones
+        return positions, events
 
     @staticmethod
     def _logical_status(drone: Drone, zone: str) -> DroneStatus:

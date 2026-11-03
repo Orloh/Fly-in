@@ -32,7 +32,7 @@ class TurnSnapshot(BaseModel):
     ``events`` are the tokens that should be printed for this turn.
     ``positions`` holds every drone's logical position after the turn.
     ``zone_occupancy`` and ``link_usage`` are derived from those positions.
-    ``moved_zones`` contains the zones shown as zone tokens.
+    ``moved_zones`` is derived from the zone events.
     """
 
     turn_number: int
@@ -42,9 +42,17 @@ class TurnSnapshot(BaseModel):
     zone_occupancy: dict[str, int] = Field(default_factory=dict)
     link_usage: dict[tuple[str, str], int] = Field(default_factory=dict)
     conflicts: list[str] = Field(default_factory=list)
-    moved_zones: set[str] = Field(default_factory=set)
     zone_capacities: dict[str, int | None] = Field(default_factory=dict)
     link_capacities: dict[tuple[str, str], int] = Field(default_factory=dict)
+
+    @property
+    def moved_zones(self) -> set[str]:
+        """Zones printed as zone tokens this turn."""
+        return {
+            event.label
+            for event in self.events
+            if event.kind == "zone"
+        }
 
 
 #: Backwards-compatible alias for code that used the old result name.
