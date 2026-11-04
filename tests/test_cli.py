@@ -28,7 +28,7 @@ from src.cli import (
     format_stats,
     build_output,
     _has_future_action,
-    _simulate_raw,
+    simulate_turns,
 )
 from src.simulation.engine import Simulation
 from src.palette import (
@@ -44,7 +44,7 @@ def _simulate_lines(
     color: bool = False,
 ) -> list[str]:
     """Return only the formatted lines from the raw turn generator."""
-    return [line for line, _ in _simulate_raw(graph, drones, color)]
+    return [line for line, _ in simulate_turns(graph, drones, color)]
 
 
 def _zone(

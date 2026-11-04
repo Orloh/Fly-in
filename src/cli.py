@@ -268,13 +268,23 @@ def _has_future_action(sim: Simulation) -> bool:
     return False
 
 
-def _simulate_raw(
+def simulate_turns(
     graph: Graph,
     drones: list[Drone],
     color: bool = False,
     show_stats: bool = False,
 ) -> Iterator[tuple[str, list[str]]]:
-    """Internal: step simulation, yielding (line, conflicts) per turn."""
+    """Step the simulation, yielding ``(line, conflicts)`` per turn.
+
+    Args:
+        graph: The routing graph.
+        drones: The fleet to simulate.
+        color: Whether to enable ANSI color output.
+        show_stats: Whether to append the stats block after the turns.
+
+    Yields:
+        ``(formatted_line, conflicts)`` pairs for each simulation turn.
+    """
     sim = Simulation(graph, drones)
 
     # Build zone_roles from graph: zone.name -> Google role (default blue)
@@ -364,7 +374,7 @@ def build_output(
         stdout_lines.extend(format_map(parsed, use_color))
 
     # Simulation turns
-    for line, conflicts in _simulate_raw(
+    for line, conflicts in simulate_turns(
         graph,
         fleet,
         use_color,
