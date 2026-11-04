@@ -55,10 +55,6 @@ class TurnSnapshot(BaseModel):
         }
 
 
-#: Backwards-compatible alias for code that used the old result name.
-TurnResult = TurnSnapshot
-
-
 class SimulationState(BaseModel):
     """Mutable fleet state during replay."""
 

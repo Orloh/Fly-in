@@ -60,7 +60,7 @@ class Simulation:
             drone.schedule_index = 0
         self.schedule = schedule
         self._schedule_zone_time, self._schedule_link_time = (
-            self.schedule._occupancy()
+            self.schedule.occupancy()
         )
         self.state = SimulationState(drones={d.id: d for d in drones})
         self._blocked_reported: set[int] = set()

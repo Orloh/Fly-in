@@ -14,7 +14,6 @@ from src.models.simulation import (
     DronePosition,
     SimulationState,
     TurnEvent,
-    TurnResult,
     TurnSnapshot,
 )
 from src.models.zone import Zone
@@ -34,7 +33,6 @@ __all__ = [
     "ScheduledAction",
     "SimulationState",
     "TurnEvent",
-    "TurnResult",
     "TurnSnapshot",
     "Zone",
     "ZoneType",

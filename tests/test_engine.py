@@ -128,7 +128,7 @@ class TestSimulation:
         assert sim.finished
         assert sim.state.turn == 4
 
-    def test_turn_result_occupancy_after_normal_move(self) -> None:
+    def test_snapshot_occupancy_after_normal_move(self) -> None:
         graph = _graph(
             [_zone("S", start=True), _zone("A"), _zone("G", end=True)],
             [("S", "A"), ("A", "G")],
@@ -145,7 +145,7 @@ class TestSimulation:
         assert second.moved_zones == {"G"}
         assert second.zone_capacities == {"G": None}
 
-    def test_turn_result_occupancy_during_restricted_transit(self) -> None:
+    def test_snapshot_occupancy_during_restricted_transit(self) -> None:
         graph = _graph(
             [
                 _zone("S", start=True),

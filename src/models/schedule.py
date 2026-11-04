@@ -25,7 +25,7 @@ class Schedule(BaseModel):
     makespan: int = 0
     graph: Graph
 
-    def _occupancy(
+    def occupancy(
         self,
     ) -> tuple[
         dict[tuple[str, int], int],
@@ -70,7 +70,7 @@ class Schedule(BaseModel):
         Returns:
             True when every zone and link stays within capacity.
         """
-        zone_time, link_time = self._occupancy()
+        zone_time, link_time = self.occupancy()
         for (zone_name, turn), count in zone_time.items():
             zone = self.graph.zones.get(zone_name)
             if zone is None or zone.capacity is None:
@@ -95,7 +95,7 @@ class Schedule(BaseModel):
         Returns:
             True when no finite-capacity goal is exceeded.
         """
-        zone_time, _ = self._occupancy()
+        zone_time, _ = self.occupancy()
         for (zone_name, turn), count in zone_time.items():
             zone = self.graph.zones.get(zone_name)
             if zone is None or zone.capacity is None:
