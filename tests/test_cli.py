@@ -1,6 +1,6 @@
 """Tests for the CLI output layer.
 
-Pure formatter tests + simulate integration tests reusing engine helpers.
+Pure formatter tests + raw simulation integration tests.
 """
 
 from __future__ import annotations
@@ -26,9 +26,9 @@ from src.cli import (
     format_makespan,
     format_metrics,
     format_stats,
-    simulate,
     build_output,
     _has_future_action,
+    _simulate_raw,
 )
 from src.simulation.engine import Simulation
 from src.palette import (
@@ -36,6 +36,15 @@ from src.palette import (
     COLOR_NAME_TO_ROLE,
     color_role,
 )
+
+
+def _simulate_lines(
+    graph: Graph,
+    drones: list[Drone],
+    color: bool = False,
+) -> list[str]:
+    """Return only the formatted lines from the raw turn generator."""
+    return [line for line, _ in _simulate_raw(graph, drones, color)]
 
 
 def _zone(
@@ -466,7 +475,7 @@ class TestSimulate:
             [_zone("S", start=True), _zone("A"), _zone("G", end=True)],
             [("S", "A"), ("A", "G")],
         )
-        lines = list(simulate(graph, [_drone(1, "S", "G")]))
+        lines = list(_simulate_lines(graph, [_drone(1, "S", "G")]))
         # Final arrival turn with no movements is not printed
         assert lines == ["D1-A", "D1-G"]
 
@@ -500,7 +509,7 @@ class TestSimulate:
             ],
             [("S", "R"), ("R", "G")],
         )
-        lines = list(simulate(graph, [_drone(1, "S", "G")]))
+        lines = list(_simulate_lines(graph, [_drone(1, "S", "G")]))
         # turn 1: move onto the S-R connection, turn 2: reach R,
         # turn 3: R->G, turn 4: arrival (not printed)
         assert lines == ["D1-S-R", "D1-R", "D1-G"]
@@ -515,7 +524,7 @@ class TestSimulate:
             [("S", "R"), ("R", "G")],
         )
         lines = list(
-            simulate(graph, [_drone(1, "S", "G"), _drone(2, "S", "G")])
+            _simulate_lines(graph, [_drone(1, "S", "G"), _drone(2, "S", "G")])
         )
         # D1 leads through the cap-1 restricted link, D2 follows. D1's
         # arrival-then-departure at R is a movement, not an in-flight line.
@@ -534,7 +543,7 @@ class TestSimulate:
             [("S", "A")],
         )
         lines = list(
-            simulate(
+            _simulate_lines(
                 graph, [_drone(1, "S", "A"), _drone(2, "A", "S")]
             )
         )
@@ -553,7 +562,7 @@ class TestSimulate:
             link_capacity=2,
         )
         lines = list(
-            simulate(graph, [_drone(1, "S", "G"), _drone(2, "S", "G")])
+            _simulate_lines(graph, [_drone(1, "S", "G"), _drone(2, "S", "G")])
         )
         # Both move S->A on turn 1
         assert "D1-A D2-A" in lines[0]
@@ -568,7 +577,7 @@ class TestSimulate:
             [("S", "A"), ("A", "G")],
         )
         lines = list(
-            simulate(graph, [_drone(1, "S", "G")], color=True)
+            _simulate_lines(graph, [_drone(1, "S", "G")], color=True)
         )
         # A should be red, G should be green
         red_code = (

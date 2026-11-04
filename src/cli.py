@@ -250,30 +250,6 @@ def format_metrics(schedule: Schedule) -> list[str]:
     ]
 
 
-def simulate(
-    graph: Graph, drones: list[Drone], color: bool = False
-) -> Iterator[str]:
-    """Step the simulation, yielding one line per turn.
-
-    - Yields ``format_turn`` result for every turn (empty string only
-      for a fully idle turn).
-    - Stops on ``finished`` (final arrival turn without movements is not
-      yielded).
-    - Deadlock guard: breaks when a turn has no movements, no drone is
-      ``IN_TRANSIT``, and no drone has a future scheduled action.
-
-    Args:
-        graph: The routing graph.
-        drones: The fleet to simulate.
-        color: Whether to enable ANSI color output.
-
-    Yields:
-        One formatted line per simulation turn.
-    """
-    for line, _ in _simulate_raw(graph, drones, color):
-        yield line
-
-
 def _has_future_action(sim: Simulation) -> bool:
     """Whether a waiting drone has a scheduled action still ahead.
 

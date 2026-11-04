@@ -32,9 +32,9 @@ def main() -> None:
     )
     args = parser.parse_args()
 
-    from src.cli import run as run_cli
+    from src.cli import run
 
-    run_cli(
+    run(
         args.map,
         debug=args.debug,
         color=False if args.no_color else None,
