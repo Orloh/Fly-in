@@ -9,12 +9,14 @@ from __future__ import annotations
 
 from src.models import (
     Connection,
+    ConnectionKey,
     Drone,
     Graph,
     ParsedConnection,
     ParsedMap,
     ParsedZone,
     Zone,
+    ZoneName,
     ZoneType,
 )
 from src.parser.errors import ParseError
@@ -38,7 +40,7 @@ def build_graph(parsed: ParsedMap) -> tuple[Graph, list[Drone]]:
             "start_hub and end_hub cannot share a name",
         )
 
-    zones: dict[str, Zone] = {
+    zones: dict[ZoneName, Zone] = {
         start_zone.name: start_zone,
         end_zone.name: end_zone,
     }
@@ -51,7 +53,7 @@ def build_graph(parsed: ParsedMap) -> tuple[Graph, list[Drone]]:
             )
         zones[zone.name] = zone
 
-    connections: dict[tuple[str, str], Connection] = {}
+    connections: dict[ConnectionKey, Connection] = {}
     known = set(zones)
 
     for c in parsed.connections:
@@ -127,7 +129,7 @@ def _convert_zone(
 
 
 def _convert_connection(
-    parsed: ParsedConnection, known_zones: set[str]
+    parsed: ParsedConnection, known_zones: set[ZoneName]
 ) -> Connection:
     """Convert one ParsedConnection into a validated Connection."""
     if parsed.zone_a not in known_zones:

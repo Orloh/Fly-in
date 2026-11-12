@@ -11,14 +11,20 @@ from __future__ import annotations
 from typing import Protocol, TypeAlias
 
 from src.models import (
+    ConnectionKey,
     Drone,
+    DroneId,
     DronePosition,
+    DronePositions,
     DroneStatus,
     Graph,
+    LinkUsage,
     Movement,
     SimulationState,
     TurnEvent,
     TurnSnapshot,
+    ZoneName,
+    ZoneOccupancy,
 )
 from src.models.schedule import Schedule, ScheduledAction
 from src.models.graph_utils import canonical_key
@@ -26,6 +32,8 @@ from src.simulation.planner import Planner
 
 #: A human-readable capacity or routing failure reported on a turn.
 Conflict: TypeAlias = str
+#: Drone id to the connection it was on before a step.
+TransitStart = dict[DroneId, ConnectionKey]
 
 
 class PlannerProtocol(Protocol):
@@ -63,7 +71,7 @@ class Simulation:
             self.schedule.occupancy()
         )
         self.state = SimulationState(drones={d.id: d for d in drones})
-        self._blocked_reported: set[int] = set()
+        self._blocked_reported: set[DroneId] = set()
 
     @property
     def finished(self) -> bool:
@@ -84,7 +92,7 @@ class Simulation:
         self.state.turn += 1
         movements: list[Movement] = []
         conflicts: list[Conflict] = []
-        in_transit_before = {
+        in_transit_before: TransitStart = {
             drone.id: (drone.transit_from, drone.transit_destination)
             for drone in self.state.drones.values()
             if drone.status == DroneStatus.IN_TRANSIT
@@ -138,12 +146,12 @@ class Simulation:
                     self._blocked_reported.add(drone.id)
 
         events = self._build_events(movements, in_transit_before)
-        positions = {
+        positions: DronePositions = {
             drone.id: self._position(drone)
             for drone in self.state.drones.values()
         }
-        zone_occupancy: dict[str, int] = {}
-        link_usage: dict[tuple[str, str], int] = {}
+        zone_occupancy: ZoneOccupancy = {}
+        link_usage: LinkUsage = {}
         for position in positions.values():
             if position.zone is not None:
                 zone_occupancy[position.zone] = (
@@ -153,7 +161,7 @@ class Simulation:
                 key = canonical_key(*position.connection)
                 link_usage[key] = link_usage.get(key, 0) + 1
 
-        zone_names = {
+        zone_names: set[ZoneName] = {
             event.label for event in events if event.kind == "zone"
         }
         zone_capacities = {
@@ -181,7 +189,7 @@ class Simulation:
     def _build_events(
         self,
         movements: list[Movement],
-        in_transit_before: dict[int, tuple[str, str]],
+        in_transit_before: TransitStart,
     ) -> list[TurnEvent]:
         """Build the tokens to print for this turn."""
         movement_ids = {movement.drone_id for movement in movements}

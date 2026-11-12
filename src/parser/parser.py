@@ -6,7 +6,15 @@ No domain validation is performed — every value is stored as a string.
 """
 
 from __future__ import annotations
-from src.models import ParsedConnection, ParsedMap, ParsedZone
+
+from src.models import (
+    LineNumber,
+    Metadata,
+    ParsedConnection,
+    ParsedMap,
+    ParsedZone,
+    ZoneName,
+)
 from src.parser.errors import ParseError
 
 
@@ -22,7 +30,7 @@ def parse_map(path: str) -> ParsedMap:
         The parsed map structure.
     """
     with open(path, "r", encoding="utf-8") as file:
-        content_lines: list[tuple[int, str]] = []
+        content_lines: list[tuple[LineNumber, str]] = []
 
         for line_number, raw_line in enumerate(file, start=1):
             text = raw_line.split("#", 1)[0]
@@ -43,7 +51,7 @@ def parse_map(path: str) -> ParsedMap:
         end_hub: ParsedZone | None = None
         zones: list[ParsedZone] = []
         connections: list[ParsedConnection] = []
-        defined_zones: set[str] = set()
+        defined_zones: set[ZoneName] = set()
 
         for line_number, line in content_lines[1:]:
             head = line.split("[", 1)[0].strip()
@@ -114,7 +122,7 @@ def parse_map(path: str) -> ParsedMap:
         )
 
 
-def _parse_nb_drones(line: str, line_number: int) -> int:
+def _parse_nb_drones(line: str, line_number: LineNumber) -> int:
     """Parse and validate the 'nb_drones: <int>' first line."""
     parts = line.split(": ", 1)
     if len(parts) != 2 or parts[0] != "nb_drones":
@@ -130,7 +138,9 @@ def _parse_nb_drones(line: str, line_number: int) -> int:
     return value
 
 
-def _parse_hub_line(line: str, line_number: int) -> ParsedZone:
+def _parse_hub_line(
+    line: str, line_number: LineNumber
+) -> ParsedZone:
     """Parse a hub line (start/end/hub) into a ParsedZone."""
     head = line.split("[", 1)[0].strip()
     tokens = head.split()
@@ -152,7 +162,9 @@ def _parse_hub_line(line: str, line_number: int) -> ParsedZone:
     )
 
 
-def _parse_connection_line(line: str, line_number: int) -> ParsedConnection:
+def _parse_connection_line(
+    line: str, line_number: LineNumber
+) -> ParsedConnection:
     """Parse a 'connection: <A>-<B>' line into a ParsedConnection."""
     head = line.split("[", 1)[0].strip()
     tokens = head.split()
@@ -174,7 +186,9 @@ def _parse_connection_line(line: str, line_number: int) -> ParsedConnection:
     )
 
 
-def _parse_metadata(raw_line: str, line_number: int) -> dict[str, str]:
+def _parse_metadata(
+    raw_line: str, line_number: LineNumber
+) -> Metadata:
     """Extract the "[key=value ...]" metadata of a map line.
 
     Returns an empty dict when no brackets are present. Raises
@@ -198,7 +212,7 @@ def _parse_metadata(raw_line: str, line_number: int) -> dict[str, str]:
     if not metadata_list:
         return {}
 
-    result: dict[str, str] = {}
+    result: Metadata = {}
     for token in metadata_list:
         parts = token.split("=")
         if len(parts) != 2:

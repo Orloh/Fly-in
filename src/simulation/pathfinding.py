@@ -10,20 +10,28 @@ from __future__ import annotations
 import heapq
 from typing import TypeAlias
 
-from src.models import Graph, Zone, ZoneType, canonical_key
+from src.models import (
+    ConnectionKey,
+    Graph,
+    TurnNumber,
+    Zone,
+    ZoneName,
+    ZoneType,
+    canonical_key,
+)
 
 #: A (zone, arrival_turn) state in the time-expanded search space.
-State: TypeAlias = tuple[str, int]
+State: TypeAlias = tuple[ZoneName, TurnNumber]
 #: An ordered list of states from start to goal, inclusive.
 TimedRoute: TypeAlias = list[State]
 #: A forbidden (zone, turn) occupancy — structurally a State.
 VertexConstraint: TypeAlias = State
 #: A forbidden (canonical_link, turn) occupancy during a transit.
-LinkConstraint: TypeAlias = tuple[tuple[str, str], int]
+LinkConstraint: TypeAlias = tuple[ConnectionKey, TurnNumber]
 #: The constraint pair passed to the low-level search.
 Constraints: TypeAlias = tuple[set[VertexConstraint], set[LinkConstraint]]
 #: Heuristic table: zone -> min travel time to goal (reverse Dijkstra).
-Heuristic: TypeAlias = dict[str, int | float]
+Heuristic: TypeAlias = dict[ZoneName, int | float]
 #: Accumulated priority-zone count per search state.
 PriorityCount: TypeAlias = dict[State, int]
 #: Path reconstruction: state -> previous state (None for the start).
@@ -41,10 +49,12 @@ _ZONE_COSTS: dict[ZoneType, int | float] = {
 }
 
 #: Reverse-Dijkstra queue entry: (distance, zone_name).
-_QueueEntry: TypeAlias = tuple[int | float, str]
+_QueueEntry: TypeAlias = tuple[int | float, ZoneName]
 
 #: Timed A* queue entry: (f, -priority_count, turn, zone_name).
-_TimedQueueEntry: TypeAlias = tuple[int | float, int, int, str]
+_TimedQueueEntry: TypeAlias = tuple[
+    int | float, int, TurnNumber, ZoneName
+]
 
 
 def _reconstruct_path(
@@ -61,9 +71,9 @@ def _reconstruct_path(
 
 
 def _is_link_blocked(
-    link_key: tuple[str, str],
-    start_turn: int,
-    end_turn: int,
+    link_key: ConnectionKey,
+    start_turn: TurnNumber,
+    end_turn: TurnNumber,
     link_constraints: set[LinkConstraint],
 ) -> bool:
     """Whether any transit turn in [start_turn, end_turn) is constrained."""
@@ -101,7 +111,7 @@ def _push_state(
     heapq.heappush(pq, (f_score, -new_priority, turn, zone))
 
 
-def dist_to_goal(graph: Graph, goal: str) -> Heuristic:
+def dist_to_goal(graph: Graph, goal: ZoneName) -> Heuristic:
     """Reverse Dijkstra from goal to all zones.
 
     Edge weight u->v = enter_cost(v). Returns dict[zone, min_turns_to_goal].
@@ -146,11 +156,11 @@ def dist_to_goal(graph: Graph, goal: str) -> Heuristic:
 
 def find_path_timed(
     graph: Graph,
-    start: str,
-    goal: str,
+    start: ZoneName,
+    goal: ZoneName,
     constraints: Constraints,
-    start_turn: int,
-    horizon: int,
+    start_turn: TurnNumber,
+    horizon: TurnNumber,
     dist: Heuristic,
 ) -> TimedRoute | None:
     """Time-expanded A* returning the earliest feasible arrival route.

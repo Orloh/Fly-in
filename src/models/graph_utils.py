@@ -6,8 +6,10 @@ graph, engine, and tests.
 
 from __future__ import annotations
 
+from src.models.aliases import ConnectionKey, ZoneName
 
-def canonical_key(a: str, b: str) -> tuple[str, str]:
+
+def canonical_key(a: ZoneName, b: ZoneName) -> ConnectionKey:
     """Return the canonical (sorted) key for an undirected edge.
 
     Ensures ``(a, b)`` and ``(b, a)`` produce the same key.

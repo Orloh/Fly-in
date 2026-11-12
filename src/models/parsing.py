@@ -9,24 +9,26 @@ from __future__ import annotations
 
 from pydantic import BaseModel, Field
 
+from src.models.aliases import LineNumber, Metadata, ZoneName
+
 
 class ParsedZone(BaseModel):
     """A zone line as read from the map file."""
 
-    name: str
+    name: ZoneName
     x: int
     y: int
-    metadata: dict[str, str] = Field(default_factory=dict)
-    line_number: int
+    metadata: Metadata = Field(default_factory=dict)
+    line_number: LineNumber
 
 
 class ParsedConnection(BaseModel):
     """A connection line as read from the map file."""
 
-    zone_a: str
-    zone_b: str
-    metadata: dict[str, str] = Field(default_factory=dict)
-    line_number: int
+    zone_a: ZoneName
+    zone_b: ZoneName
+    metadata: Metadata = Field(default_factory=dict)
+    line_number: LineNumber
 
 
 class ParsedMap(BaseModel):

@@ -5,8 +5,15 @@ No rendering dependency: this module is pure data and helpers.
 
 from __future__ import annotations
 
+#: Red, green, blue color triplet.
+RGB = tuple[int, int, int]
+#: Terminal palette role name.
+ColorRole = str
+#: Color name to RGB mapping.
+Palette = dict[ColorRole, RGB]
+
 #: Google brand-inspired truecolor palette.
-PALETTE: dict[str, tuple[int, int, int]] = {
+PALETTE: Palette = {
     "blue": (66, 133, 244),
     "red": (234, 67, 53),
     "yellow": (251, 188, 5),
@@ -18,7 +25,7 @@ PALETTE: dict[str, tuple[int, int, int]] = {
 }
 
 #: Maps common map-file color names to Google palette roles.
-COLOR_NAME_TO_ROLE: dict[str, str] = {
+COLOR_NAME_TO_ROLE: dict[str, ColorRole] = {
     "red": "red",
     "rose": "red",
     "pink": "red",
@@ -51,7 +58,7 @@ COLOR_NAME_TO_ROLE: dict[str, str] = {
 }
 
 #: Roles used for deterministic fallback colors of unknown names.
-_FALLBACK_ROLES: tuple[str, ...] = (
+_FALLBACK_ROLES: tuple[ColorRole, ...] = (
     "blue",
     "red",
     "yellow",
@@ -60,7 +67,7 @@ _FALLBACK_ROLES: tuple[str, ...] = (
 )
 
 
-def color_role(color_name: str) -> str | None:
+def color_role(color_name: str) -> ColorRole | None:
     """Map a color name to a Google palette role, or None for 'none'.
 
     Args:

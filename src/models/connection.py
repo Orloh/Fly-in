@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from pydantic import BaseModel, Field
 
+from src.models.aliases import ConnectionKey, ZoneName
 from src.models.graph_utils import canonical_key
 
 
@@ -14,12 +15,12 @@ class Connection(BaseModel):
     the same key, enabling duplicate detection and symmetric capacity checks.
     """
 
-    zone_a: str
-    zone_b: str
+    zone_a: ZoneName
+    zone_b: ZoneName
     max_link_capacity: int = Field(default=1, ge=1)
 
     @property
-    def key(self) -> tuple[str, str]:
+    def key(self) -> ConnectionKey:
         """Canonical (sorted) key identifying this undirected edge.
 
         Returns:

@@ -14,15 +14,22 @@ from src.models import (
     Drone,
     DroneStatus,
     Graph,
+    Metadata,
     ParsedMap,
     ParsedZone,
     Schedule,
     TurnSnapshot,
+    ZoneName,
     ZoneType,
 )
 from src.parser import build_graph, ParseError, parse_map
 from src.palette import PALETTE, color_role
 from src.simulation.engine import Simulation
+
+#: Zone name to terminal palette role.
+ZoneRoles = dict[ZoneName, str]
+#: Zone name to map-file color metadata.
+ZoneColors = dict[ZoneName, str]
 
 ZONE_TYPE_ROLES: dict[ZoneType, str] = {
     ZoneType.NORMAL: "blue",
@@ -58,7 +65,7 @@ def _format_zone_line(
     prefix: str,
     zone: ParsedZone,
     default_role: str,
-    zone_colors: dict[str, str],
+    zone_colors: ZoneColors,
     color: bool,
 ) -> str:
     """Format a single zone line: prefix + painted name + coords + metadata."""
@@ -69,7 +76,7 @@ def _format_zone_line(
     return f"{prefix_p}{name} {coords}" + _format_metadata(zone.metadata)
 
 
-def _format_metadata(meta: dict[str, str]) -> str:
+def _format_metadata(meta: Metadata) -> str:
     """Render metadata dict as canonical '[k=v ...]' string (sorted keys)."""
     if not meta:
         return ""
@@ -96,7 +103,7 @@ def format_map(parsed: ParsedMap, color: bool = False) -> list[str]:
     lines.append(paint(f"nb_drones: {parsed.nb_drones}", "blue", color))
 
     # Build name -> color_name lookup for all zones
-    zone_colors: dict[str, str] = {}
+    zone_colors: ZoneColors = {}
     for z in [parsed.start_hub, parsed.end_hub, *parsed.zones]:
         zone_colors[z.name] = z.metadata.get("color", "none")
 
@@ -132,7 +139,7 @@ def format_map(parsed: ParsedMap, color: bool = False) -> list[str]:
 def format_turn(
     snapshot: TurnSnapshot,
     color: bool = False,
-    zone_roles: dict[str, str] | None = None,
+    zone_roles: ZoneRoles | None = None,
 ) -> str:
     """Format a snapshot's events as ``D{id}-{label}`` tokens.
 
@@ -165,7 +172,7 @@ def format_turn(
 
 def _paint_connection(
     connection: str,
-    zone_roles: dict[str, str] | None,
+    zone_roles: ZoneRoles | None,
     color: bool,
 ) -> str:
     """Paint a ``zone_a-zone_b`` connection name by endpoint roles."""
@@ -288,7 +295,7 @@ def simulate_turns(
     sim = Simulation(graph, drones)
 
     # Build zone_roles from graph: zone.name -> Google role (default blue)
-    zone_roles: dict[str, str] = {}
+    zone_roles: ZoneRoles = {}
     for name, zone in graph.zones.items():
         explicit = color_role(zone.color)
         zone_roles[name] = explicit or ZONE_TYPE_ROLES[zone.zone_type]

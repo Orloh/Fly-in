@@ -6,6 +6,8 @@ as required by the map format specification.
 
 from __future__ import annotations
 
+from src.models.aliases import LineNumber
+
 
 class ParseError(Exception):
     """A fatal error encountered during map-file processing.
@@ -14,7 +16,7 @@ class ParseError(Exception):
     so the caller can emit a clear diagnostic before exiting.
     """
 
-    def __init__(self, line_number: int, message: str) -> None:
+    def __init__(self, line_number: LineNumber, message: str) -> None:
         """Record the offending line number and diagnostic message.
 
         Args:

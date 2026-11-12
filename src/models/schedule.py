@@ -2,44 +2,58 @@
 
 from __future__ import annotations
 
+from typing import Literal
+
 from pydantic import BaseModel, Field
 
+from src.models.aliases import (
+    ConnectionKey,
+    DroneId,
+    TurnNumber,
+    ZoneName,
+)
 from src.models.graph import Graph
 from src.models.graph_utils import canonical_key
+
+#: A scheduled action kind.
+ActionKind = Literal["WAIT", "MOVE"]
+#: Per-drone action lists.
+ActionMap = dict[DroneId, list["ScheduledAction"]]
+#: Zone name and turn to drone count.
+ZoneTime = dict[tuple[ZoneName, TurnNumber], int]
+#: Canonical connection key and turn to drone count.
+LinkTime = dict[tuple[ConnectionKey, TurnNumber], int]
 
 
 class ScheduledAction(BaseModel):
     """One timed action for a drone (WAIT or MOVE)."""
 
-    kind: str
-    turn: int
-    from_zone: str
-    to_zone: str
+    kind: ActionKind
+    turn: TurnNumber
+    from_zone: ZoneName
+    to_zone: ZoneName
     turns_required: int = 1
 
 
 class Schedule(BaseModel):
     """Optimal-makespan plan: per-drone timed action lists."""
 
-    actions: dict[int, list[ScheduledAction]] = Field(default_factory=dict)
+    actions: ActionMap = Field(default_factory=dict)
     makespan: int = 0
     graph: Graph
 
     def occupancy(
         self,
-    ) -> tuple[
-        dict[tuple[str, int], int],
-        dict[tuple[tuple[str, str], int], int],
-    ]:
+    ) -> tuple[ZoneTime, LinkTime]:
         """zone_time[(z,t)] and link_time[(canon,t)] from the actions.
 
         Matches the planner's occupancy model: a drone occupies its
         arrival zone at the arrival turn and its link during transit.
         """
-        zone_time: dict[tuple[str, int], int] = {}
-        link_time: dict[tuple[tuple[str, str], int], int] = {}
+        zone_time: ZoneTime = {}
+        link_time: LinkTime = {}
         for drone_actions in self.actions.values():
-            last_arrival: tuple[str, int] | None = None
+            last_arrival: tuple[ZoneName, TurnNumber] | None = None
             for action in drone_actions:
                 if action.kind == "WAIT":
                     # A wait occupies its zone at the wait turn, unless the

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from pydantic import BaseModel, Field, field_validator
 
+from src.models.aliases import ZoneName
 from src.models.enums import ZoneType
 
 
@@ -15,7 +16,7 @@ class Zone(BaseModel):
     only behavioural difference is an unlimited occupancy capacity.
     """
 
-    name: str
+    name: ZoneName
     x: int
     y: int
     zone_type: ZoneType = ZoneType.NORMAL

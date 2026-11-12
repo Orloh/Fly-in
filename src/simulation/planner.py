@@ -8,7 +8,16 @@ not guaranteed to minimize makespan.
 
 from __future__ import annotations
 
-from src.models import Drone, DroneStatus, Graph, canonical_key
+from src.models import (
+    ConnectionKey,
+    Drone,
+    DroneId,
+    DroneStatus,
+    Graph,
+    TurnNumber,
+    ZoneName,
+    canonical_key,
+)
 from src.models.schedule import Schedule, ScheduledAction
 from src.simulation.pathfinding import (
     Constraints,
@@ -21,6 +30,15 @@ from src.simulation.pathfinding import (
     sum_entry_cost,
 )
 
+#: Drone id to timed route.
+RouteMap = dict[DroneId, TimedRoute]
+#: Drone id to drone object.
+DronesById = dict[DroneId, Drone]
+#: Zone and turn to drones reserved there.
+ZoneReservations = dict[tuple[ZoneName, TurnNumber], list[DroneId]]
+#: Connection and turn to drones reserved there.
+LinkReservations = dict[tuple[ConnectionKey, TurnNumber], list[DroneId]]
+
 
 class Planner:
     """Route drones greedily in id order with capacity reservations."""
@@ -32,7 +50,7 @@ class Planner:
             graph: The routing graph.
         """
         self.graph = graph
-        self._dist_cache: dict[str, Heuristic] = {}
+        self._dist_cache: dict[ZoneName, Heuristic] = {}
 
     def plan(self, drones: list[Drone]) -> tuple[Schedule, list[Drone]]:
         """Plan all drones greedily and return the schedule plus blocked ones.
@@ -73,10 +91,10 @@ class Planner:
     def _plan_order(
         self,
         order: list[Drone],
-        horizon: int,
-    ) -> tuple[dict[int, TimedRoute], list[Drone]]:
+        horizon: TurnNumber,
+    ) -> tuple[RouteMap, list[Drone]]:
         """Plan one prioritized pass in the given drone order."""
-        routes: dict[int, TimedRoute] = {}
+        routes: RouteMap = {}
         blocked: list[Drone] = []
         for drone in order:
             route = self._plan_drone(drone, routes, horizon)
@@ -89,8 +107,8 @@ class Planner:
     def _plan_drone(
         self,
         drone: Drone,
-        committed: dict[int, TimedRoute],
-        horizon: int,
+        committed: RouteMap,
+        horizon: TurnNumber,
     ) -> TimedRoute | None:
         """Plan one drone around already committed routes."""
         if drone.current_zone is None:
@@ -118,8 +136,8 @@ class Planner:
 
     def _reservation_constraints(
         self,
-        routes: dict[int, TimedRoute],
-        horizon: int,
+        routes: RouteMap,
+        horizon: TurnNumber,
     ) -> Constraints:
         """Constraints forbidding cells already at capacity."""
         zone_drones, link_drones = self._build_occupancy(routes, horizon)
@@ -144,18 +162,18 @@ class Planner:
 
     def _build_occupancy(
         self,
-        routes: dict[int, TimedRoute],
-        horizon: int,
+        routes: RouteMap,
+        horizon: TurnNumber,
     ) -> tuple[
-        dict[tuple[str, int], list[int]],
-        dict[tuple[tuple[str, str], int], list[int]],
+        ZoneReservations,
+        LinkReservations,
     ]:
         """Map occupied zone/link cells to the drones currently using them.
 
         Arrrived drones keep occupying their goal after arrival.
         """
-        zone_drones: dict[tuple[str, int], list[int]] = {}
-        link_drones: dict[tuple[tuple[str, str], int], list[int]] = {}
+        zone_drones: ZoneReservations = {}
+        link_drones: LinkReservations = {}
 
         for drone_id, route in routes.items():
             for (zone_a, turn_a), (zone_b, turn_b) in zip(
@@ -184,9 +202,7 @@ class Planner:
 
         return zone_drones, link_drones
 
-    def _routes_to_schedule(
-        self, routes: dict[int, TimedRoute]
-    ) -> Schedule:
+    def _routes_to_schedule(self, routes: RouteMap) -> Schedule:
         """Convert committed timed routes into scheduled actions."""
         actions = {
             drone_id: _route_to_actions(route)
@@ -231,7 +247,7 @@ def _route_to_actions(route: TimedRoute) -> list[ScheduledAction]:
     return actions
 
 
-def _makespan(routes: dict[int, TimedRoute]) -> int:
+def _makespan(routes: RouteMap) -> int:
     """Return the number of emitted turns until the last delivery."""
     if not routes:
         return 0
