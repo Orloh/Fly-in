@@ -137,7 +137,7 @@ def format_turn(
     """Format a snapshot's events as ``D{id}-{label}`` tokens.
 
     Args:
-        snapshot: The logical end-of-turn snapshot.
+        snapshot: The end-of-turn snapshot.
         color: Whether to enable ANSI color output.
         zone_roles: Zone name to Google palette role mapping; unlisted
             zones default to ``blue``.

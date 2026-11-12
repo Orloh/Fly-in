@@ -200,7 +200,7 @@ choices can force later drones to wait or detour.
 
 The plan is computed **once** at `Simulation.__init__`; `step()` replays
 it as a cursor. Each `TurnSnapshot` carries the printed events, every
-drone's logical end-of-turn position, zone occupancy, link usage, and
+drone's end-of-turn position, zone occupancy, link usage, and
 capacity metadata for diagnostics or future output extensions. Planned
 waits are silent; conflicts are limited to no-route drones and
 safety-net planner bugs (visible with `--debug`).

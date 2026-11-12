@@ -17,8 +17,9 @@ class Drone(BaseModel):
     status: DroneStatus = DroneStatus.WAITING
     schedule: list[ScheduledAction] = Field(default_factory=list)
     schedule_index: int = 0
-    turns_in_transit: int = 0
+    transit_from: str | None = None
     transit_destination: str | None = None
+    turns_remaining: int = 0
     blocked_reason: str | None = None
 
 

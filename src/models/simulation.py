@@ -19,7 +19,7 @@ class TurnEvent(BaseModel):
 
 
 class DronePosition(BaseModel):
-    """Logical position of a drone at the end of a turn."""
+    """Position of a drone at the end of a turn."""
 
     zone: str | None = None
     connection: tuple[str, str] | None = None
@@ -27,10 +27,10 @@ class DronePosition(BaseModel):
 
 
 class TurnSnapshot(BaseModel):
-    """Logical end-of-turn snapshot used for output and diagnostics.
+    """End-of-turn snapshot used for output and diagnostics.
 
     ``events`` are the tokens that should be printed for this turn.
-    ``positions`` holds every drone's logical position after the turn.
+    ``positions`` holds every drone's position after the turn.
     ``zone_occupancy`` and ``link_usage`` are derived from those positions.
     ``moved_zones`` is derived from the zone events.
     """
@@ -60,5 +60,4 @@ class SimulationState(BaseModel):
 
     turn: int = 0
     drones: dict[int, Drone] = Field(default_factory=dict)
-    link_usage: dict[tuple[str, str], int] = Field(default_factory=dict)
     completed_drones: set[int] = Field(default_factory=set)

@@ -79,7 +79,7 @@ class TestSimulation:
         while not sim.finished:
             results.append(sim.step())
 
-        assert sim.state.turn == 3
+        assert sim.state.turn == 2
         movements = [m for result in results for m in result.movements]
         assert movements == [
             Movement(
@@ -110,12 +110,20 @@ class TestSimulation:
                 drone_id=1, from_zone="S", to_zone="R", turns_required=2
             )
         ]
-        assert sim.state.drones[1].status == DroneStatus.IN_TRANSIT
-        assert sim.state.link_usage[("S", "R")] == 1
+        drone = sim.state.drones[1]
+        assert drone.status == DroneStatus.IN_TRANSIT
+        assert drone.current_zone is None
+        assert drone.transit_from == "S"
+        assert drone.transit_destination == "R"
+        assert drone.turns_remaining == 1
+        assert first.link_usage == {("R", "S"): 1}
 
         second = sim.step()
         assert second.movements == []
-        assert sim.state.drones[1].status == DroneStatus.IN_TRANSIT
+        assert second.events[0].kind == "zone"
+        assert sim.state.drones[1].status == DroneStatus.WAITING
+        assert sim.state.drones[1].current_zone == "R"
+        assert second.link_usage == {}
 
         third = sim.step()
         assert third.movements == [
@@ -123,10 +131,8 @@ class TestSimulation:
                 drone_id=1, from_zone="R", to_zone="G", turns_required=1
             )
         ]
-
-        sim.step()
         assert sim.finished
-        assert sim.state.turn == 4
+        assert sim.state.turn == 3
 
     def test_snapshot_occupancy_after_normal_move(self) -> None:
         graph = _graph(
@@ -234,7 +240,7 @@ class TestSimulation:
         while not sim.finished:
             sim.step()
 
-        assert sim.state.turn == 4
+        assert sim.state.turn == 3
         assert sim.state.completed_drones == {1, 2}
 
     def test_link_capacity_makes_second_drone_wait(self) -> None:
@@ -272,12 +278,13 @@ class TestSimulation:
         sim = Simulation(graph, [_drone(1, "S", "G"), _drone(2, "S", "G")])
 
         first = sim.step()
-        assert sim.state.link_usage[("S", "R")] == 1
+        assert first.link_usage == {("R", "S"): 1}
         assert len(first.conflicts) == 0
 
         second = sim.step()
-        assert sim.state.link_usage[("S", "R")] == 1
+        assert second.link_usage == {}
         assert len(second.conflicts) == 0
+        assert all(event.drone_id != 2 for event in second.events)
 
     def test_drones_processed_in_id_order(self) -> None:
         graph = _graph(
