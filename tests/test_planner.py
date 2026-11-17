@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from collections.abc import Callable
 
-from src.models import Drone, Graph
+from src.models import Drone, DroneFleet, Graph, canonical_key
 from src.parser.parser import parse_map
 from src.parser.converter import build_graph
 from src.simulation.planner import Planner
@@ -76,7 +76,7 @@ class TestPlannerSynthetic:
     def test_single_drone_normal_route(
         self,
         simple_graph: Graph,
-        drones_at_start: Callable[..., list[Drone]],
+        drones_at_start: Callable[..., DroneFleet],
     ) -> None:
         drones = drones_at_start(1, "S", "G")
         schedule, _ = Planner(simple_graph).plan(drones)
@@ -85,7 +85,7 @@ class TestPlannerSynthetic:
     def test_single_drone_restricted_route(
         self,
         restricted_graph: Graph,
-        drones_at_start: Callable[..., list[Drone]],
+        drones_at_start: Callable[..., DroneFleet],
     ) -> None:
         drones = drones_at_start(1, "S", "G")
         schedule, _ = Planner(restricted_graph).plan(drones)
@@ -94,7 +94,7 @@ class TestPlannerSynthetic:
     def test_split_routes_two_drones(
         self,
         split_graph: Graph,
-        drones_at_start: Callable[..., list[Drone]],
+        drones_at_start: Callable[..., DroneFleet],
     ) -> None:
         drones = drones_at_start(2, "S", "G")
         schedule, _ = Planner(split_graph).plan(drones)
@@ -109,6 +109,39 @@ class TestPlannerSynthetic:
         assert schedule.makespan == 1
         assert len(blocked) == 1
 
+    def test_occupancy_uses_executed_turns(
+        self,
+        simple_graph: Graph,
+        drones_at_start: Callable[..., DroneFleet],
+    ) -> None:
+        schedule, _ = Planner(simple_graph).plan(
+            drones_at_start(1, "S", "G")
+        )
+        zone_occ, link_occ = schedule.occupancy()
+
+        assert zone_occ == {("A", 1): 1, ("G", 2): 1}
+        assert link_occ == {
+            (canonical_key("S", "A"), 1): 1,
+            (canonical_key("A", "G"), 2): 1,
+        }
+
+    def test_restricted_occupancy_spans_transit_turns(
+        self,
+        restricted_graph: Graph,
+        drones_at_start: Callable[..., DroneFleet],
+    ) -> None:
+        schedule, _ = Planner(restricted_graph).plan(
+            drones_at_start(1, "S", "G")
+        )
+        zone_occ, link_occ = schedule.occupancy()
+
+        assert zone_occ == {("R", 2): 1, ("G", 3): 1}
+        assert link_occ == {
+            (canonical_key("S", "R"), 1): 1,
+            (canonical_key("S", "R"), 2): 1,
+            (canonical_key("R", "G"), 3): 1,
+        }
+
 
 class TestPlannerConflictFree:
     """Verify schedule respects all capacity constraints."""
@@ -116,7 +149,7 @@ class TestPlannerConflictFree:
     def test_no_zone_over_capacity(
         self,
         bottleneck_graph: Graph,
-        drones_at_start: Callable[..., list[Drone]],
+        drones_at_start: Callable[..., DroneFleet],
     ) -> None:
         drones = drones_at_start(3)
         schedule, _ = Planner(bottleneck_graph).plan(drones)
@@ -125,7 +158,7 @@ class TestPlannerConflictFree:
     def test_no_link_over_capacity(
         self,
         bottleneck_graph: Graph,
-        drones_at_start: Callable[..., list[Drone]],
+        drones_at_start: Callable[..., DroneFleet],
     ) -> None:
         drones = drones_at_start(3)
         schedule, _ = Planner(bottleneck_graph).plan(drones)
@@ -134,7 +167,7 @@ class TestPlannerConflictFree:
     def test_post_arrival_occupancy(
         self,
         finite_goal_graph: Graph,
-        drones_at_start: Callable[..., list[Drone]],
+        drones_at_start: Callable[..., DroneFleet],
     ) -> None:
         """Arrived drone occupies finite-capacity goal for all future turns."""
         drones = drones_at_start(1)
@@ -148,7 +181,7 @@ class TestPlannerUnreachable:
     def test_unreachable_goal_blocks_drones(
         self,
         disconnected_graph: Graph,
-        drones_at_start: Callable[..., list[Drone]],
+        drones_at_start: Callable[..., DroneFleet],
     ) -> None:
         drones = drones_at_start(1)
         _, blocked = Planner(disconnected_graph).plan(drones)
@@ -164,7 +197,7 @@ class TestPlannerDeterminism:
     def test_deterministic_output(
         self,
         split_graph: Graph,
-        drones_at_start: Callable[..., list[Drone]],
+        drones_at_start: Callable[..., DroneFleet],
     ) -> None:
         drones = drones_at_start(3)
         s1, _ = Planner(split_graph).plan(drones)

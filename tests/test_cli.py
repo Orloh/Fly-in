@@ -8,6 +8,7 @@ from __future__ import annotations
 from src.models import (
     Connection,
     Drone,
+    DroneFleet,
     Graph,
     ParsedConnection,
     ParsedMap,
@@ -18,6 +19,7 @@ from src.models import (
     TurnSnapshot,
     Zone,
     ZoneType,
+    canonical_key,
 )
 from src.cli import (
     paint,
@@ -40,7 +42,7 @@ from src.palette import (
 
 def _simulate_lines(
     graph: Graph,
-    drones: list[Drone],
+    drones: DroneFleet,
     color: bool = False,
 ) -> list[str]:
     """Return only the formatted lines from the raw turn generator."""
@@ -78,7 +80,7 @@ def _graph(
 ) -> Graph:
     connections: dict[tuple[str, str], Connection] = {}
     for zone_a, zone_b in edges:
-        key = (zone_a, zone_b) if zone_a <= zone_b else (zone_b, zone_a)
+        key = canonical_key(zone_a, zone_b)
         connections[key] = Connection(
             zone_a=key[0],
             zone_b=key[1],
@@ -181,7 +183,7 @@ class TestFormatTurn:
         turn = TurnSnapshot(
             turn_number=1,
             events=[
-                TurnEvent(drone_id=1, kind="zone", label="A"),
+                TurnEvent(drone_id=1, zone="A"),
             ],
         )
         assert format_turn(turn) == "D1-A"
@@ -190,8 +192,8 @@ class TestFormatTurn:
         turn = TurnSnapshot(
             turn_number=1,
             events=[
-                TurnEvent(drone_id=2, kind="zone", label="B"),
-                TurnEvent(drone_id=1, kind="zone", label="A"),
+                TurnEvent(drone_id=2, zone="B"),
+                TurnEvent(drone_id=1, zone="A"),
             ],
         )
         assert format_turn(turn) == "D1-A D2-B"
@@ -206,8 +208,8 @@ class TestFormatTurn:
             events=[
                 TurnEvent(
                     drone_id=2,
-                    kind="connection",
-                    label="loop_b-exit_point",
+                    from_zone="loop_b",
+                    to_zone="exit_point",
                 ),
             ],
         )
@@ -219,8 +221,8 @@ class TestFormatTurn:
             events=[
                 TurnEvent(
                     drone_id=1,
-                    kind="connection",
-                    label="S-R",
+                    from_zone="S",
+                    to_zone="R",
                 ),
             ],
         )
@@ -230,7 +232,7 @@ class TestFormatTurn:
         turn = TurnSnapshot(
             turn_number=2,
             events=[
-                TurnEvent(drone_id=1, kind="zone", label="R"),
+                TurnEvent(drone_id=1, zone="R"),
             ],
         )
         assert format_turn(turn) == "D1-R"
@@ -239,11 +241,11 @@ class TestFormatTurn:
         turn = TurnSnapshot(
             turn_number=2,
             events=[
-                TurnEvent(drone_id=1, kind="zone", label="A"),
+                TurnEvent(drone_id=1, zone="A"),
                 TurnEvent(
                     drone_id=2,
-                    kind="connection",
-                    label="loop_b-exit_point",
+                    from_zone="loop_b",
+                    to_zone="exit_point",
                 ),
             ],
         )
@@ -255,8 +257,8 @@ class TestFormatTurn:
             events=[
                 TurnEvent(
                     drone_id=2,
-                    kind="connection",
-                    label="loop_b-exit_point",
+                    from_zone="loop_b",
+                    to_zone="exit_point",
                 ),
             ],
         )
@@ -282,7 +284,7 @@ class TestFormatTurn:
         turn = TurnSnapshot(
             turn_number=1,
             events=[
-                TurnEvent(drone_id=1, kind="zone", label="A"),
+                TurnEvent(drone_id=1, zone="A"),
             ],
         )
         colored = format_turn(turn, color=True)
@@ -297,7 +299,7 @@ class TestFormatTurn:
         turn = TurnSnapshot(
             turn_number=1,
             events=[
-                TurnEvent(drone_id=1, kind="zone", label="A"),
+                TurnEvent(drone_id=1, zone="A"),
             ],
         )
         colored = format_turn(turn, zone_roles={"A": "red"}, color=True)
@@ -312,8 +314,8 @@ class TestFormatTurn:
         turn = TurnSnapshot(
             turn_number=1,
             events=[
-                TurnEvent(drone_id=1, kind="zone", label="A"),
-                TurnEvent(drone_id=2, kind="zone", label="B"),
+                TurnEvent(drone_id=1, zone="A"),
+                TurnEvent(drone_id=2, zone="B"),
             ],
         )
         colored = format_turn(
@@ -511,7 +513,7 @@ class TestSimulate:
         )
         lines = list(_simulate_lines(graph, [_drone(1, "S", "G")]))
         # turn 1: move onto the S-R connection, turn 2: reach R,
-        # turn 3: R->G, turn 4: arrival (not printed)
+        # turn 3: R->G and arrival at G
         assert lines == ["D1-S-R", "D1-R", "D1-G"]
 
     def test_in_flight_and_movement_same_line(self) -> None:
@@ -536,8 +538,9 @@ class TestSimulate:
             "D2-G",
         ]
 
-    def test_deadlock_breaks(self) -> None:
-        # Two drones head-on on capacity-1 link: D1 S->A, D2 A->S. Link cap 1.
+    def test_head_on_deadlock_blocks_second_drone(self) -> None:
+        # Head-on on a capacity-1 link: D1 S->A, D2 A->S. Id-order
+        # planning routes D1 and leaves D2 blocked; there is no retry.
         graph = _graph(
             [_zone("S", start=True), _zone("A")],
             [("S", "A")],
@@ -547,9 +550,8 @@ class TestSimulate:
                 graph, [_drone(1, "S", "A"), _drone(2, "A", "S")]
             )
         )
-        # D1 moves S->A, D2 blocked; D1 arrives, then D2 moves A->S
         assert "D1-A" in lines
-        assert "D2-S" in lines
+        assert "D2-S" not in lines
 
     def test_multi_drone_simultaneous(self) -> None:
         graph = _graph(

@@ -13,16 +13,19 @@ from typing import Protocol, TypeAlias
 from src.models import (
     ConnectionKey,
     Drone,
+    DroneFleet,
     DroneId,
     DronePosition,
     DronePositions,
     DroneStatus,
     Graph,
+    LinkCapacities,
     LinkUsage,
     Movement,
     SimulationState,
     TurnEvent,
     TurnSnapshot,
+    ZoneCapacities,
     ZoneName,
     ZoneOccupancy,
 )
@@ -33,13 +36,13 @@ from src.simulation.planner import Planner
 #: A human-readable capacity or routing failure reported on a turn.
 Conflict: TypeAlias = str
 #: Drone id to the connection it was on before a step.
-TransitStart = dict[DroneId, ConnectionKey]
+TransitStart: TypeAlias = dict[DroneId, ConnectionKey]
 
 
 class PlannerProtocol(Protocol):
     """Structural type for any planner the engine can replay."""
 
-    def plan(self, drones: list[Drone]) -> tuple[Schedule, list[Drone]]:
+    def plan(self, drones: DroneFleet) -> tuple[Schedule, DroneFleet]:
         """Compute a Schedule; return (schedule, blocked drones)."""
         ...
 
@@ -50,7 +53,7 @@ class Simulation:
     def __init__(
         self,
         graph: Graph,
-        drones: list[Drone],
+        drones: DroneFleet,
         planner: PlannerProtocol | None = None,
     ) -> None:
         """Plan a Schedule and prepare the replay state.
@@ -93,7 +96,9 @@ class Simulation:
         movements: list[Movement] = []
         conflicts: list[Conflict] = []
         in_transit_before: TransitStart = {
-            drone.id: (drone.transit_from, drone.transit_destination)
+            drone.id: canonical_key(
+                drone.transit_from, drone.transit_destination
+            )
             for drone in self.state.drones.values()
             if drone.status == DroneStatus.IN_TRANSIT
             and drone.transit_from is not None
@@ -162,13 +167,13 @@ class Simulation:
                 link_usage[key] = link_usage.get(key, 0) + 1
 
         zone_names: set[ZoneName] = {
-            event.label for event in events if event.kind == "zone"
+            event.zone for event in events if event.zone is not None
         }
-        zone_capacities = {
+        zone_capacities: ZoneCapacities = {
             zone_name: self.graph.zones[zone_name].capacity
             for zone_name in zone_names
         }
-        link_capacities = {
+        link_capacities: LinkCapacities = {
             key: self.graph.connections[key].max_link_capacity
             for key in link_usage
             if key in self.graph.connections
@@ -200,19 +205,15 @@ class Simulation:
                 events.append(
                     TurnEvent(
                         drone_id=movement.drone_id,
-                        kind="zone",
-                        label=movement.to_zone,
+                        zone=movement.to_zone,
                     )
                 )
             else:
                 events.append(
                     TurnEvent(
                         drone_id=movement.drone_id,
-                        kind="connection",
-                        label=(
-                            f"{movement.from_zone}-"
-                            f"{movement.to_zone}"
-                        ),
+                        from_zone=movement.from_zone,
+                        to_zone=movement.to_zone,
                     )
                 )
 
@@ -228,19 +229,15 @@ class Simulation:
                 events.append(
                     TurnEvent(
                         drone_id=drone_id,
-                        kind="connection",
-                        label=(
-                            f"{drone.transit_from}-"
-                            f"{drone.transit_destination}"
-                        ),
+                        from_zone=drone.transit_from,
+                        to_zone=drone.transit_destination,
                     )
                 )
             elif drone.current_zone is not None:
                 events.append(
                     TurnEvent(
                         drone_id=drone_id,
-                        kind="zone",
-                        label=drone.current_zone,
+                        zone=drone.current_zone,
                     )
                 )
 
@@ -256,7 +253,7 @@ class Simulation:
                 and drone.transit_destination is not None
             ):
                 return DronePosition(
-                    connection=(
+                    connection=canonical_key(
                         drone.transit_from,
                         drone.transit_destination,
                     ),
@@ -281,7 +278,7 @@ class Simulation:
         if drone.current_zone is None:
             return None
 
-        arrival = action.turn + action.turns_required
+        arrival = action.turn + action.turns_required - 1
 
         dest = self.graph.zones[action.to_zone]
         if dest.capacity is not None:
@@ -294,7 +291,9 @@ class Simulation:
         link_key = canonical_key(action.from_zone, action.to_zone)
         connection = self.graph.connections.get(link_key)
         if connection is not None:
-            for t in range(action.turn, arrival):
+            for t in range(
+                action.turn, action.turn + action.turns_required
+            ):
                 count = self._schedule_link_time.get((link_key, t), 0)
                 if count > connection.max_link_capacity:
                     return (

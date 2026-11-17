@@ -8,30 +8,31 @@ from __future__ import annotations
 
 import os
 import sys
-from typing import Iterator
+from typing import Iterator, TypeAlias
 
 from src.models import (
-    Drone,
+    DroneFleet,
     DroneStatus,
     Graph,
     Metadata,
     ParsedMap,
     ParsedZone,
     Schedule,
+    TurnNumber,
     TurnSnapshot,
     ZoneName,
     ZoneType,
 )
 from src.parser import build_graph, ParseError, parse_map
-from src.palette import PALETTE, color_role
+from src.palette import PALETTE, ColorRole, color_role
 from src.simulation.engine import Simulation
 
 #: Zone name to terminal palette role.
-ZoneRoles = dict[ZoneName, str]
+ZoneRoles: TypeAlias = dict[ZoneName, ColorRole]
 #: Zone name to map-file color metadata.
-ZoneColors = dict[ZoneName, str]
+ZoneColors: TypeAlias = dict[ZoneName, str]
 
-ZONE_TYPE_ROLES: dict[ZoneType, str] = {
+ZONE_TYPE_ROLES: dict[ZoneType, ColorRole] = {
     ZoneType.NORMAL: "blue",
     ZoneType.PRIORITY: "green",
     ZoneType.RESTRICTED: "yellow",
@@ -39,7 +40,7 @@ ZONE_TYPE_ROLES: dict[ZoneType, str] = {
 }
 
 
-def paint(text: str, role: str, color: bool = False) -> str:
+def paint(text: str, role: ColorRole, color: bool = False) -> str:
     """Wrap ``text`` in ANSI truecolor for ``role`` if ``color`` is True.
 
     No-op when ``color`` is False or role unknown.
@@ -64,7 +65,7 @@ def paint(text: str, role: str, color: bool = False) -> str:
 def _format_zone_line(
     prefix: str,
     zone: ParsedZone,
-    default_role: str,
+    default_role: ColorRole,
     zone_colors: ZoneColors,
     color: bool,
 ) -> str:
@@ -159,31 +160,33 @@ def format_turn(
         snapshot.events, key=lambda item: item.drone_id
     ):
         drone_part = paint(f"D{event.drone_id}", "yellow", color)
-        if event.kind == "connection":
+        if event.from_zone is not None and event.to_zone is not None:
             label_part = _paint_connection(
-                event.label, zone_roles, color
+                event.from_zone, event.to_zone, zone_roles, color
             )
         else:
-            role = (zone_roles or {}).get(event.label, "blue")
-            label_part = paint(event.label, role, color)
+            assert event.zone is not None
+            zone = event.zone
+            role = (zone_roles or {}).get(zone, "blue")
+            label_part = paint(zone, role, color)
         parts.append((event.drone_id, f"{drone_part}-{label_part}"))
     return " ".join(token for _, token in sorted(parts))
 
 
 def _paint_connection(
-    connection: str,
+    zone_a: ZoneName,
+    zone_b: ZoneName,
     zone_roles: ZoneRoles | None,
     color: bool,
 ) -> str:
     """Paint a ``zone_a-zone_b`` connection name by endpoint roles."""
-    zone_a, zone_b = connection.split("-", 1)
     roles = zone_roles or {}
     role_a = roles.get(zone_a, "blue")
     role_b = roles.get(zone_b, "blue")
     return f"{paint(zone_a, role_a, color)}-{paint(zone_b, role_b, color)}"
 
 
-def format_makespan(makespan: int) -> str:
+def format_makespan(makespan: TurnNumber) -> str:
     """Format the final makespan summary line.
 
     Args:
@@ -277,7 +280,7 @@ def _has_future_action(sim: Simulation) -> bool:
 
 def simulate_turns(
     graph: Graph,
-    drones: list[Drone],
+    drones: DroneFleet,
     color: bool = False,
     show_stats: bool = False,
 ) -> Iterator[tuple[str, list[str]]]:

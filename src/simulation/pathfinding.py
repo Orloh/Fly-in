@@ -13,21 +13,23 @@ from typing import TypeAlias
 from src.models import (
     ConnectionKey,
     Graph,
+    LinkTurn,
     TurnNumber,
     Zone,
     ZoneName,
+    ZoneTurn,
     ZoneType,
     canonical_key,
 )
 
-#: A (zone, arrival_turn) state in the time-expanded search space.
-State: TypeAlias = tuple[ZoneName, TurnNumber]
+#: A (zone, end_of_turn) state; turn 0 is the initial state.
+State: TypeAlias = ZoneTurn
 #: An ordered list of states from start to goal, inclusive.
 TimedRoute: TypeAlias = list[State]
 #: A forbidden (zone, turn) occupancy — structurally a State.
 VertexConstraint: TypeAlias = State
 #: A forbidden (canonical_link, turn) occupancy during a transit.
-LinkConstraint: TypeAlias = tuple[ConnectionKey, TurnNumber]
+LinkConstraint: TypeAlias = LinkTurn
 #: The constraint pair passed to the low-level search.
 Constraints: TypeAlias = tuple[set[VertexConstraint], set[LinkConstraint]]
 #: Heuristic table: zone -> min travel time to goal (reverse Dijkstra).
@@ -72,12 +74,12 @@ def _reconstruct_path(
 
 def _is_link_blocked(
     link_key: ConnectionKey,
-    start_turn: TurnNumber,
-    end_turn: TurnNumber,
+    first_turn: TurnNumber,
+    last_turn: TurnNumber,
     link_constraints: set[LinkConstraint],
 ) -> bool:
-    """Whether any transit turn in [start_turn, end_turn) is constrained."""
-    for turn in range(start_turn, end_turn):
+    """Whether any transit turn in [first_turn, last_turn] is constrained."""
+    for turn in range(first_turn, last_turn + 1):
         if (link_key, turn) in link_constraints:
             return True
     return False
@@ -165,19 +167,21 @@ def find_path_timed(
 ) -> TimedRoute | None:
     """Time-expanded A* returning the earliest feasible arrival route.
 
-    State = (zone, turn); start = (start, start_turn); goal = any (goal, t).
-    Successors: wait -> (z, t+1), move -> (w, t+enter_cost(w)).
-    Vertex/link constraints prune states and transit moves. Heuristic
-    f = turn + dist[zone]; priority zones break f-ties. Returns None if
-    no route exists within ``horizon``.
+    State = (zone, turn) where ``turn`` is the end-of-turn time; turn 0
+    is the initial state. Start = (start, start_turn); goal = any
+    (goal, t). Successors: wait -> (z, t+1), move -> (w, t+enter_cost(w)).
+    A move from turn ``t`` occupies its link during turns ``t+1`` through
+    its arrival turn. Vertex/link constraints prune states and transit
+    moves. Heuristic f = turn + dist[zone]; priority zones break f-ties.
+    Returns None if no route exists within ``horizon``.
 
     Args:
         graph: The routing graph.
         start: The starting zone name.
         goal: The destination zone name.
         constraints: The vertex and link constraints to honor.
-        start_turn: The turn the drone starts moving.
-        horizon: The latest turn a route may arrive.
+        start_turn: The initial turn (0 before any action is executed).
+        horizon: The latest end-of-turn a route may arrive.
         dist: The heuristic table from ``dist_to_goal``.
 
     Returns:
@@ -243,7 +247,9 @@ def find_path_timed(
                 continue
 
             link_key = canonical_key(zone_name, neighbor_name)
-            if _is_link_blocked(link_key, turn, arrive_turn, link_constraints):
+            if _is_link_blocked(
+                link_key, turn + 1, arrive_turn, link_constraints
+            ):
                 continue
 
             new_priority = priority_count[state] + (

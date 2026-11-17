@@ -2,27 +2,29 @@
 
 from __future__ import annotations
 
-from typing import Literal
+from typing import Literal, TypeAlias
 
 from pydantic import BaseModel, Field
 
 from src.models.aliases import (
-    ConnectionKey,
+    DroneCount,
     DroneId,
+    LinkTurn,
     TurnNumber,
     ZoneName,
+    ZoneTurn,
 )
 from src.models.graph import Graph
 from src.models.graph_utils import canonical_key
 
 #: A scheduled action kind.
-ActionKind = Literal["WAIT", "MOVE"]
+ActionKind: TypeAlias = Literal["WAIT", "MOVE"]
 #: Per-drone action lists.
-ActionMap = dict[DroneId, list["ScheduledAction"]]
-#: Zone name and turn to drone count.
-ZoneTime = dict[tuple[ZoneName, TurnNumber], int]
-#: Canonical connection key and turn to drone count.
-LinkTime = dict[tuple[ConnectionKey, TurnNumber], int]
+ActionMap: TypeAlias = dict[DroneId, list["ScheduledAction"]]
+#: Zone and turn to the number of drones occupying that cell.
+ZoneOccupancyByTurn: TypeAlias = dict[ZoneTurn, DroneCount]
+#: Canonical link and turn to the number of drones occupying that cell.
+LinkOccupancyByTurn: TypeAlias = dict[LinkTurn, DroneCount]
 
 
 class ScheduledAction(BaseModel):
@@ -39,35 +41,30 @@ class Schedule(BaseModel):
     """Optimal-makespan plan: per-drone timed action lists."""
 
     actions: ActionMap = Field(default_factory=dict)
-    makespan: int = 0
+    makespan: TurnNumber = 0
     graph: Graph
 
     def occupancy(
         self,
-    ) -> tuple[ZoneTime, LinkTime]:
-        """zone_time[(z,t)] and link_time[(canon,t)] from the actions.
+    ) -> tuple[ZoneOccupancyByTurn, LinkOccupancyByTurn]:
+        """Per-turn zone and link occupancy derived from the actions.
 
-        Matches the planner's occupancy model: a drone occupies its
-        arrival zone at the arrival turn and its link during transit.
+        Turns are executed-turn numbers: a move occupies its link on
+        every transit turn and its destination zone at the end of the
+        final transit turn.
         """
-        zone_time: ZoneTime = {}
-        link_time: LinkTime = {}
+        zone_time: ZoneOccupancyByTurn = {}
+        link_time: LinkOccupancyByTurn = {}
         for drone_actions in self.actions.values():
-            last_arrival: tuple[ZoneName, TurnNumber] | None = None
             for action in drone_actions:
                 if action.kind == "WAIT":
-                    # A wait occupies its zone at the wait turn, unless the
-                    # previous MOVE just arrived there (same event, avoid
-                    # double counting).
-                    if last_arrival != (action.from_zone, action.turn):
-                        zone_time[(action.from_zone, action.turn)] = (
-                            zone_time.get(
-                                (action.from_zone, action.turn), 0
-                            ) + 1
-                        )
+                    zone_time[(action.from_zone, action.turn)] = (
+                        zone_time.get(
+                            (action.from_zone, action.turn), 0
+                        ) + 1
+                    )
                 else:
-                    arrival = action.turn + action.turns_required
-                    last_arrival = (action.to_zone, arrival)
+                    arrival = action.turn + action.turns_required - 1
                     zone_time[(action.to_zone, arrival)] = (
                         zone_time.get((action.to_zone, arrival), 0) + 1
                     )
@@ -85,13 +82,13 @@ class Schedule(BaseModel):
             True when every zone and link stays within capacity.
         """
         zone_time, link_time = self.occupancy()
-        for (zone_name, turn), count in zone_time.items():
+        for (zone_name, _), count in zone_time.items():
             zone = self.graph.zones.get(zone_name)
             if zone is None or zone.capacity is None:
                 continue
             if count > zone.capacity:
                 return False
-        for (link, turn), count in link_time.items():
+        for (link, _), count in link_time.items():
             connection = self.graph.connections.get(link)
             if connection is None:
                 continue

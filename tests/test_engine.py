@@ -7,9 +7,13 @@ paths, in-flight drones count down their traversal turns, and conflicts
 
 from __future__ import annotations
 
+import pytest
+
 from src.models import (
     Connection,
     Drone,
+    DroneFleet,
+    DronePosition,
     DroneStatus,
     Graph,
     Movement,
@@ -17,6 +21,7 @@ from src.models import (
     ScheduledAction,
     Zone,
     ZoneType,
+    canonical_key,
 )
 from src.simulation.engine import Simulation
 
@@ -53,7 +58,7 @@ def _graph(
     """Build a Graph with every edge sharing ``link_capacity``."""
     connections: dict[tuple[str, str], Connection] = {}
     for zone_a, zone_b in edges:
-        key = (zone_a, zone_b) if zone_a <= zone_b else (zone_b, zone_a)
+        key = canonical_key(zone_a, zone_b)
         connections[key] = Connection(
             zone_a=key[0],
             zone_b=key[1],
@@ -168,7 +173,7 @@ class TestSimulation:
         assert launch.zone_capacities == {}
         assert launch.link_usage == {("R", "S"): 1}
         assert launch.events[0].kind == "connection"
-        assert launch.positions[1].connection == ("S", "R")
+        assert launch.positions[1].connection == canonical_key("S", "R")
 
         final_transit = sim.step()
         assert final_transit.zone_occupancy == {"R": 1}
@@ -183,6 +188,18 @@ class TestSimulation:
         assert onward.zone_capacities == {"G": None}
         assert onward.link_usage == {}
         assert onward.events[0].kind == "zone"
+
+    def test_drone_position_canonicalizes_connection(self) -> None:
+        position = DronePosition(connection=("S", "R"))
+
+        assert position.connection == ("R", "S")
+
+    def test_drone_position_requires_zone_xor_connection(self) -> None:
+        with pytest.raises(ValueError):
+            DronePosition()
+
+        with pytest.raises(ValueError):
+            DronePosition(zone="A", connection=("A", "B"))
 
     def test_unreachable_goal_blocks_drone(self) -> None:
         graph = _graph(
@@ -367,8 +384,8 @@ class TestSimulation:
                 self.graph = graph
 
             def plan(
-                self, drones: list[Drone]
-            ) -> tuple[Schedule, list[Drone]]:
+                self, drones: DroneFleet
+            ) -> tuple[Schedule, DroneFleet]:
                 actions = {
                     1: [ScheduledAction(
                         kind="MOVE", turn=1, from_zone="S",

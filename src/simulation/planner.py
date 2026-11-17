@@ -8,14 +8,18 @@ not guaranteed to minimize makespan.
 
 from __future__ import annotations
 
+from typing import TypeAlias
+
 from src.models import (
-    ConnectionKey,
     Drone,
+    DroneFleet,
     DroneId,
     DroneStatus,
     Graph,
+    LinkTurn,
     TurnNumber,
     ZoneName,
+    ZoneTurn,
     canonical_key,
 )
 from src.models.schedule import Schedule, ScheduledAction
@@ -31,13 +35,11 @@ from src.simulation.pathfinding import (
 )
 
 #: Drone id to timed route.
-RouteMap = dict[DroneId, TimedRoute]
-#: Drone id to drone object.
-DronesById = dict[DroneId, Drone]
+RouteMap: TypeAlias = dict[DroneId, TimedRoute]
 #: Zone and turn to drones reserved there.
-ZoneReservations = dict[tuple[ZoneName, TurnNumber], list[DroneId]]
+ZoneReservations: TypeAlias = dict[ZoneTurn, list[DroneId]]
 #: Connection and turn to drones reserved there.
-LinkReservations = dict[tuple[ConnectionKey, TurnNumber], list[DroneId]]
+LinkReservations: TypeAlias = dict[LinkTurn, list[DroneId]]
 
 
 class Planner:
@@ -52,7 +54,7 @@ class Planner:
         self.graph = graph
         self._dist_cache: dict[ZoneName, Heuristic] = {}
 
-    def plan(self, drones: list[Drone]) -> tuple[Schedule, list[Drone]]:
+    def plan(self, drones: DroneFleet) -> tuple[Schedule, DroneFleet]:
         """Plan all drones greedily and return the schedule plus blocked ones.
 
         Args:
@@ -66,23 +68,9 @@ class Planner:
                 actions={}, makespan=0, graph=self.graph
             ), []
 
-        horizon = 1 + len(drones) * sum_entry_cost(self.graph)
+        horizon = len(drones) * sum_entry_cost(self.graph)
         ordered = sorted(drones, key=lambda item: item.id)
         routes, blocked = self._plan_order(ordered, horizon)
-
-        # A strict id order can serialize a head-on swap badly. If any
-        # drone failed, retry with the reverse order and keep the better
-        # result: fewer blocked drones first, then lower makespan.
-        if blocked:
-            alt_routes, alt_blocked = self._plan_order(
-                list(reversed(ordered)), horizon
-            )
-            if (
-                len(alt_blocked), _makespan(alt_routes)
-            ) < (
-                len(blocked), _makespan(routes)
-            ):
-                routes, blocked = alt_routes, alt_blocked
 
         for drone in blocked:
             self._mark_blocked(drone)
@@ -90,12 +78,12 @@ class Planner:
 
     def _plan_order(
         self,
-        order: list[Drone],
+        order: DroneFleet,
         horizon: TurnNumber,
-    ) -> tuple[RouteMap, list[Drone]]:
+    ) -> tuple[RouteMap, DroneFleet]:
         """Plan one prioritized pass in the given drone order."""
         routes: RouteMap = {}
-        blocked: list[Drone] = []
+        blocked: DroneFleet = []
         for drone in order:
             route = self._plan_drone(drone, routes, horizon)
             if route is None:
@@ -129,7 +117,7 @@ class Planner:
             drone.current_zone,
             drone.target_zone,
             constraints,
-            1,
+            0,
             horizon,
             dist,
         )
@@ -170,7 +158,9 @@ class Planner:
     ]:
         """Map occupied zone/link cells to the drones currently using them.
 
-        Arrrived drones keep occupying their goal after arrival.
+        States are end-of-turn times; a move occupies its link on turns
+        ``turn_a + 1`` through ``turn_b``. Arrived drones keep occupying
+        their goal after arrival.
         """
         zone_drones: ZoneReservations = {}
         link_drones: LinkReservations = {}
@@ -181,11 +171,11 @@ class Planner:
             ):
                 if zone_a == zone_b:
                     zone_drones.setdefault(
-                        (zone_a, turn_a), []
+                        (zone_a, turn_b), []
                     ).append(drone_id)
                 else:
                     link = canonical_key(zone_a, zone_b)
-                    for turn in range(turn_a, turn_b):
+                    for turn in range(turn_a + 1, turn_b + 1):
                         link_drones.setdefault(
                             (link, turn), []
                         ).append(drone_id)
@@ -228,7 +218,7 @@ def _route_to_actions(route: TimedRoute) -> list[ScheduledAction]:
             actions.append(
                 ScheduledAction(
                     kind="WAIT",
-                    turn=turn_a,
+                    turn=turn_a + 1,
                     from_zone=zone_a,
                     to_zone=zone_a,
                     turns_required=1,
@@ -238,7 +228,7 @@ def _route_to_actions(route: TimedRoute) -> list[ScheduledAction]:
             actions.append(
                 ScheduledAction(
                     kind="MOVE",
-                    turn=turn_a,
+                    turn=turn_a + 1,
                     from_zone=zone_a,
                     to_zone=zone_b,
                     turns_required=turn_b - turn_a,
@@ -247,8 +237,8 @@ def _route_to_actions(route: TimedRoute) -> list[ScheduledAction]:
     return actions
 
 
-def _makespan(routes: RouteMap) -> int:
+def _makespan(routes: RouteMap) -> TurnNumber:
     """Return the number of emitted turns until the last delivery."""
     if not routes:
         return 0
-    return max(route[-1][1] - 1 for route in routes.values())
+    return max(route[-1][1] for route in routes.values())
