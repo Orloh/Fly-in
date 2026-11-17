@@ -6,16 +6,19 @@ and simulation layers.
 
 from src.models.aliases import (
     ConnectionKey,
+    DroneCount,
     DroneId,
     LineNumber,
+    LinkTurn,
     Metadata,
     TurnNumber,
     ZoneName,
+    ZoneTurn,
 )
 from src.models.connection import Connection
-from src.models.drone import Drone, Movement
+from src.models.drone import Drone, DroneFleet, DronesById, Movement
 from src.models.enums import DroneStatus, ZoneType
-from src.models.graph import Graph
+from src.models.graph import ConnectionMap, Graph, ZoneMap
 from src.models.parsing import ParsedConnection, ParsedMap, ParsedZone
 from src.models.schedule import Schedule, ScheduledAction
 from src.models.simulation import (
@@ -35,14 +38,19 @@ from src.models.graph_utils import canonical_key
 __all__ = [
     "Connection",
     "ConnectionKey",
+    "ConnectionMap",
     "Drone",
+    "DroneCount",
+    "DroneFleet",
     "DroneId",
     "DronePosition",
     "DronePositions",
+    "DronesById",
     "DroneStatus",
     "Graph",
     "LineNumber",
     "LinkCapacities",
+    "LinkTurn",
     "LinkUsage",
     "Metadata",
     "Movement",
@@ -57,8 +65,10 @@ __all__ = [
     "TurnSnapshot",
     "Zone",
     "ZoneCapacities",
+    "ZoneMap",
     "ZoneName",
     "ZoneOccupancy",
+    "ZoneTurn",
     "ZoneType",
     "canonical_key",
 ]

@@ -13,7 +13,8 @@ class Zone(BaseModel):
 
     The start_hub and end_hub are modeled with boolean flags rather than
     subclasses, keeping parsing and traversal code paths uniform. Their
-    only behavioural difference is an unlimited occupancy capacity.
+    only behavioural difference is an unlimited occupancy capacity, which
+    is represented by ``max_drones=None`` (``None`` always means unlimited).
     """
 
     name: ZoneName
@@ -21,7 +22,7 @@ class Zone(BaseModel):
     y: int
     zone_type: ZoneType = ZoneType.NORMAL
     color: str = "none"
-    max_drones: int = Field(default=1, ge=1)
+    max_drones: int | None = Field(default=1, ge=1)
     is_start_hub: bool = False
     is_end_hub: bool = False
 

@@ -9,20 +9,22 @@ from __future__ import annotations
 
 from src.models import (
     Connection,
-    ConnectionKey,
+    ConnectionMap,
     Drone,
+    DroneFleet,
     Graph,
     ParsedConnection,
     ParsedMap,
     ParsedZone,
     Zone,
+    ZoneMap,
     ZoneName,
     ZoneType,
 )
 from src.parser.errors import ParseError
 
 
-def build_graph(parsed: ParsedMap) -> tuple[Graph, list[Drone]]:
+def build_graph(parsed: ParsedMap) -> tuple[Graph, DroneFleet]:
     """Convert a parsed map into a Graph and a fleet of drones.
 
     Args:
@@ -40,7 +42,7 @@ def build_graph(parsed: ParsedMap) -> tuple[Graph, list[Drone]]:
             "start_hub and end_hub cannot share a name",
         )
 
-    zones: dict[ZoneName, Zone] = {
+    zones: ZoneMap = {
         start_zone.name: start_zone,
         end_zone.name: end_zone,
     }
@@ -53,7 +55,7 @@ def build_graph(parsed: ParsedMap) -> tuple[Graph, list[Drone]]:
             )
         zones[zone.name] = zone
 
-    connections: dict[ConnectionKey, Connection] = {}
+    connections: ConnectionMap = {}
     known = set(zones)
 
     for c in parsed.connections:
@@ -98,8 +100,8 @@ def _convert_zone(
         ) from None
 
     if is_start or is_end:
-        # Hubs have unlimited capacity; max_drones is ignored entirely.
-        max_drones = 1
+        # Hubs have unlimited capacity, represented by max_drones=None.
+        max_drones = None
     else:
         token = parsed.metadata.get("max_drones", "1")
         try:

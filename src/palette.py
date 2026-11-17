@@ -5,12 +5,14 @@ No rendering dependency: this module is pure data and helpers.
 
 from __future__ import annotations
 
+from typing import TypeAlias
+
 #: Red, green, blue color triplet.
-RGB = tuple[int, int, int]
+RGB: TypeAlias = tuple[int, int, int]
 #: Terminal palette role name.
-ColorRole = str
+ColorRole: TypeAlias = str
 #: Color name to RGB mapping.
-Palette = dict[ColorRole, RGB]
+Palette: TypeAlias = dict[ColorRole, RGB]
 
 #: Google brand-inspired truecolor palette.
 PALETTE: Palette = {

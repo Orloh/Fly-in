@@ -3,7 +3,7 @@
 import pytest
 
 from collections.abc import Callable
-from src.models import Graph, Zone, Connection, ZoneType, Drone
+from src.models import Graph, Zone, Connection, ZoneType, Drone, DroneFleet
 from src.models.graph_utils import canonical_key
 
 
@@ -259,9 +259,9 @@ def priority_longer_graph() -> Graph:
 
 
 @pytest.fixture
-def drones_at_start() -> Callable[..., list[Drone]]:
+def drones_at_start() -> Callable[..., DroneFleet]:
     """Factory: n drones at start_zone targeting goal_zone."""
-    def _make(n: int, start: str = "S", goal: str = "G") -> list[Drone]:
+    def _make(n: int, start: str = "S", goal: str = "G") -> DroneFleet:
         return [
             Drone(id=i, current_zone=start, target_zone=goal)
             for i in range(1, n + 1)

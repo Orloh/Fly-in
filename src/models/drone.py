@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from typing import TypeAlias
+
 from pydantic import BaseModel, Field
 
 from src.models.aliases import DroneId, ZoneName
@@ -22,6 +24,12 @@ class Drone(BaseModel):
     transit_destination: ZoneName | None = None
     turns_remaining: int = 0
     blocked_reason: str | None = None
+
+
+#: An ordered collection of drones forming the fleet.
+DroneFleet: TypeAlias = list[Drone]
+#: Drone id to the drone object with that id.
+DronesById: TypeAlias = dict[DroneId, Drone]
 
 
 class Movement(BaseModel):

@@ -110,6 +110,10 @@ class TestConvertZone:
             _convert_zone(parsed, False, False)
         assert exc.value.line_number == 4
 
+    def test_max_drones_defaults_to_one(self) -> None:
+        zone = _convert_zone(_make_zone("A"), False, False)
+        assert zone.max_drones == 1
+
     def test_color(self) -> None:
         parsed = _make_zone("A", metadata={"color": "red"})
         zone = _convert_zone(parsed, False, False)
@@ -129,13 +133,13 @@ class TestConvertZone:
     def test_start_hub_ignores_invalid_max_drones(self) -> None:
         parsed = _make_zone("A", metadata={"max_drones": "abc"})
         zone = _convert_zone(parsed, True, False)
-        assert zone.max_drones == 1
+        assert zone.max_drones is None
         assert zone.capacity is None
 
     def test_end_hub_ignores_zero_max_drones(self) -> None:
         parsed = _make_zone("A", metadata={"max_drones": "0"})
         zone = _convert_zone(parsed, False, True)
-        assert zone.max_drones == 1
+        assert zone.max_drones is None
         assert zone.capacity is None
 
     def test_regular_zone_capacity(self) -> None:

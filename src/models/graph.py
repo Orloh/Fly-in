@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from functools import cached_property
+from typing import TypeAlias
 
 from pydantic import BaseModel, Field
 
@@ -11,11 +12,11 @@ from src.models.connection import Connection
 from src.models.zone import Zone
 
 #: Zone name to validated zone.
-ZoneMap = dict[ZoneName, Zone]
+ZoneMap: TypeAlias = dict[ZoneName, Zone]
 #: Canonical connection key to validated connection.
-ConnectionMap = dict[ConnectionKey, Connection]
+ConnectionMap: TypeAlias = dict[ConnectionKey, Connection]
 #: Zone name to adjacent zone names.
-Adjacency = dict[ZoneName, list[ZoneName]]
+Adjacency: TypeAlias = dict[ZoneName, list[ZoneName]]
 
 
 class Graph(BaseModel):

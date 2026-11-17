@@ -14,8 +14,14 @@ ZoneName: TypeAlias = str
 ConnectionKey: TypeAlias = tuple[ZoneName, ZoneName]
 #: Unique drone identifier.
 DroneId: TypeAlias = int
+#: Number of drones occupying a zone, link, or turn.
+DroneCount: TypeAlias = int
 #: Simulation turn number.
 TurnNumber: TypeAlias = int
+#: A zone and the turn at which it is occupied.
+ZoneTurn: TypeAlias = tuple[ZoneName, TurnNumber]
+#: A canonical connection and the turn during which it is occupied.
+LinkTurn: TypeAlias = tuple[ConnectionKey, TurnNumber]
 #: Source-file line number used in parse diagnostics.
 LineNumber: TypeAlias = int
 #: Raw parser metadata, stored as strings before domain conversion.
