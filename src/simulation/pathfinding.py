@@ -11,15 +11,15 @@ import heapq
 from typing import TypeAlias
 
 from src.models import (
-    ConnectionKey,
-    Graph,
-    LinkTurn,
-    TurnNumber,
-    Zone,
-    ZoneName,
-    ZoneTurn,
-    ZoneType,
-    canonical_key,
+	ConnectionKey,
+	Graph,
+	LinkTurn,
+	TurnNumber,
+	Zone,
+	ZoneName,
+	ZoneTurn,
+	ZoneType,
+	canonical_key,
 )
 
 #: A (zone, end_of_turn) state; turn 0 is the initial state.
@@ -44,10 +44,10 @@ BestG: TypeAlias = dict[State, int]
 
 #: Turn cost of entering a zone, keyed by zone type (blocked = infinite).
 _ZONE_COSTS: dict[ZoneType, int | float] = {
-    ZoneType.NORMAL: 1,
-    ZoneType.PRIORITY: 1,
-    ZoneType.RESTRICTED: 2,
-    ZoneType.BLOCKED: float("inf"),
+	ZoneType.NORMAL: 1,
+	ZoneType.PRIORITY: 1,
+	ZoneType.RESTRICTED: 2,
+	ZoneType.BLOCKED: float("inf"),
 }
 
 #: Reverse-Dijkstra queue entry: (distance, zone_name).
@@ -55,232 +55,232 @@ _QueueEntry: TypeAlias = tuple[int | float, ZoneName]
 
 #: Timed A* queue entry: (f, -priority_count, turn, zone_name).
 _TimedQueueEntry: TypeAlias = tuple[
-    int | float, int, TurnNumber, ZoneName
+	int | float, int, TurnNumber, ZoneName
 ]
 
 
 def _reconstruct_path(
-    breadcrumbs: Breadcrumbs, goal_state: State
+	breadcrumbs: Breadcrumbs, goal_state: State
 ) -> TimedRoute:
-    """Rebuild the route by walking breadcrumbs from goal to start."""
-    route: TimedRoute = []
-    current: State | None = goal_state
-    while current is not None:
-        route.append(current)
-        current = breadcrumbs[current]
-    route.reverse()
-    return route
+	"""Rebuild the route by walking breadcrumbs from goal to start."""
+	route: TimedRoute = []
+	current: State | None = goal_state
+	while current is not None:
+		route.append(current)
+		current = breadcrumbs[current]
+	route.reverse()
+	return route
 
 
 def _is_link_blocked(
-    link_key: ConnectionKey,
-    first_turn: TurnNumber,
-    last_turn: TurnNumber,
-    link_constraints: set[LinkConstraint],
+	link_key: ConnectionKey,
+	first_turn: TurnNumber,
+	last_turn: TurnNumber,
+	link_constraints: set[LinkConstraint],
 ) -> bool:
-    """Whether any transit turn in [first_turn, last_turn] is constrained."""
-    for turn in range(first_turn, last_turn + 1):
-        if (link_key, turn) in link_constraints:
-            return True
-    return False
+	"""Whether any transit turn in [first_turn, last_turn] is constrained."""
+	for turn in range(first_turn, last_turn + 1):
+		if (link_key, turn) in link_constraints:
+			return True
+	return False
 
 
 def _vertex_blocked(
-    state: State, vertex_constraints: set[VertexConstraint]
+	state: State, vertex_constraints: set[VertexConstraint]
 ) -> bool:
-    """Whether ``state`` is vertex-constrained."""
-    return state in vertex_constraints
+	"""Whether ``state`` is vertex-constrained."""
+	return state in vertex_constraints
 
 
 def _push_state(
-    pq: list[_TimedQueueEntry],
-    breadcrumbs: Breadcrumbs,
-    priority_count: PriorityCount,
-    best_g: BestG,
-    dist: Heuristic,
-    state: State,
-    prev_state: State | None,
-    new_priority: int,
+	pq: list[_TimedQueueEntry],
+	breadcrumbs: Breadcrumbs,
+	priority_count: PriorityCount,
+	best_g: BestG,
+	dist: Heuristic,
+	state: State,
+	prev_state: State | None,
+	new_priority: int,
 ) -> None:
-    """Enqueue ``state`` when it improves the best known g-score."""
-    zone, turn = state
-    if turn >= best_g.get(state, turn + 1):
-        return
-    best_g[state] = turn
-    breadcrumbs[state] = prev_state
-    priority_count[state] = new_priority
-    f_score = turn + dist[zone]
-    heapq.heappush(pq, (f_score, -new_priority, turn, zone))
+	"""Enqueue ``state`` when it improves the best known g-score."""
+	zone, turn = state
+	if turn >= best_g.get(state, turn + 1):
+		return
+	best_g[state] = turn
+	breadcrumbs[state] = prev_state
+	priority_count[state] = new_priority
+	f_score = turn + dist[zone]
+	heapq.heappush(pq, (f_score, -new_priority, turn, zone))
 
 
 def dist_to_goal(graph: Graph, goal: ZoneName) -> Heuristic:
-    """Reverse Dijkstra from goal to all zones.
+	"""Reverse Dijkstra from goal to all zones.
 
-    Edge weight u->v = enter_cost(v). Returns dict[zone, min_turns_to_goal].
-    Goal zone has distance 0. Blocked zones = inf.
+	Edge weight u->v = enter_cost(v). Returns dict[zone, min_turns_to_goal].
+	Goal zone has distance 0. Blocked zones = inf.
 
-    Args:
-        graph: The routing graph.
-        goal: The destination zone name.
+	Args:
+		graph: The routing graph.
+		goal: The destination zone name.
 
-    Returns:
-        Zone name to minimum travel time to the goal.
-    """
-    heuristic_table: Heuristic = {
-        zone_name: float("inf") for zone_name in graph.zones
-    }
-    heuristic_table[goal] = 0
+	Returns:
+		Zone name to minimum travel time to the goal.
+	"""
+	heuristic_table: Heuristic = {
+		zone_name: float("inf") for zone_name in graph.zones
+	}
+	heuristic_table[goal] = 0
 
-    priority_queue: list[_QueueEntry] = [(0, goal)]
+	priority_queue: list[_QueueEntry] = [(0, goal)]
 
-    while priority_queue:
-        current_distance, current_zone_name = heapq.heappop(priority_queue)
+	while priority_queue:
+		current_distance, current_zone_name = heapq.heappop(priority_queue)
 
-        if current_distance > heuristic_table[current_zone_name]:
-            continue
+		if current_distance > heuristic_table[current_zone_name]:
+			continue
 
-        for neighbor in graph.neighbors(current_zone_name):
-            neighbor_zone = graph.zones[neighbor]
+		for neighbor in graph.neighbors(current_zone_name):
+			neighbor_zone = graph.zones[neighbor]
 
-            if neighbor_zone.zone_type == ZoneType.BLOCKED:
-                continue
+			if neighbor_zone.zone_type == ZoneType.BLOCKED:
+				continue
 
-            new_distance = current_distance + _enter_cost(
-                graph.zones[current_zone_name]
-            )
+			new_distance = current_distance + _enter_cost(
+				graph.zones[current_zone_name]
+			)
 
-            if new_distance < heuristic_table[neighbor]:
-                heuristic_table[neighbor] = new_distance
-                heapq.heappush(priority_queue, (new_distance, neighbor))
+			if new_distance < heuristic_table[neighbor]:
+				heuristic_table[neighbor] = new_distance
+				heapq.heappush(priority_queue, (new_distance, neighbor))
 
-    return heuristic_table
+	return heuristic_table
 
 
 def find_path_timed(
-    graph: Graph,
-    start: ZoneName,
-    goal: ZoneName,
-    constraints: Constraints,
-    start_turn: TurnNumber,
-    horizon: TurnNumber,
-    dist: Heuristic,
+	graph: Graph,
+	start: ZoneName,
+	goal: ZoneName,
+	constraints: Constraints,
+	start_turn: TurnNumber,
+	horizon: TurnNumber,
+	dist: Heuristic,
 ) -> TimedRoute | None:
-    """Time-expanded A* returning the earliest feasible arrival route.
+	"""Time-expanded A* returning the earliest feasible arrival route.
 
-    State = (zone, turn) where ``turn`` is the end-of-turn time; turn 0
-    is the initial state. Start = (start, start_turn); goal = any
-    (goal, t). Successors: wait -> (z, t+1), move -> (w, t+enter_cost(w)).
-    A move from turn ``t`` occupies its link during turns ``t+1`` through
-    its arrival turn. Vertex/link constraints prune states and transit
-    moves. Heuristic f = turn + dist[zone]; priority zones break f-ties.
-    Returns None if no route exists within ``horizon``.
+	State = (zone, turn) where ``turn`` is the end-of-turn time; turn 0
+	is the initial state. Start = (start, start_turn); goal = any
+	(goal, t). Successors: wait -> (z, t+1), move -> (w, t+enter_cost(w)).
+	A move from turn ``t`` occupies its link during turns ``t+1`` through
+	its arrival turn. Vertex/link constraints prune states and transit
+	moves. Heuristic f = turn + dist[zone]; priority zones break f-ties.
+	Returns None if no route exists within ``horizon``.
 
-    Args:
-        graph: The routing graph.
-        start: The starting zone name.
-        goal: The destination zone name.
-        constraints: The vertex and link constraints to honor.
-        start_turn: The initial turn (0 before any action is executed).
-        horizon: The latest end-of-turn a route may arrive.
-        dist: The heuristic table from ``dist_to_goal``.
+	Args:
+		graph: The routing graph.
+		start: The starting zone name.
+		goal: The destination zone name.
+		constraints: The vertex and link constraints to honor.
+		start_turn: The initial turn (0 before any action is executed).
+		horizon: The latest end-of-turn a route may arrive.
+		dist: The heuristic table from ``dist_to_goal``.
 
-    Returns:
-        The timed route, or None when no route exists.
-    """
-    if graph.zones[goal].zone_type == ZoneType.BLOCKED:
-        return None
+	Returns:
+		The timed route, or None when no route exists.
+	"""
+	if graph.zones[goal].zone_type == ZoneType.BLOCKED:
+		return None
 
-    if start == goal:
-        return [(start, start_turn)]
+	if start == goal:
+		return [(start, start_turn)]
 
-    vertex_constraints, link_constraints = constraints
+	vertex_constraints, link_constraints = constraints
 
-    start_state = (start, start_turn)
-    initial_priority = (
-        1 if graph.zones[start].zone_type == ZoneType.PRIORITY else 0
-    )
-    initial_f = start_turn + dist[start]
-    priority_queue: list[_TimedQueueEntry] = [
-        (initial_f, -initial_priority, start_turn, start)
-    ]
-    breadcrumbs: Breadcrumbs = {start_state: None}
-    priority_count: PriorityCount = {start_state: initial_priority}
-    best_g: BestG = {start_state: start_turn}
+	start_state = (start, start_turn)
+	initial_priority = (
+		1 if graph.zones[start].zone_type == ZoneType.PRIORITY else 0
+	)
+	initial_f = start_turn + dist[start]
+	priority_queue: list[_TimedQueueEntry] = [
+		(initial_f, -initial_priority, start_turn, start)
+	]
+	breadcrumbs: Breadcrumbs = {start_state: None}
+	priority_count: PriorityCount = {start_state: initial_priority}
+	best_g: BestG = {start_state: start_turn}
 
-    while priority_queue:
-        _f, _neg_priority, turn, zone_name = heapq.heappop(priority_queue)
-        state = (zone_name, turn)
+	while priority_queue:
+		_f, _neg_priority, turn, zone_name = heapq.heappop(priority_queue)
+		state = (zone_name, turn)
 
-        if turn > best_g.get(state, turn):
-            continue
+		if turn > best_g.get(state, turn):
+			continue
 
-        if zone_name == goal:
-            return _reconstruct_path(breadcrumbs, state)
+		if zone_name == goal:
+			return _reconstruct_path(breadcrumbs, state)
 
-        wait_turn = turn + 1
-        if wait_turn <= horizon:
-            wait_state = (zone_name, wait_turn)
-            if not _vertex_blocked(wait_state, vertex_constraints):
-                _push_state(
-                    priority_queue, breadcrumbs, priority_count, best_g,
-                    dist, wait_state, state, priority_count[state],
-                )
+		wait_turn = turn + 1
+		if wait_turn <= horizon:
+			wait_state = (zone_name, wait_turn)
+			if not _vertex_blocked(wait_state, vertex_constraints):
+				_push_state(
+					priority_queue, breadcrumbs, priority_count, best_g,
+					dist, wait_state, state, priority_count[state],
+				)
 
-        for neighbor_name in graph.neighbors(zone_name):
-            neighbor_zone = graph.zones[neighbor_name]
+		for neighbor_name in graph.neighbors(zone_name):
+			neighbor_zone = graph.zones[neighbor_name]
 
-            if neighbor_zone.zone_type == ZoneType.BLOCKED:
-                continue
+			if neighbor_zone.zone_type == ZoneType.BLOCKED:
+				continue
 
-            cost = _enter_cost(neighbor_zone)
-            assert isinstance(cost, int), (
-                "Cost should be int for non-blocked zones"
-            )
-            arrive_turn = turn + cost
+			cost = _enter_cost(neighbor_zone)
+			assert isinstance(cost, int), (
+				"Cost should be int for non-blocked zones"
+			)
+			arrive_turn = turn + cost
 
-            if arrive_turn > horizon:
-                continue
+			if arrive_turn > horizon:
+				continue
 
-            move_state = (neighbor_name, arrive_turn)
+			move_state = (neighbor_name, arrive_turn)
 
-            if _vertex_blocked(move_state, vertex_constraints):
-                continue
+			if _vertex_blocked(move_state, vertex_constraints):
+				continue
 
-            link_key = canonical_key(zone_name, neighbor_name)
-            if _is_link_blocked(
-                link_key, turn + 1, arrive_turn, link_constraints
-            ):
-                continue
+			link_key = canonical_key(zone_name, neighbor_name)
+			if _is_link_blocked(
+				link_key, turn + 1, arrive_turn, link_constraints
+			):
+				continue
 
-            new_priority = priority_count[state] + (
-                1 if neighbor_zone.zone_type == ZoneType.PRIORITY else 0
-            )
+			new_priority = priority_count[state] + (
+				1 if neighbor_zone.zone_type == ZoneType.PRIORITY else 0
+			)
 
-            _push_state(
-                priority_queue, breadcrumbs, priority_count, best_g,
-                dist, move_state, state, new_priority,
-            )
+			_push_state(
+				priority_queue, breadcrumbs, priority_count, best_g,
+				dist, move_state, state, new_priority,
+			)
 
-    return None
+	return None
 
 
 def _enter_cost(zone: Zone) -> int | float:
-    """Return the turn cost of moving into ``zone``."""
-    return _ZONE_COSTS[zone.zone_type]
+	"""Return the turn cost of moving into ``zone``."""
+	return _ZONE_COSTS[zone.zone_type]
 
 
 def sum_entry_cost(graph: Graph) -> int:
-    """Sum of entry costs over all non-blocked zones (for the horizon).
+	"""Sum of entry costs over all non-blocked zones (for the horizon).
 
-    Args:
-        graph: The routing graph.
+	Args:
+		graph: The routing graph.
 
-    Returns:
-        The summed entry cost across non-blocked zones.
-    """
-    total = 0
-    for zone in graph.zones.values():
-        cost = _enter_cost(zone)
-        if isinstance(cost, int):
-            total += cost
-    return total
+	Returns:
+		The summed entry cost across non-blocked zones.
+	"""
+	total = 0
+	for zone in graph.zones.values():
+		cost = _enter_cost(zone)
+		if isinstance(cost, int):
+			total += cost
+	return total

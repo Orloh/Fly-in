@@ -13,29 +13,29 @@ from src.models.aliases import LineNumber, Metadata, ZoneName
 
 
 class ParsedZone(BaseModel):
-    """A zone line as read from the map file."""
+	"""A zone line as read from the map file."""
 
-    name: ZoneName
-    x: int
-    y: int
-    metadata: Metadata = Field(default_factory=dict)
-    line_number: LineNumber
+	name: ZoneName
+	x: int
+	y: int
+	metadata: Metadata = Field(default_factory=dict)
+	line_number: LineNumber
 
 
 class ParsedConnection(BaseModel):
-    """A connection line as read from the map file."""
+	"""A connection line as read from the map file."""
 
-    zone_a: ZoneName
-    zone_b: ZoneName
-    metadata: Metadata = Field(default_factory=dict)
-    line_number: LineNumber
+	zone_a: ZoneName
+	zone_b: ZoneName
+	metadata: Metadata = Field(default_factory=dict)
+	line_number: LineNumber
 
 
 class ParsedMap(BaseModel):
-    """The full set of entities found in a map file."""
+	"""The full set of entities found in a map file."""
 
-    nb_drones: int
-    start_hub: ParsedZone
-    end_hub: ParsedZone
-    zones: list[ParsedZone] = Field(default_factory=list)
-    connections: list[ParsedConnection] = Field(default_factory=list)
+	nb_drones: int
+	start_hub: ParsedZone
+	end_hub: ParsedZone
+	zones: list[ParsedZone] = Field(default_factory=list)
+	connections: list[ParsedConnection] = Field(default_factory=list)

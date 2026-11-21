@@ -9,40 +9,40 @@ from src.models.enums import ZoneType
 
 
 class Zone(BaseModel):
-    """A node in the map graph.
+	"""A node in the map graph.
 
-    The start_hub and end_hub are modeled with boolean flags rather than
-    subclasses, keeping parsing and traversal code paths uniform. Their
-    only behavioural difference is an unlimited occupancy capacity, which
-    is represented by ``max_drones=None`` (``None`` always means unlimited).
-    """
+	The start_hub and end_hub are modeled with boolean flags rather than
+	subclasses, keeping parsing and traversal code paths uniform. Their
+	only behavioural difference is an unlimited occupancy capacity, which
+	is represented by ``max_drones=None`` (``None`` always means unlimited).
+	"""
 
-    name: ZoneName
-    x: int
-    y: int
-    zone_type: ZoneType = ZoneType.NORMAL
-    color: str = "none"
-    max_drones: int | None = Field(default=1, ge=1)
-    is_start_hub: bool = False
-    is_end_hub: bool = False
+	name: ZoneName
+	x: int
+	y: int
+	zone_type: ZoneType = ZoneType.NORMAL
+	color: str = "none"
+	max_drones: int | None = Field(default=1, ge=1)
+	is_start_hub: bool = False
+	is_end_hub: bool = False
 
-    @field_validator("name")
-    @classmethod
-    def _validate_name(cls, value: str) -> str:
-        """Reject zone names containing dashes or spaces."""
-        if "-" in value or " " in value:
-            raise ValueError(
-                "zone names cannot contain dashes or spaces"
-            )
-        return value
+	@field_validator("name")
+	@classmethod
+	def _validate_name(cls, value: str) -> str:
+		"""Reject zone names containing dashes or spaces."""
+		if "-" in value or " " in value:
+			raise ValueError(
+				"zone names cannot contain dashes or spaces"
+			)
+		return value
 
-    @property
-    def capacity(self) -> int | None:
-        """Occupancy limit, or None for hubs (unlimited).
+	@property
+	def capacity(self) -> int | None:
+		"""Occupancy limit, or None for hubs (unlimited).
 
-        Returns:
-            The drone capacity, or None for start/end hubs.
-        """
-        if self.is_start_hub or self.is_end_hub:
-            return None
-        return self.max_drones
+		Returns:
+			The drone capacity, or None for start/end hubs.
+		"""
+		if self.is_start_hub or self.is_end_hub:
+			return None
+		return self.max_drones

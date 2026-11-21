@@ -6,42 +6,42 @@ import argparse
 
 
 def main() -> None:
-    """Parse command-line arguments and dispatch the requested mode."""
-    parser = argparse.ArgumentParser(
-        prog="fly-in", description="Drone fleet routing simulation"
-    )
-    parser.add_argument("map", help="path to the map file")
-    parser.add_argument(
-        "--debug",
-        action="store_true",
-        help="enable debug mode (conflicts to stderr)",
-    )
-    parser.add_argument(
-        "--no-color", action="store_true", help="disable ANSI color output"
-    )
-    parser.add_argument(
-        "--stats",
-        action="store_true",
-        help="append a stats block (== Stats == header, metrics, makespan)",
-    )
-    parser.add_argument(
-        "--map",
-        dest="show_map",
-        action="store_true",
-        help="echo the normalized map header before the turns",
-    )
-    args = parser.parse_args()
+	"""Parse command-line arguments and dispatch the requested mode."""
+	parser = argparse.ArgumentParser(
+		prog="fly-in", description="Drone fleet routing simulation"
+	)
+	parser.add_argument("map", help="path to the map file")
+	parser.add_argument(
+		"--debug",
+		action="store_true",
+		help="enable debug mode (conflicts to stderr)",
+	)
+	parser.add_argument(
+		"--no-color", action="store_true", help="disable ANSI color output"
+	)
+	parser.add_argument(
+		"--stats",
+		action="store_true",
+		help="append a stats block (== Stats == header, metrics, makespan)",
+	)
+	parser.add_argument(
+		"--map",
+		dest="show_map",
+		action="store_true",
+		help="echo the normalized map header before the turns",
+	)
+	args = parser.parse_args()
 
-    from src.cli import run
+	from src.cli import run
 
-    run(
-        args.map,
-        debug=args.debug,
-        color=False if args.no_color else None,
-        show_stats=args.stats,
-        show_map=args.show_map,
-    )
+	run(
+		args.map,
+		debug=args.debug,
+		color=False if args.no_color else None,
+		show_stats=args.stats,
+		show_map=args.show_map,
+	)
 
 
 if __name__ == "__main__":
-    main()
+	main()

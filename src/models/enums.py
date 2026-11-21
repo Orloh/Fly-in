@@ -6,18 +6,18 @@ from enum import Enum
 
 
 class ZoneType(str, Enum):
-    """Movement cost semantics of a zone."""
+	"""Movement cost semantics of a zone."""
 
-    NORMAL = "normal"
-    PRIORITY = "priority"
-    RESTRICTED = "restricted"
-    BLOCKED = "blocked"
+	NORMAL = "normal"
+	PRIORITY = "priority"
+	RESTRICTED = "restricted"
+	BLOCKED = "blocked"
 
 
 class DroneStatus(str, Enum):
-    """Runtime status of a drone."""
+	"""Runtime status of a drone."""
 
-    WAITING = "waiting"
-    IN_TRANSIT = "in_transit"
-    ARRIVED = "arrived"
-    BLOCKED = "blocked"
+	WAITING = "waiting"
+	IN_TRANSIT = "in_transit"
+	ARRIVED = "arrived"
+	BLOCKED = "blocked"
