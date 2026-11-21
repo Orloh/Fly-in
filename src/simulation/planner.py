@@ -8,6 +8,7 @@ not guaranteed to minimize makespan.
 
 from __future__ import annotations
 
+from itertools import pairwise
 from typing import TypeAlias
 
 from src.models import (
@@ -167,9 +168,7 @@ class Planner:
         link_drones: LinkReservations = {}
 
         for drone_id, route in routes.items():
-            for (zone_a, turn_a), (zone_b, turn_b) in zip(
-                route, route[1:]
-            ):
+            for (zone_a, turn_a), (zone_b, turn_b) in pairwise(route):
                 if zone_a == zone_b:
                     zone_drones.setdefault(
                         (zone_a, turn_b), []
@@ -214,7 +213,7 @@ class Planner:
 def _route_to_actions(route: TimedRoute) -> list[ScheduledAction]:
     """Convert a timed route into dense MOVE/WAIT actions."""
     actions: list[ScheduledAction] = []
-    for (zone_a, turn_a), (zone_b, turn_b) in zip(route, route[1:]):
+    for (zone_a, turn_a), (zone_b, turn_b) in pairwise(route):
         if zone_a == zone_b:
             actions.append(
                 ScheduledAction(
