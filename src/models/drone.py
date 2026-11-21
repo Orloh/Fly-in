@@ -21,7 +21,7 @@ class Drone(BaseModel):
     schedule: list[ScheduledAction] = Field(default_factory=list)
     schedule_index: int = 0
     transit_from: ZoneName | None = None
-    transit_destination: ZoneName | None = None
+    transit_to: ZoneName | None = None
     turns_remaining: int = 0
     blocked_reason: str | None = None
 

@@ -97,12 +97,12 @@ class Simulation:
         conflicts: list[Conflict] = []
         in_transit_before: TransitStart = {
             drone.id: canonical_key(
-                drone.transit_from, drone.transit_destination
+                drone.transit_from, drone.transit_to
             )
             for drone in self.state.drones.values()
             if drone.status == DroneStatus.IN_TRANSIT
             and drone.transit_from is not None
-            and drone.transit_destination is not None
+            and drone.transit_to is not None
         }
 
         # Replay the schedule in drone-id order.
@@ -224,13 +224,13 @@ class Simulation:
             if (
                 drone.status == DroneStatus.IN_TRANSIT
                 and drone.transit_from is not None
-                and drone.transit_destination is not None
+                and drone.transit_to is not None
             ):
                 events.append(
                     TurnEvent(
                         drone_id=drone_id,
                         from_zone=drone.transit_from,
-                        to_zone=drone.transit_destination,
+                        to_zone=drone.transit_to,
                     )
                 )
             elif drone.current_zone is not None:
@@ -250,12 +250,12 @@ class Simulation:
         if drone.status == DroneStatus.IN_TRANSIT:
             if (
                 drone.transit_from is not None
-                and drone.transit_destination is not None
+                and drone.transit_to is not None
             ):
                 return DronePosition(
                     connection=canonical_key(
                         drone.transit_from,
-                        drone.transit_destination,
+                        drone.transit_to,
                     ),
                     status=DroneStatus.IN_TRANSIT,
                 )
@@ -316,7 +316,7 @@ class Simulation:
         drone.status = DroneStatus.IN_TRANSIT
         drone.current_zone = None
         drone.transit_from = from_zone
-        drone.transit_destination = next_zone_name
+        drone.transit_to = next_zone_name
         drone.turns_remaining = action.turns_required
 
         return Movement(
@@ -330,13 +330,13 @@ class Simulation:
         """Land the drone at its destination."""
         if (
             drone.transit_from is None
-            or drone.transit_destination is None
+            or drone.transit_to is None
         ):
             return
 
-        drone.current_zone = drone.transit_destination
+        drone.current_zone = drone.transit_to
         drone.transit_from = None
-        drone.transit_destination = None
+        drone.transit_to = None
         drone.turns_remaining = 0
 
         if drone.current_zone == drone.target_zone:

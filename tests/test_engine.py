@@ -119,7 +119,7 @@ class TestSimulation:
         assert drone.status == DroneStatus.IN_TRANSIT
         assert drone.current_zone is None
         assert drone.transit_from == "S"
-        assert drone.transit_destination == "R"
+        assert drone.transit_to == "R"
         assert drone.turns_remaining == 1
         assert first.link_usage == {("R", "S"): 1}
 
