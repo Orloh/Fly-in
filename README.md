@@ -23,7 +23,7 @@ truecolor terminal interface.
   `blocked` (inaccessible).
 - Full map parser with line-numbered error messages.
 - CLI: Google-colored truecolor terminal output (`D1-zoneA D2-zoneB` per turn).
-- Deterministic replays and reproducible benchmark results.
+- Deterministic replays.
 
 ## Instructions
 
@@ -148,12 +148,7 @@ easy to spot, while `--debug` prints engine conflicts to stderr.
 
 ```
 make lint        # mypy strict + flake8
-uv run pytest tests   # real pass/fail signal (make test masks failures)
 ```
-
-Test-driven: write tests in `tests/` first, then `make lint` and
-`uv run pytest tests`. Algorithm details are documented below; measured
-baselines can be reproduced with `make benchmark`.
 
 ## Architecture
 
@@ -205,11 +200,6 @@ capacity metadata for diagnostics or future output extensions. Planned
 waits are silent; conflicts are limited to no-route drones and
 safety-net planner bugs (visible with `--debug`).
 
-### Benchmark checks
-
-Run `make benchmark` to run the tier benchmark suite. Makespans are
-produced by the greedy prioritized planner for every supplied map.
-
 ## Resources
 
 - Python 3.10, [pydantic](https://docs.pydantic.dev/), `uv`.
@@ -228,8 +218,7 @@ This project was developed iteratively with an AI coding assistant
 - Designing the turn-based engine (`src/simulation/engine.py`) and its
   conflict-free schedule replay model.
 - The Google-inspired terminal palette (`src/palette.py`).
-- Writing the test suite and the tiered benchmark maps.
 
-Human review covered the algorithm choices, reservation model, test
-expectations, and final polish; every AI-generated component was read,
-validated, and tested before adoption.
+Human review covered the algorithm choices, reservation model, and
+final polish; every AI-generated component was read and validated
+before adoption.

@@ -3,7 +3,7 @@ PYTHON := uv run python
 MAP ?= maps/easy/01_linear_path.txt
 MAP_TIERS := easy medium hard challenger
 
-.PHONY: install run stats run-all debug clean lint test benchmark
+.PHONY: install run stats run-all debug clean lint
 
 install:
 	uv sync --group dev
@@ -36,8 +36,3 @@ lint:
 		--ignore-missing-imports --disallow-untyped-defs \
 		--check-untyped-defs
 
-test:
-	uv run pytest tests || true
-
-benchmark:
-	uv run pytest tests/test_benchmarks.py -q
