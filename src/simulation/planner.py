@@ -107,10 +107,11 @@ class Planner:
         ):
             return None
 
-        dist = self._dist_cache.setdefault(
-            drone.target_zone,
-            dist_to_goal(self.graph, drone.target_zone),
-        )
+        if drone.target_zone not in self._dist_cache:
+            self._dist_cache[drone.target_zone] = dist_to_goal(
+                self.graph, drone.target_zone
+            )
+        dist = self._dist_cache[drone.target_zone]
         constraints = self._reservation_constraints(committed, horizon)
         return find_path_timed(
             self.graph,

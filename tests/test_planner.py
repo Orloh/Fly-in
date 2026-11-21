@@ -4,9 +4,12 @@ from __future__ import annotations
 
 from collections.abc import Callable
 
+import pytest
+
 from src.models import Drone, DroneFleet, Graph, canonical_key
 from src.parser.parser import parse_map
 from src.parser.converter import build_graph
+from src.simulation.pathfinding import dist_to_goal
 from src.simulation.planner import Planner
 
 
@@ -141,6 +144,31 @@ class TestPlannerSynthetic:
             (canonical_key("S", "R"), 2): 1,
             (canonical_key("R", "G"), 3): 1,
         }
+
+
+class TestPlannerHeuristicCache:
+    """The per-target distance table is computed only once."""
+
+    def test_distance_computed_once_per_target(
+        self,
+        simple_graph: Graph,
+        drones_at_start: Callable[..., DroneFleet],
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        calls: list[str] = []
+
+        def counting_dist(
+            graph: Graph, goal: str
+        ) -> dict[str, int | float]:
+            calls.append(goal)
+            return dist_to_goal(graph, goal)
+
+        monkeypatch.setattr(
+            "src.simulation.planner.dist_to_goal", counting_dist
+        )
+        Planner(simple_graph).plan(drones_at_start(3))
+
+        assert calls == ["G"]
 
 
 class TestPlannerConflictFree:
