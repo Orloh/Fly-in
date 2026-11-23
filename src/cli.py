@@ -22,6 +22,7 @@ from src.models import (
 	TurnSnapshot,
 	ZoneName,
 	ZoneType,
+	canonical_key,
 )
 from src.parser import build_graph, ParseError, parse_map
 from src.palette import PALETTE, ColorRole, color_role
@@ -137,10 +138,16 @@ def format_map(parsed: ParsedMap, color: bool = False) -> list[str]:
 	return lines
 
 
+def _format_limit(limit: int | None) -> str:
+	"""Render a capacity limit, using ``inf`` for unlimited hubs."""
+	return "inf" if limit is None else str(limit)
+
+
 def format_turn(
 	snapshot: TurnSnapshot,
 	color: bool = False,
 	zone_roles: ZoneRoles | None = None,
+	capacity: bool = False,
 ) -> str:
 	"""Format a snapshot's events as ``D{id}-{label}`` tokens.
 
@@ -149,6 +156,7 @@ def format_turn(
 		color: Whether to enable ANSI color output.
 		zone_roles: Zone name to Google palette role mapping; unlisted
 			zones default to ``blue``.
+		capacity: Whether to append ``(used/limit)`` to each token.
 
 	Returns:
 		The turn line, or an empty string when nothing to report.
@@ -159,17 +167,29 @@ def format_turn(
 	for event in sorted(
 		snapshot.events, key=lambda item: item.drone_id
 	):
+		suffix = ""
 		drone_part = paint(f"D{event.drone_id}", "yellow", color)
 		if event.from_zone is not None and event.to_zone is not None:
 			label_part = _paint_connection(
 				event.from_zone, event.to_zone, zone_roles, color
 			)
+			if capacity:
+				key = canonical_key(event.from_zone, event.to_zone)
+				used = snapshot.link_usage.get(key, 0)
+				limit = snapshot.link_capacities.get(key)
+				suffix = f" ({used}/{_format_limit(limit)})"
 		else:
 			assert event.zone is not None
 			zone = event.zone
 			role = (zone_roles or {}).get(zone, "blue")
 			label_part = paint(zone, role, color)
-		parts.append((event.drone_id, f"{drone_part}-{label_part}"))
+			if capacity:
+				used = snapshot.zone_occupancy.get(zone, 0)
+				limit = snapshot.zone_capacities.get(zone)
+				suffix = f" ({used}/{_format_limit(limit)})"
+		parts.append(
+			(event.drone_id, f"{drone_part}-{label_part}{suffix}")
+		)
 	return " ".join(token for _, token in sorted(parts))
 
 
@@ -283,6 +303,7 @@ def simulate_turns(
 	drones: DroneFleet,
 	color: bool = False,
 	show_stats: bool = False,
+	capacity: bool = False,
 ) -> Iterator[tuple[str, list[str]]]:
 	"""Step the simulation, yielding ``(line, conflicts)`` per turn.
 
@@ -291,6 +312,7 @@ def simulate_turns(
 		drones: The fleet to simulate.
 		color: Whether to enable ANSI color output.
 		show_stats: Whether to append the stats block after the turns.
+		capacity: Whether to annotate tokens with ``(used/limit)``.
 
 	Yields:
 		``(formatted_line, conflicts)`` pairs for each simulation turn.
@@ -310,7 +332,7 @@ def simulate_turns(
 			# Final arrival turn: only emit if there were events
 			if result.events:
 				yield format_turn(
-					result, color, zone_roles
+					result, color, zone_roles, capacity
 				), result.conflicts
 			break
 
@@ -320,7 +342,7 @@ def simulate_turns(
 			d.status == DroneStatus.IN_TRANSIT
 			for d in sim.state.drones.values()
 		)
-		line = format_turn(result, color, zone_roles)
+		line = format_turn(result, color, zone_roles, capacity)
 		if (
 			not result.events
 			and not in_transit
@@ -347,13 +369,15 @@ def build_output(
 	color: bool | None = None,
 	show_stats: bool = False,
 	show_map: bool = False,
+	capacity: bool = False,
 ) -> tuple[list[str], list[str], int]:
 	"""Build the complete CLI output without side effects.
 
 	Returns a tuple of (stdout_lines, stderr_lines, exit_code).
 	exit_code is 0 for success, 1 for parse/IO errors.
 	``show_stats`` appends a stats block (``== Stats ==`` header, metrics,
-	makespan); ``show_map`` echoes the normalized map header first.
+	makespan); ``show_map`` echoes the normalized map header first;
+	``capacity`` annotates movement tokens with ``(used/limit)``.
 
 	Args:
 		map_path: Path to the map file.
@@ -361,6 +385,7 @@ def build_output(
 		color: Force enable/disable ANSI color; None = auto-detect.
 		show_stats: Whether to append the stats block.
 		show_map: Whether to echo the normalized map header first.
+		capacity: Whether to annotate tokens with ``(used/limit)``.
 
 	Returns:
 		A ``(stdout_lines, stderr_lines, exit_code)`` tuple.
@@ -389,6 +414,7 @@ def build_output(
 		fleet,
 		use_color,
 		show_stats=show_stats,
+		capacity=capacity,
 	):
 		stdout_lines.append(line)
 		if debug:
@@ -403,6 +429,7 @@ def run(
 	color: bool | None = None,
 	show_stats: bool = False,
 	show_map: bool = False,
+	capacity: bool = False,
 ) -> None:
 	"""Parse map, run simulation, print turns.
 
@@ -411,6 +438,7 @@ def run(
 	- ``show_stats``: append the stats block (``== Stats ==`` header,
 		metrics, makespan).
 	- ``show_map``: echo the normalized map header before the turns.
+	- ``capacity``: annotate movement tokens with ``(used/limit)``.
 
 	Args:
 		map_path: Path to the map file.
@@ -418,9 +446,15 @@ def run(
 		color: Force enable/disable ANSI color; None = auto-detect.
 		show_stats: Whether to append the stats block.
 		show_map: Whether to echo the normalized map header first.
+		capacity: Whether to annotate tokens with ``(used/limit)``.
 	"""
 	stdout_lines, stderr_lines, exit_code = build_output(
-		map_path, debug, color, show_stats, show_map
+		map_path,
+		debug,
+		color,
+		show_stats,
+		show_map,
+		capacity,
 	)
 	for line in stdout_lines:
 		print(line)

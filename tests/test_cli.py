@@ -332,6 +332,70 @@ class TestFormatTurn:
             f"{PALETTE['blue'][1]};{PALETTE['blue'][2]}mB\033[0m"
         ) in colored
 
+    def test_capacity_zone_finite(self) -> None:
+        turn = TurnSnapshot(
+            turn_number=1,
+            events=[TurnEvent(drone_id=1, zone="A")],
+            zone_occupancy={"A": 1},
+            zone_capacities={"A": 1},
+        )
+        assert format_turn(turn, capacity=True) == "D1-A (1/1)"
+
+    def test_capacity_zone_unlimited(self) -> None:
+        turn = TurnSnapshot(
+            turn_number=1,
+            events=[TurnEvent(drone_id=1, zone="G")],
+            zone_occupancy={"G": 2},
+            zone_capacities={"G": None},
+        )
+        assert format_turn(turn, capacity=True) == "D1-G (2/inf)"
+
+    def test_capacity_connection(self) -> None:
+        turn = TurnSnapshot(
+            turn_number=1,
+            events=[
+                TurnEvent(drone_id=1, from_zone="S", to_zone="R"),
+            ],
+            link_usage={("R", "S"): 1},
+            link_capacities={("R", "S"): 1},
+        )
+        assert format_turn(turn, capacity=True) == "D1-S-R (1/1)"
+
+    def test_capacity_multiple_events(self) -> None:
+        turn = TurnSnapshot(
+            turn_number=1,
+            events=[
+                TurnEvent(drone_id=2, from_zone="S", to_zone="R"),
+                TurnEvent(drone_id=1, zone="A"),
+            ],
+            zone_occupancy={"A": 1},
+            zone_capacities={"A": 1},
+            link_usage={("R", "S"): 1},
+            link_capacities={("R", "S"): 1},
+        )
+        assert format_turn(turn, capacity=True) == (
+            "D1-A (1/1) D2-S-R (1/1)"
+        )
+
+    def test_capacity_disabled_by_default(self) -> None:
+        turn = TurnSnapshot(
+            turn_number=1,
+            events=[TurnEvent(drone_id=1, zone="A")],
+            zone_occupancy={"A": 1},
+            zone_capacities={"A": 1},
+        )
+        assert format_turn(turn) == "D1-A"
+
+    def test_capacity_with_color(self) -> None:
+        turn = TurnSnapshot(
+            turn_number=1,
+            events=[TurnEvent(drone_id=1, zone="A")],
+            zone_occupancy={"A": 1},
+            zone_capacities={"A": 1},
+        )
+        colored = format_turn(turn, color=True, capacity=True)
+        assert colored.endswith("A\033[0m (1/1)")
+
 
 class TestFormatMap:
     def test_basic_structure(self) -> None:
@@ -640,6 +704,27 @@ class TestMapHeader:
             assert stdout[1] == "start_hub: S 0 0"
             assert "D1-A" in stdout
             assert "D1-G" in stdout
+            assert not stderr
+
+    def test_capacity_annotates_movement_lines(self) -> None:
+        import pathlib
+        import tempfile
+
+        with tempfile.TemporaryDirectory() as tmp:
+            path = pathlib.Path(tmp) / "map.txt"
+            path.write_text(
+                "nb_drones: 1\n"
+                "start_hub: S 0 0\n"
+                "hub: A 2 0\n"
+                "end_hub: G 3 0\n"
+                "connection: S-A\n"
+                "connection: A-G\n"
+            )
+            stdout, stderr, code = build_output(
+                str(path), capacity=True
+            )
+            assert code == 0
+            assert stdout == ["D1-A (1/1)", "D1-G (1/inf)"]
             assert not stderr
 
 

@@ -50,7 +50,7 @@ make run-all                                  # all tier maps with --stats
 #### Command line
 
 ```
-python -m src <map> [--debug] [--no-color] [--stats] [--map]
+python -m src <map> [--debug] [--no-color] [--stats] [--map] [--capacity]
 ```
 
 | Arg | Meaning |
@@ -60,6 +60,7 @@ python -m src <map> [--debug] [--no-color] [--stats] [--map]
 | `--no-color` | disable ANSI truecolor (default: auto, off on non-TTY / `NO_COLOR`) |
 | `--stats` | append a stats block after the turns: blank line, `== Stats ==`, secondary metrics and the makespan |
 | `--map` | echo the normalized map header before the turns (hidden by default) |
+| `--capacity` | annotate each movement token with `(used/limit)`; hubs show `inf` |
 
 Maps ship in tiers under `maps/` (`easy/`, `medium/`, `hard/`,
 `challenger/`) plus regression maps in `maps/personal/`. The map format

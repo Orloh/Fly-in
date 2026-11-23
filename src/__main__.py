@@ -30,6 +30,11 @@ def main() -> None:
 		action="store_true",
 		help="echo the normalized map header before the turns",
 	)
+	parser.add_argument(
+		"--capacity",
+		action="store_true",
+		help="annotate each movement token with (used/limit)",
+	)
 	args = parser.parse_args()
 
 	from src.cli import run
@@ -40,6 +45,7 @@ def main() -> None:
 		color=False if args.no_color else None,
 		show_stats=args.stats,
 		show_map=args.show_map,
+		capacity=args.capacity,
 	)
 
 
